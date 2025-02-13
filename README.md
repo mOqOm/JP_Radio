@@ -4,6 +4,8 @@ Japanese radio relay server for Volumio3
 > **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
 
 ## Change log
+### version 0.0.4(2025/02/13)
+* Bug fix for not being able to play FM802.
 ### version 0.0.3(2024/03/16)
 * Change to display a popup for prompting restart.
 * Change to allow the user to specify the startup port.
