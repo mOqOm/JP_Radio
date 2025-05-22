@@ -1,0 +1,1 @@
+{"version":3,"file":"Auth.js","sourceRoot":"","sources":["../../../src/lib/models/Auth.ts"],"names":[],"mappings":"","sourcesContent":["export interface LoginAccount {\r\n  mail: string;\r\n  pass: string;\r\n}\r\n\r\nexport interface LoginState {\r\n  member_type: {\r\n    type: string;\r\n  };\r\n  [key: string]: any; // 他のプロパティがある場合の保険\r\n}"]}

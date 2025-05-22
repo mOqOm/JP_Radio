@@ -1,0 +1,1 @@
+{"version":3,"file":"RadikoProgramData.js","sourceRoot":"","sources":["../../../src/lib/models/RadikoProgramData.ts"],"names":[],"mappings":"","sourcesContent":["export interface RadikoProgramData {\r\n  station: string;\r\n  id: string;\r\n  ft: string;\r\n  tt: string;\r\n  title: string;\r\n  pfm: string;\r\n}\r\n"]}
