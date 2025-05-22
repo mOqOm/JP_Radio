@@ -1,0 +1,41 @@
+export = ControllerJpRadio;
+declare class ControllerJpRadio {
+    private context;
+    private commandRouter;
+    private logger;
+    private configManager;
+    private config;
+    private readonly serviceName;
+    private appRadio;
+    constructor(context: any);
+    restartPlugin(): void;
+    private showRestartModal;
+    saveServicePort(data: any): Promise<void>;
+    saveRadikoAccount(data: any): Promise<void>;
+    onVolumioStart(): Promise<void>;
+    onStart(): Promise<void>;
+    onStop(): Promise<void>;
+    onRestart(): void;
+    getUIConfig(): Promise<any>;
+    getConfigurationFiles(): string[];
+    setUIConfig(data: any): void;
+    getConf(varName: string): void;
+    setConf(varName: string, varValue: any): void;
+    addToBrowseSources(): void;
+    handleBrowseUri(curUri: string): Promise<any>;
+    clearAddPlayTrack(track: any): Promise<any>;
+    seek(timepos: number): Promise<any>;
+    stop(): void;
+    pause(): void;
+    getState(): void;
+    parseState(sState: any): void;
+    pushState(state: any): any;
+    explodeUri(uri: string): Promise<any>;
+    search(query: any): Promise<any>;
+    _searchArtists(results: any): void;
+    _searchAlbums(results: any): void;
+    _searchPlaylists(results: any): void;
+    _searchTracks(results: any): void;
+    goto(data: any): Promise<any>;
+}
+//# sourceMappingURL=index.d.ts.map
