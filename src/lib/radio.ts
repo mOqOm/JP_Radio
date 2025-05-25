@@ -1,149 +1,133 @@
 import express, { Application, Request, Response } from 'express';
-import RdkProg from './prog';
-import Radiko from './radiko';
 import cron from 'node-cron';
 import IcyMetadata from 'icy-metadata';
 import { capitalize } from 'lodash';
+import RdkProg from './prog';
+import Radiko from './radiko';
 
 export default class JpRadio {
-  private task: ReturnType<typeof cron.schedule>;
-  private app: Application;
-  private server: any = null;
-  private port: number;
-  private logger: Console;
-  private acct: any;
+  private readonly app: Application;
+  private server: ReturnType<Application['listen']> | null = null;
+  private readonly task: ReturnType<typeof cron.schedule>;
+  private readonly port: number;
+  private readonly logger: Console;
+  private readonly acct: any;
+  private readonly commandRouter: any;
   private prg: RdkProg | null = null;
   private rdk: Radiko | null = null;
 
-  constructor(port: number = 9000, logger: Console, acct: any = null) {
+  constructor(port = 9000, logger: Console, acct: any = null, commandRouter: any) {
     this.app = express();
     this.port = port;
     this.logger = logger;
     this.acct = acct;
+    this.commandRouter = commandRouter;
 
-    this.task = cron.schedule(
-      '0 3,9,15 * * *',
-      async () => {
-        try {
-          await this.#pgupdate();
-        } catch (e) {
-          this.logger.error('JP_Radio::cron task failed', e);
-        }
-      },
-      { scheduled: false }
-    );
+    this.task = cron.schedule('0 3,9,15 * * *', this.#pgupdate.bind(this), {
+      scheduled: false
+    });
 
     this.#setupRoutes();
   }
 
-  #setupRoutes() {
-    this.app.get('/radiko/:stationID', async (req: Request, res: Response) => {
+  #setupRoutes(): void {
+    this.app.get('/radiko/:stationID', async (req: Request, res: Response): Promise<void> => {
+      const station = req.params['stationID'];
+
+      if (!this.rdk || !this.rdk.stations?.has(station)) {
+        const msg = !this.rdk
+          ? 'JP_Radio::Radiko instance not initialized'
+          : `JP_Radio::${station} not in available stations`;
+        this.logger.error(msg);
+        res.status(500).send(msg);
+        return;
+      }
+
       try {
-        if (!this.rdk) {
-          this.logger.error('JP_Radio::Radiko instance not initialized');
-          res.status(500).send('Server error');
-          return;
-        }
-
-        const station = req.params['stationID'];
-        if (!this.rdk.stations?.has(station)) {
-          const msg = `JP_Radio::${station} not in available stations`;
-          this.logger.error(msg);
-          res.status(404).send(msg);
-          return;
-        }
-
         const icyMetadata = new IcyMetadata();
         const ffmpeg = await this.rdk.play(station);
-        if (!ffmpeg) {
-          res.status(500).send('Failed to start stream');
+
+        if (!ffmpeg || !ffmpeg.stdout) {
+          this.logger.error('JP_Radio::ffmpeg start failed or stdout is null');
+          res.status(500).send('Stream start error');
           return;
         }
 
-        // プロセス終了監視用フラグ
         let ffmpegExited = false;
         ffmpeg.on('exit', () => {
           ffmpegExited = true;
           this.logger.debug(`ffmpeg process ${ffmpeg.pid} exited.`);
         });
 
-        res.setHeader('Cache-Control', 'no-cache, no-store');
-        res.setHeader('icy-name', await this.rdk.getStationAsciiName(station));
-        res.setHeader('icy-metaint', icyMetadata.metaInt);
-        res.setHeader('Content-Type', 'audio/aac');
-        res.setHeader('Connection', 'keep-alive');
-
         const progData = await this.prg?.getCurProgram(station);
-        const title = progData ? `${progData.pfm || ''} - ${progData.title || ''}` : null;
-        if (title) icyMetadata.setStreamTitle(title);
-
-        if (ffmpeg.stdout) {
-          this.logger.info('JP_Radio::ffmpeg stdout');
-          ffmpeg.stdout.pipe(icyMetadata).pipe(res);
-        } else {
-          this.logger.error('JP_Radio::ffmpeg stdout is null');
-          res.status(500).send('Internal server error');
-          return;
+        if (progData) {
+          const title = `${progData.pfm || ''} - ${progData.title || ''}`;
+          icyMetadata.setStreamTitle(title);
         }
+
+        res.set({
+          'Cache-Control': 'no-cache, no-store',
+          'icy-name': await this.rdk.getStationAsciiName(station),
+          'icy-metaint': icyMetadata.metaInt,
+          'Content-Type': 'audio/aac',
+          Connection: 'keep-alive'
+        });
+
+        ffmpeg.stdout.pipe(icyMetadata).pipe(res);
 
         res.on('close', () => {
           if (ffmpeg.pid && !ffmpegExited) {
             try {
-              // プロセスグループをSIGTERMでkill
               process.kill(-ffmpeg.pid, 'SIGTERM');
-              this.logger.info(`Sent SIGTERM to ffmpeg process group ${ffmpeg.pid}`);
+              this.logger.info(`SIGTERM sent to ffmpeg group ${ffmpeg.pid}`);
             } catch (e: any) {
-              if (e.code === 'ESRCH') {
-                // プロセスは既に終了しているので問題なし
-                this.logger.info(`ffmpeg process ${ffmpeg.pid} already exited.`);
-              } else {
-                this.logger.warn(`Failed to kill ffmpeg process ${ffmpeg.pid}`, e);
-              }
+              this.logger.warn(`Kill ffmpeg failed: ${e.code === 'ESRCH' ? 'Already exited' : e.message}`);
             }
           }
         });
 
-        this.logger.info('JP_Radio::get returning response');
+        this.logger.info('JP_Radio::Streaming started');
       } catch (err) {
-        this.logger.error('JP_Radio::error in /radiko/:stationID handler', err);
+        this.logger.error('JP_Radio::Stream error', err);
         res.status(500).send('Internal server error');
       }
     });
 
-    this.app.get('/radiko/', (req: Request, res: Response) => {
+    this.app.get('/radiko/', (_req, res) => {
       res.send("Hello, world. You're at the radiko_app index.");
     });
   }
 
-  radioStations(): any[] {
-    if (!this.rdk?.stations) {
-      return [];
-    }
+  async radioStations(): Promise<any[]> {
+    if (!this.rdk?.stations) return [];
 
-    const radikoPlayLists = [];
+    const results = await Promise.all(
+      Array.from(this.rdk.stations.entries()).map(async ([stationId, stationInfo]) => {
+        const progData = await this.prg?.getCurProgram(stationId);
+        const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
+        const title = `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
 
-    for (const [stationId, stationInfo] of this.rdk.stations.entries()) {
-      const title = `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}`;
+        return {
+          service: 'webradio',
+          type: 'song',
+          title,
+          albumart: stationInfo.BannerURL,
+          uri: `http://localhost:${this.port}/radiko/${stationId}`,
+          name: '',
+          samplerate: '',
+          bitdepth: 0,
+          channels: 0
+        };
+      })
+    );
 
-      radikoPlayLists.push({
-        service: 'webradio',
-        type: 'song',
-        title: title,
-        albumart: stationInfo.BannerURL,
-        uri: `http://localhost:${this.port}/radiko/${stationId}`,
-        name: '',
-        samplerate: '',
-        bitdepth: 0,
-        channels: 0
-      });
-    }
-
-    return radikoPlayLists;
+    return results;
   }
 
   async start(): Promise<void> {
     if (this.server) {
-      this.logger.info('JP_Radio::App already started');
+      this.logger.info('JP_Radio::Already started');
+      this.commandRouter.pushToastMessage('info', 'JP Radio', 'すでに起動しています');
       return;
     }
 
@@ -154,12 +138,20 @@ export default class JpRadio {
     return new Promise((resolve, reject) => {
       this.server = this.app
         .listen(this.port, () => {
-          this.logger.info(`JP_Radio::App is listening on port ${this.port}.`);
+          this.logger.info(`JP_Radio::Listening on port ${this.port}`);
+          this.commandRouter.pushToastMessage('success', 'JP Radio', '起動しました');
+          this.commandRouter.servicePushState({
+            status: 'play',
+            service: 'jp_radio',
+            title: 'Radiko 起動中',
+            uri: ''
+          });
           this.task.start();
           resolve();
         })
         .on('error', (err: any) => {
           this.logger.error('JP_Radio::App error:', err);
+          this.commandRouter.pushToastMessage('error', 'JP Radio 起動失敗', err.message || 'エラー');
           reject(err);
         });
     });
@@ -174,6 +166,8 @@ export default class JpRadio {
       await this.prg?.dbClose();
       this.prg = null;
       this.rdk = null;
+
+      this.commandRouter.pushToastMessage('info', 'JP Radio', '停止しました');
     }
   }
 

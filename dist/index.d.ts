@@ -8,19 +8,20 @@ declare class ControllerJpRadio {
     private readonly serviceName;
     private appRadio;
     constructor(context: any);
-    restartPlugin(): void;
+    restartPlugin(): Promise<void>;
     private showRestartModal;
-    saveServicePort(data: any): Promise<void>;
-    saveRadikoAccount(data: any): Promise<void>;
+    saveServicePort(data: {
+        servicePort: string;
+    }): Promise<void>;
+    saveRadikoAccount(data: {
+        radikoUser: string;
+        radikoPass: string;
+    }): Promise<void>;
     onVolumioStart(): Promise<void>;
     onStart(): Promise<void>;
     onStop(): Promise<void>;
-    onRestart(): void;
     getUIConfig(): Promise<any>;
     getConfigurationFiles(): string[];
-    setUIConfig(data: any): void;
-    getConf(varName: string): void;
-    setConf(varName: string, varValue: any): void;
     addToBrowseSources(): void;
     handleBrowseUri(curUri: string): Promise<any>;
     clearAddPlayTrack(track: any): Promise<any>;
@@ -32,10 +33,6 @@ declare class ControllerJpRadio {
     pushState(state: any): any;
     explodeUri(uri: string): Promise<any>;
     search(query: any): Promise<any>;
-    _searchArtists(results: any): void;
-    _searchAlbums(results: any): void;
-    _searchPlaylists(results: any): void;
-    _searchTracks(results: any): void;
     goto(data: any): Promise<any>;
 }
 //# sourceMappingURL=index.d.ts.map

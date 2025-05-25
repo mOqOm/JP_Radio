@@ -10,12 +10,12 @@ export default class Radiko {
     private areaID;
     private cookieJar;
     private loginState;
-    stations: Map<string, StationMapData> | null;
+    stations: Map<string, StationMapData>;
     stationData: RegionData[];
     areaData: Map<string, {
         areaName: string;
         stations: string[];
-    }> | null;
+    }>;
     constructor(port: number, logger: Console, acct: LoginAccount);
     init(acct?: LoginAccount | null, forceGetStations?: boolean): Promise<void>;
     private login;
