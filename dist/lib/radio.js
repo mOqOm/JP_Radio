@@ -10,13 +10,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 var _JpRadio_instances, _JpRadio_setupRoutes, _JpRadio_init, _JpRadio_pgupdate;
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const prog_1 = __importDefault(require("./prog"));
-const radiko_1 = __importDefault(require("./radiko"));
 const node_cron_1 = __importDefault(require("node-cron"));
 const icy_metadata_1 = __importDefault(require("icy-metadata"));
 const lodash_1 = require("lodash");
+const prog_1 = __importDefault(require("./prog"));
+const radiko_1 = __importDefault(require("./radiko"));
 class JpRadio {
-    constructor(port = 9000, logger, acct = null) {
+    constructor(port = 9000, logger, acct = null, commandRouter) {
         _JpRadio_instances.add(this);
         this.server = null;
         this.prg = null;
@@ -25,40 +25,37 @@ class JpRadio {
         this.port = port;
         this.logger = logger;
         this.acct = acct;
-        this.task = node_cron_1.default.schedule('0 3,9,15 * * *', async () => {
-            try {
-                await __classPrivateFieldGet(this, _JpRadio_instances, "m", _JpRadio_pgupdate).call(this);
-            }
-            catch (e) {
-                this.logger.error('JP_Radio::cron task failed', e);
-            }
-        }, { scheduled: false });
+        this.commandRouter = commandRouter;
+        this.task = node_cron_1.default.schedule('0 3,9,15 * * *', __classPrivateFieldGet(this, _JpRadio_instances, "m", _JpRadio_pgupdate).bind(this), {
+            scheduled: false
+        });
         __classPrivateFieldGet(this, _JpRadio_instances, "m", _JpRadio_setupRoutes).call(this);
     }
-    radioStations() {
-        if (!this.rdk?.stations) {
+    async radioStations() {
+        if (!this.rdk?.stations)
             return [];
-        }
-        const radikoPlayLists = [];
-        for (const [stationId, stationInfo] of this.rdk.stations.entries()) {
-            const title = `${(0, lodash_1.capitalize)(stationInfo.AreaName)} / ${stationInfo.Name}`;
-            radikoPlayLists.push({
+        const results = await Promise.all(Array.from(this.rdk.stations.entries()).map(async ([stationId, stationInfo]) => {
+            const progData = await this.prg?.getCurProgram(stationId);
+            const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
+            const title = `${(0, lodash_1.capitalize)(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
+            return {
                 service: 'webradio',
                 type: 'song',
-                title: title,
+                title,
                 albumart: stationInfo.BannerURL,
                 uri: `http://localhost:${this.port}/radiko/${stationId}`,
                 name: '',
                 samplerate: '',
                 bitdepth: 0,
                 channels: 0
-            });
-        }
-        return radikoPlayLists;
+            };
+        }));
+        return results;
     }
     async start() {
         if (this.server) {
-            this.logger.info('JP_Radio::App already started');
+            this.logger.info('JP_Radio::Already started');
+            this.commandRouter.pushToastMessage('info', 'JP Radio', 'すでに起動しています');
             return;
         }
         this.prg = new prog_1.default(this.logger);
@@ -67,12 +64,20 @@ class JpRadio {
         return new Promise((resolve, reject) => {
             this.server = this.app
                 .listen(this.port, () => {
-                this.logger.info(`JP_Radio::App is listening on port ${this.port}.`);
+                this.logger.info(`JP_Radio::Listening on port ${this.port}`);
+                this.commandRouter.pushToastMessage('success', 'JP Radio', '起動しました');
+                this.commandRouter.servicePushState({
+                    status: 'play',
+                    service: 'jp_radio',
+                    title: 'Radiko 起動中',
+                    uri: ''
+                });
                 this.task.start();
                 resolve();
             })
                 .on('error', (err) => {
                 this.logger.error('JP_Radio::App error:', err);
+                this.commandRouter.pushToastMessage('error', 'JP Radio 起動失敗', err.message || 'エラー');
                 reject(err);
             });
         });
@@ -85,80 +90,66 @@ class JpRadio {
             await this.prg?.dbClose();
             this.prg = null;
             this.rdk = null;
+            this.commandRouter.pushToastMessage('info', 'JP Radio', '停止しました');
         }
     }
 }
 _JpRadio_instances = new WeakSet(), _JpRadio_setupRoutes = function _JpRadio_setupRoutes() {
     this.app.get('/radiko/:stationID', async (req, res) => {
+        const station = req.params['stationID'];
+        if (!this.rdk || !this.rdk.stations?.has(station)) {
+            const msg = !this.rdk
+                ? 'JP_Radio::Radiko instance not initialized'
+                : `JP_Radio::${station} not in available stations`;
+            this.logger.error(msg);
+            res.status(500).send(msg);
+            return;
+        }
         try {
-            if (!this.rdk) {
-                this.logger.error('JP_Radio::Radiko instance not initialized');
-                res.status(500).send('Server error');
-                return;
-            }
-            const station = req.params['stationID'];
-            if (!this.rdk.stations?.has(station)) {
-                const msg = `JP_Radio::${station} not in available stations`;
-                this.logger.error(msg);
-                res.status(404).send(msg);
-                return;
-            }
             const icyMetadata = new icy_metadata_1.default();
             const ffmpeg = await this.rdk.play(station);
-            if (!ffmpeg) {
-                res.status(500).send('Failed to start stream');
+            if (!ffmpeg || !ffmpeg.stdout) {
+                this.logger.error('JP_Radio::ffmpeg start failed or stdout is null');
+                res.status(500).send('Stream start error');
                 return;
             }
-            // プロセス終了監視用フラグ
             let ffmpegExited = false;
             ffmpeg.on('exit', () => {
                 ffmpegExited = true;
                 this.logger.debug(`ffmpeg process ${ffmpeg.pid} exited.`);
             });
-            res.setHeader('Cache-Control', 'no-cache, no-store');
-            res.setHeader('icy-name', await this.rdk.getStationAsciiName(station));
-            res.setHeader('icy-metaint', icyMetadata.metaInt);
-            res.setHeader('Content-Type', 'audio/aac');
-            res.setHeader('Connection', 'keep-alive');
             const progData = await this.prg?.getCurProgram(station);
-            const title = progData ? `${progData.pfm || ''} - ${progData.title || ''}` : null;
-            if (title)
+            if (progData) {
+                const title = `${progData.pfm || ''} - ${progData.title || ''}`;
                 icyMetadata.setStreamTitle(title);
-            if (ffmpeg.stdout) {
-                this.logger.info('JP_Radio::ffmpeg stdout');
-                ffmpeg.stdout.pipe(icyMetadata).pipe(res);
             }
-            else {
-                this.logger.error('JP_Radio::ffmpeg stdout is null');
-                res.status(500).send('Internal server error');
-                return;
-            }
+            res.set({
+                'Cache-Control': 'no-cache, no-store',
+                'icy-name': await this.rdk.getStationAsciiName(station),
+                'icy-metaint': icyMetadata.metaInt,
+                'Content-Type': 'audio/aac',
+                Connection: 'keep-alive'
+            });
+            ffmpeg.stdout.pipe(icyMetadata).pipe(res);
             res.on('close', () => {
                 if (ffmpeg.pid && !ffmpegExited) {
                     try {
-                        // プロセスグループをSIGTERMでkill
                         process.kill(-ffmpeg.pid, 'SIGTERM');
-                        this.logger.info(`Sent SIGTERM to ffmpeg process group ${ffmpeg.pid}`);
+                        this.logger.info(`SIGTERM sent to ffmpeg group ${ffmpeg.pid}`);
                     }
                     catch (e) {
-                        if (e.code === 'ESRCH') {
-                            // プロセスは既に終了しているので問題なし
-                            this.logger.info(`ffmpeg process ${ffmpeg.pid} already exited.`);
-                        }
-                        else {
-                            this.logger.warn(`Failed to kill ffmpeg process ${ffmpeg.pid}`, e);
-                        }
+                        this.logger.warn(`Kill ffmpeg failed: ${e.code === 'ESRCH' ? 'Already exited' : e.message}`);
                     }
                 }
             });
-            this.logger.info('JP_Radio::get returning response');
+            this.logger.info('JP_Radio::Streaming started');
         }
         catch (err) {
-            this.logger.error('JP_Radio::error in /radiko/:stationID handler', err);
+            this.logger.error('JP_Radio::Stream error', err);
             res.status(500).send('Internal server error');
         }
     });
-    this.app.get('/radiko/', (req, res) => {
+    this.app.get('/radiko/', (_req, res) => {
         res.send("Hello, world. You're at the radiko_app index.");
     });
 }, _JpRadio_init = async function _JpRadio_init() {

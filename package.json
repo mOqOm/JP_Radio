@@ -1,6 +1,6 @@
 {
   "name": "jp_radio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Japanese radio relay server for Volumio3",
   "main": "/dist/index.js",
   "scripts": {
@@ -54,6 +54,7 @@
     "lodash": "^4.17.21",
     "nedb-promises": "^6.2.3",
     "node-cron": "^2.0.3",
+    "p-limit": "^2.3.0",
     "tough-cookie": "^5.1.2",
     "v-conf": "^1.4.3"
   }

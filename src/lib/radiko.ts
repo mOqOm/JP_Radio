@@ -5,6 +5,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as tough from 'tough-cookie';
 import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
+import pLimit from 'p-limit';
 
 import type { StationInfo, RegionData, StationMapData } from './models/Station';
 import type { LoginAccount, LoginState } from './models/Auth';
@@ -27,9 +28,9 @@ export default class Radiko {
   private cookieJar: CookieJar | null = null;
   private loginState: LoginState | null = null;
 
-  public stations: Map<string, StationMapData> | null = null;
+  public stations: Map<string, StationMapData> = new Map();
   public stationData: RegionData[] = [];
-  public areaData: Map<string, { areaName: string; stations: string[] }> | null = null;
+  public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
 
   constructor(
     private port: number,
@@ -127,61 +128,71 @@ export default class Radiko {
     return res.body;
   }
 
-  private async getStations(): Promise<void> {
-    this.stations = new Map();
-    this.areaData = new Map();
+private async getStations(): Promise<void> {
+  this.stations = new Map();
+  this.areaData = new Map();
 
-    const fullRes = await got(CHANNEL_FULL_URL);
-    const fullParsed = xmlParser.parse(fullRes.body);
+  // 1. フル局データを取得・パース
+  const fullRes = await got(CHANNEL_FULL_URL);
+  const fullParsed = xmlParser.parse(fullRes.body);
 
-    const regionData: RegionData[] = [];
-    for (const region of fullParsed.region.stations) {
-      regionData.push({
-        region,
-        stations: region.station.map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          ascii_name: s.ascii_name,
-          areafree: s.areafree,
-          timefree: s.timefree,
-          banner: s.banner,
-          area_id: s.area_id,
-        })),
-      });
-    }
+  const regionData: RegionData[] = fullParsed.region.stations.map((region: any) => ({
+    region,
+    stations: region.station.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      ascii_name: s.ascii_name,
+      areafree: s.areafree,
+      timefree: s.timefree,
+      banner: s.banner,
+      area_id: s.area_id,
+    })),
+  }));
 
-    for (let i = 1; i <= 47; i++) {
-      const areaID = `JP${i}`;
-      const res = await got(format(CHANNEL_AREA_URL, areaID));
-      const parsed = xmlParser.parse(res.body);
-      const stations = parsed.stations.station.map((s: any) => s.id);
-      this.areaData.set(areaID, {
-        areaName: parsed.stations['@area_name'],
-        stations,
-      });
-    }
+  // 2. 並列数制限付きで47エリア分の取得を並列化
+  const limit = pLimit(5); // 並列数5に制限
+  const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
 
-    for (const region of regionData) {
-      for (const station of region.stations) {
-        const id = station.id;
-        const areaName = this.areaData?.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-        const allowedStations = this.areaData?.get(this.areaID ?? '')?.stations.map(String) ?? [];
+  await Promise.all(
+    areaIDs.map((areaID) =>
+      limit(async () => {
+        const res = await got(format(CHANNEL_AREA_URL, areaID));
+        const parsed = xmlParser.parse(res.body);
+        const stations = parsed.stations.station.map((s: any) => s.id);
+        this.areaData.set(areaID, {
+          areaName: parsed.stations['@area_name'],
+          stations,
+        });
+      })
+    )
+  );
 
-        if (this.loginState || allowedStations.includes(id)) {
-          this.stations.set(id, {
-            RegionName: region.region.region_name,
-            BannerURL: station.banner,
-            AreaID: station.area_id,
-            AreaName: areaName,
-            Name: station.name,
-            AsciiName: station.ascii_name,
-          });
-        }
+  // 3. this.areaDataとthis.areaIDは一時変数に展開して効率化
+  const areaData = this.areaData;
+  const currentAreaID = this.areaID ?? '';
+  const allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
+
+  // 4. regionDataを元にstationsをセット
+  for (const region of regionData) {
+    for (const station of region.stations) {
+      const id = station.id;
+      const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
+
+      if (this.loginState || allowedStations.includes(id)) {
+        this.stations.set(id, {
+          RegionName: region.region.region_name,
+          BannerURL: station.banner,
+          AreaID: station.area_id,
+          AreaName: areaName,
+          Name: station.name,
+          AsciiName: station.ascii_name,
+        });
       }
     }
-
-    this.stationData = regionData;
   }
+
+  this.stationData = regionData;
+}
 
   async getStationAsciiName(stationID: string): Promise<string> {
     return this.stations?.get(stationID)?.AsciiName ?? '';
@@ -207,15 +218,7 @@ export default class Radiko {
       return null;
     }
 
-    const args = [
-      '-y',
-      '-headers', `X-Radiko-Authtoken:${this.token}`,
-      '-i', m3u8,
-      '-acodec', 'copy',
-      '-f', 'adts',
-      '-loglevel', 'error',
-      'pipe:1',
-    ];
+    const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
 
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }

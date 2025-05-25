@@ -3,6 +3,7 @@ import got from 'got';
 import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
+import pLimit from 'p-limit';
 
 import { PROG_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramData';
@@ -11,16 +12,16 @@ import type { RadikoXMLData } from './models/RadikoXMLStation';
 export default class RdkProg {
   private logger: Console;
   private db = Datastore.create({ inMemoryOnly: true });
-  private station: string | null = null;
-  private lastdt: string | null = null;
-  private radikoProgData: RadikoProgramData | null = null;
+  private lastStation: string | null = null;
+  private lastTime: string | null = null;
+  private cachedProgram: RadikoProgramData | null = null;
 
   constructor(logger: Console) {
     this.logger = logger;
-    this.#initDBIndexes();
+    this.initDBIndexes();
   }
 
-  #initDBIndexes() {
+  private initDBIndexes(): void {
     this.db.ensureIndex({ fieldName: 'id', unique: true });
     this.db.ensureIndex({ fieldName: 'station' });
     this.db.ensureIndex({ fieldName: 'ft' });
@@ -28,27 +29,26 @@ export default class RdkProg {
   }
 
   async getCurProgram(station: string): Promise<RadikoProgramData | null> {
-    const curdt = this.#getCurrentTime();
+    const currentTime = this.getCurrentTime();
 
-    if (station !== this.station || curdt !== this.lastdt) {
+    if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
-        const results = await this.db.find({
+        const result = await this.db.findOne({
           station,
-          ft: { $lte: curdt },
-          tt: { $gte: curdt }
+          ft: { $lte: currentTime },
+          tt: { $gte: currentTime },
         });
 
-        const first = results[0];
-        this.radikoProgData = isRadikoProgramData(first) ? first : null;
+        this.cachedProgram = isRadikoProgramData(result) ? result : null;
       } catch (error) {
-        this.logger.error(`JP_Radio::DB Find Error for station ${station}`, error);
+        this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
       }
 
-      this.station = station;
-      this.lastdt = curdt;
+      this.lastStation = station;
+      this.lastTime = currentTime;
     }
 
-    return this.radikoProgData;
+    return this.cachedProgram;
   }
 
   async putProgram(prog: RadikoProgramData): Promise<void> {
@@ -56,59 +56,67 @@ export default class RdkProg {
       await this.db.insert(prog);
     } catch (error: any) {
       if (error?.errorType !== 'uniqueViolated') {
-        this.logger.error('JP_Radio::DB Insert Error', error);
+        this.logger.error('JP_Radio::DB insert error', error);
       }
     }
   }
 
   async clearOldProgram(): Promise<void> {
-    const curdt = this.#getCurrentTime();
+    const currentTime = this.getCurrentTime();
     try {
-      await this.db.remove({ tt: { $lt: curdt } }, { multi: true });
+      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
     } catch (error) {
-      this.logger.error('JP_Radio::DB Delete Error', error);
+      this.logger.error('JP_Radio::DB delete error', error);
     }
   }
 
   async updatePrograms(): Promise<void> {
-    const curDate = this.#getCurrentDate();
-    const xmlParser = new XMLParser({
+    const currentDate = this.getCurrentDate();
+    const parser = new XMLParser({
       attributeNamePrefix: '@',
       ignoreAttributes: false,
-      allowBooleanAttributes: true
+      allowBooleanAttributes: true,
     });
 
-    for (let i = 1; i <= 47; i++) {
-      const areaID = `JP${i}`;
-      const url = utilFormat(PROG_URL, curDate, areaID);
+    const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+    // 並列数5に制限
+    const limit = pLimit(5);
 
-      try {
-        const response = await got(url);
-        const data: RadikoXMLData = xmlParser.parse(response.body);
+    const tasks = areaIDs.map((areaID) =>
+      limit(async () => {
+        const url = utilFormat(PROG_URL, currentDate, areaID);
+        try {
+          const response = await got(url);
+          const xmlData: RadikoXMLData = parser.parse(response.body);
 
-        for (const stationData of data.radiko.stations.station) {
-          const stationName = stationData['@id'];
-          if (stationName === 'MAJAL') continue;
+          for (const stationData of xmlData.radiko.stations.station) {
+            const stationId = stationData['@id'];
+            const progRaw = stationData.progs?.prog;
+            const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
 
-          for (const prog of stationData.progs.prog) {
-            await this.putProgram({
-              station: stationName,
-              id: stationName + prog['@id'],
-              ft: prog['@ft'],
-              tt: prog['@to'],
-              title: prog['title'],
-              pfm: prog['pfm'] || ''
-            });
+            for (const prog of progs) {
+              const program: RadikoProgramData = {
+                station: stationId,
+                id: stationId + prog['@id'],
+                ft: prog['@ft'],
+                tt: prog['@to'],
+                title: prog['title'],
+                pfm: prog['pfm'] || '',
+              };
+              await this.putProgram(program);
+            }
           }
+        } catch (error) {
+          this.logger.error(`JP_Radio::Failed to update program for ${areaID}`, error);
         }
-      } catch (error) {
-        this.logger.error(`JP_Radio::Failed to update program for ${areaID}`, error);
-      }
-    }
+      })
+    );
+
+    await Promise.all(tasks);
   }
 
   async dbClose(): Promise<void> {
-    this.logger.info('JP_Radio::DB Compacting');
+    this.logger.info('JP_Radio::DB compacting');
     await this.db.persistence.compactDatafile();
   }
 
@@ -117,24 +125,15 @@ export default class RdkProg {
     return JSON.stringify(data, null, 2);
   }
 
-  /**
-   * "yyyyMMddHHmm" 形式の現在時刻文字列を返す
-   */
-  #getCurrentTime(): string {
+  private getCurrentTime(): string {
     return format(new Date(), 'yyyyMMddHHmm');
   }
 
-  /**
-   * "yyyyMMdd" 形式の現在日付文字列を返す
-   */
-  #getCurrentDate(): string {
+  private getCurrentDate(): string {
     return format(new Date(), 'yyyyMMdd');
   }
 }
 
-/**
- * 型チェックユーティリティ
- */
 function isRadikoProgramData(data: any): data is RadikoProgramData {
   return (
     typeof data?.station === 'string' &&

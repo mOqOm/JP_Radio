@@ -7,18 +7,22 @@ const v_conf_1 = __importDefault(require("v-conf"));
 const radio_1 = __importDefault(require("./lib/radio"));
 class ControllerJpRadio {
     constructor(context) {
+        this.config = null;
         this.serviceName = 'jp_radio';
+        this.appRadio = null;
         this.context = context;
         this.commandRouter = context.coreCommand;
         this.logger = context.logger;
         this.configManager = context.configManager;
     }
-    restartPlugin() {
-        this.onStop().then(() => {
-            this.onStart().catch(() => {
-                this.commandRouter.pushToastMessage('error', 'Restart Failed', 'The plugin could not be restarted.');
-            });
-        });
+    async restartPlugin() {
+        try {
+            await this.onStop();
+            await this.onStart();
+        }
+        catch {
+            this.commandRouter.pushToastMessage('error', 'Restart Failed', 'The plugin could not be restarted.');
+        }
     }
     showRestartModal() {
         const message = {
@@ -46,68 +50,88 @@ class ControllerJpRadio {
         };
         this.commandRouter.broadcastMessage('openModal', message);
     }
-    saveServicePort(data) {
-        const newPort = parseInt(data['servicePort']);
-        if (!isNaN(newPort) && this.config.get('servicePort') !== newPort) {
+    async saveServicePort(data) {
+        const newPort = Number(data.servicePort);
+        if (!isNaN(newPort) && this.config && this.config.get('servicePort') !== newPort) {
             this.config.set('servicePort', newPort);
             this.showRestartModal();
         }
-        return kew_1.default.resolve();
     }
-    saveRadikoAccount(data) {
-        const updated = ['radikoUser', 'radikoPass'].some(key => {
-            if (this.config.get(key) !== data[key]) {
-                this.config.set(key, data[key]);
-                return true;
-            }
-            return false;
-        });
+    async saveRadikoAccount(data) {
+        if (!this.config)
+            return;
+        const updated = ['radikoUser', 'radikoPass'].some((key) => this.config.get(key) !== data[key]);
         if (updated) {
+            this.config.set('radikoUser', data.radikoUser);
+            this.config.set('radikoPass', data.radikoPass);
             this.showRestartModal();
         }
-        return kew_1.default.resolve();
     }
     onVolumioStart() {
-        const configFile = this.commandRouter.pluginManager.getConfigurationFile(this.context, 'config.json');
-        this.config = new v_conf_1.default();
-        this.config.loadFile(configFile);
-        return kew_1.default.resolve();
+        const defer = kew_1.default.defer();
+        try {
+            const configFile = this.commandRouter.pluginManager.getConfigurationFile(this.context, 'config.json');
+            this.config = new v_conf_1.default();
+            this.config.loadFile(configFile);
+            defer.resolve();
+        }
+        catch (error) {
+            defer.reject(error);
+        }
+        return defer.promise;
     }
     onStart() {
+        const defer = kew_1.default.defer();
+        if (!this.config) {
+            this.logger.error('Config not initialized onStart');
+            defer.reject(new Error('Config not initialized'));
+            return defer.promise;
+        }
         const radikoUser = this.config.get('radikoUser');
         const radikoPass = this.config.get('radikoPass');
         const servicePort = this.config.get('servicePort') || 9000;
-        const account = (radikoUser && radikoPass) ? { mail: radikoUser, pass: radikoPass } : null;
-        this.appRadio = new radio_1.default(servicePort, this.logger, account);
-        this.appRadio.start();
-        this.addToBrowseSources();
-        return kew_1.default.resolve();
+        const account = radikoUser && radikoPass ? { mail: radikoUser, pass: radikoPass } : null;
+        this.appRadio = new radio_1.default(servicePort, this.logger, account, this.commandRouter);
+        this.appRadio.start()
+            .then(() => {
+            this.addToBrowseSources();
+            defer.resolve();
+        })
+            .catch((err) => {
+            this.logger.error('JP_Radio::Failed to start appRadio', err);
+            defer.reject(err);
+        });
+        return defer.promise;
     }
-    onStop() {
-        this.appRadio.stop();
+    async onStop() {
+        try {
+            if (this.appRadio)
+                await this.appRadio.stop();
+        }
+        catch (err) {
+            this.logger.error('JP_Radio::Error stopping appRadio', err);
+        }
         this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
-        return kew_1.default.resolve();
     }
-    onRestart() { }
-    getUIConfig() {
-        const defer = kew_1.default.defer();
-        const lang_code = this.commandRouter.sharedVars.get('language_code');
-        this.commandRouter.i18nJson(`${__dirname}/i18n/strings_${lang_code}.json`, `${__dirname}/i18n/strings_en.json`, `${__dirname}/UIConfig.json`).then((uiconf) => {
+    async getUIConfig() {
+        if (!this.config)
+            return {};
+        const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
+        try {
+            const uiconf = await this.commandRouter.i18nJson(`${__dirname}/i18n/strings_${langCode}.json`, `${__dirname}/i18n/strings_en.json`, `${__dirname}/UIConfig.json`);
             uiconf.sections[0].content[0].value = this.config.get('servicePort');
             uiconf.sections[1].content[0].value = this.config.get('radikoUser');
             uiconf.sections[1].content[1].value = this.config.get('radikoPass');
-            defer.resolve(uiconf);
-        }).fail(() => {
-            defer.reject(new Error());
-        });
-        return defer.promise;
+            return uiconf;
+        }
+        catch (e) {
+            this.logger.error('Failed to load UI config', e);
+            return {};
+        }
     }
     getConfigurationFiles() {
         return ['config.json'];
     }
-    setUIConfig(data) { }
-    getConf(varName) { }
-    setConf(varName, varValue) { }
     addToBrowseSources() {
         this.commandRouter.volumioAddToBrowseSources({
             name: 'RADIKO',
@@ -117,42 +141,52 @@ class ControllerJpRadio {
             albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
         });
     }
-    handleBrowseUri(curUri) {
-        if (curUri === 'radiko') {
-            return kew_1.default.resolve({
+    async handleBrowseUri(curUri) {
+        const [baseUri] = curUri.split('?');
+        if (baseUri === 'radiko') {
+            const timestamp = Date.now();
+            if (!this.appRadio)
+                return {};
+            const items = await this.appRadio.radioStations();
+            const updatedItems = items.map((item) => ({
+                ...item,
+                uri: `${item.uri}?ts=${timestamp}`
+            }));
+            return {
                 navigation: {
                     lists: [{
                             title: 'LIVE',
                             availableListViews: ['grid', 'list'],
-                            items: this.appRadio.radioStations()
+                            items: updatedItems
                         }]
-                }
-            });
+                },
+                uri: `radiko?ts=${timestamp}`
+            };
         }
-        return kew_1.default.resolve();
+        return {};
     }
     clearAddPlayTrack(track) {
-        this.logger.info(`[${Date.now()}] JP_Radio::clearAddPlayTrack\n${JSON.stringify(track)}`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::clearAddPlayTrack`, track);
         return kew_1.default.resolve();
     }
     seek(timepos) {
-        this.logger.info(`[${Date.now()}] JP_Radio::seek to ${timepos}`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::seek to ${timepos}`);
         return kew_1.default.resolve();
     }
     stop() {
-        this.logger.info(`[${Date.now()}] JP_Radio::stop`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::stop`);
     }
     pause() {
-        this.logger.info(`[${Date.now()}] JP_Radio::pause`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::pause`);
     }
     getState() {
-        this.logger.info(`[${Date.now()}] JP_Radio::getState`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::getState`);
     }
     parseState(sState) {
-        this.logger.info(`[${Date.now()}] JP_Radio::parseState`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::parseState`);
     }
     pushState(state) {
-        this.logger.info(`[${Date.now()}] JP_Radio::pushState`);
+        this.logger.info(`[${new Date().toISOString()}] JP_Radio::pushState`);
         return this.commandRouter.servicePushState(state, this.serviceName);
     }
     explodeUri(uri) {
@@ -161,10 +195,6 @@ class ControllerJpRadio {
     search(query) {
         return kew_1.default.resolve();
     }
-    _searchArtists(results) { }
-    _searchAlbums(results) { }
-    _searchPlaylists(results) { }
-    _searchTracks(results) { }
     goto(data) {
         return kew_1.default.resolve();
     }
