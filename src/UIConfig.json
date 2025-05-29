@@ -34,8 +34,7 @@
           ],
           "value": 9000,
           "description": "TRANSLATE.SERVICE_PORT_DESC"
-        },
-        {}
+        }
       ]
     },
     {

@@ -25,7 +25,7 @@ const xmlParser = new XMLParser({
 export default class Radiko {
   private token: string | null = null;
   private areaID: string | null = null;
-  private cookieJar: CookieJar | null = null;
+  private cookieJar: CookieJar = new tough.CookieJar();
   private loginState: LoginState | null = null;
 
   public stations: Map<string, StationMapData> = new Map();
@@ -39,16 +39,17 @@ export default class Radiko {
   ) {}
 
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
-    this.cookieJar ??= new tough.CookieJar();
-
     if (acct) {
       this.logger.info('JP_Radio::Attempting login');
-      const loginOK = await this.checkLogin(this.cookieJar) ?? await this.login(acct).then(jar => this.checkLogin(jar));
+      const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
+      this.cookieJar = jar;
+      return this.checkLogin();
+    });
       this.loginState = loginOK;
     }
 
     if (forceGetStations || !this.areaID) {
-      const [token, areaID] = await this.getToken(this.cookieJar);
+      const [token, areaID] = await this.getToken();
       this.token = token;
       this.areaID = areaID;
       await this.getStations();
@@ -70,33 +71,49 @@ export default class Radiko {
     }
   }
 
-  private async checkLogin(jar: CookieJar): Promise<LoginState | null> {
+  private async checkLogin(): Promise<LoginState | null> {
+    if (!this.cookieJar) {
+      this.logger.info('JP_Radio::premium account not set');
+      return null;
+    }
+
     try {
-      const res = await got.get(CHECK_URL, {
-        cookieJar: jar,
-        responseType: 'json',
-      });
-      const loginState = res.body as LoginState;
-      this.logger.info(`JP_Radio::Login status: ${loginState.member_type.type}`);
-      return loginState;
+      const options: OptionsOfJSONResponseBody = {
+        cookieJar: this.cookieJar,
+        method: 'GET',
+        responseType: 'json'
+      };
+
+      const response: Response<any> = await got(CHECK_URL, options);
+      const body = response.body as LoginState;
+
+      this.logger.info(`JP_Radio::Login status: ${body.member_type.type}`);
+      return body;
+
     } catch (err: any) {
-      if (err.statusCode === 400) return null;
-      this.logger.warn('JP_Radio::Login check error', err);
+      const statusCode = err?.response?.statusCode;
+
+      if (statusCode === 400) {
+        this.logger.info('JP_Radio::premium not logged in (HTTP 400)');
+        return null;
+      }
+
+      this.logger.error(`JP_Radio::premium account login check error: ${err.message}`, err);
       return null;
     }
   }
 
-  private async getToken(jar: CookieJar): Promise<[string, string]> {
-    const auth1Headers = await this.auth1(jar);
+  private async getToken(): Promise<[string, string]> {
+    const auth1Headers = await this.auth1();
     const [partialKey, token] = this.getPartialKey(auth1Headers);
-    const result = await this.auth2(token, partialKey, jar);
+    const result = await this.auth2(token, partialKey);
     const [areaID] = result.trim().split(',');
     return [token, areaID];
   }
 
-  private async auth1(jar: CookieJar): Promise<Record<string, string>> {
+  private async auth1(): Promise<Record<string, string>> {
     const res = await got.get(AUTH1_URL, {
-      cookieJar: jar,
+      cookieJar: this.cookieJar,
       headers: {
         'X-Radiko-App': 'pc_html5',
         'X-Radiko-App-Version': '0.0.1',
@@ -115,9 +132,9 @@ export default class Radiko {
     return [partialKey, token];
   }
 
-  private async auth2(token: string, partialKey: string, jar: CookieJar): Promise<string> {
+  private async auth2(token: string, partialKey: string): Promise<string> {
     const res = await got.get(AUTH2_URL, {
-      cookieJar: jar,
+      cookieJar: this.cookieJar,
       headers: {
         'X-Radiko-AuthToken': token,
         'X-Radiko-Partialkey': partialKey,
@@ -206,11 +223,11 @@ private async getStations(): Promise<void> {
 
     let m3u8: string | null = null;
     for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.areaID] = await this.getToken(this.cookieJar!);
+      if (!this.token) [this.token, this.areaID] = await this.getToken();
       m3u8 = await this.genTempChunkM3u8URL(format(PLAY_URL, station), this.token);
       if (m3u8) break;
       this.logger.info('JP_Radio::Retrying stream fetch with new token');
-      [this.token, this.areaID] = await this.getToken(this.cookieJar!);
+      [this.token, this.areaID] = await this.getToken();
     }
 
     if (!m3u8) {

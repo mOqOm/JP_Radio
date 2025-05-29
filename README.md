@@ -4,6 +4,8 @@ Japanese radio relay server for Volumio3
 > **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
 
 ## Change log
+### version 0.1.2(2025/05/29)
++ Fixed a bug that prevents viewing on Radiko Premium.
 ### version 0.1.1(2025/05/22)
 + 2025/05/26 Changed to display a popup window on startup (tentative)
 ### version 0.1.0(2025/05/22)

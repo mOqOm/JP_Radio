@@ -127,27 +127,35 @@ class ControllerJpRadio {
     this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
   }
 
-  async getUIConfig(): Promise<any> {
-    if (!this.config) return {};
+  getUIConfig(): Promise<any> {
+    const defer = libQ.defer();
     const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
-    try {
-      const uiconf = await this.commandRouter.i18nJson(
-        `${__dirname}/i18n/strings_${langCode}.json`,
-        `${__dirname}/i18n/strings_en.json`,
-        `${__dirname}/UIConfig.json`
-      );
+    this.commandRouter.i18nJson(
+      `${__dirname}/i18n/strings_${langCode}.json`,
+      `${__dirname}/i18n/strings_en.json`,
+      `${__dirname}/UIConfig.json`
+    )
+    .then((uiconf: any) => {
+      const servicePort = this.config.get('servicePort');
+      const radikoUser = this.config.get('radikoUser');
+      const radikoPass = this.config.get('radikoPass');
 
-      uiconf.sections[0].content[0].value = this.config.get('servicePort');
-      uiconf.sections[1].content[0].value = this.config.get('radikoUser');
-      uiconf.sections[1].content[1].value = this.config.get('radikoPass');
-      return uiconf;
-    } catch (e) {
-      this.logger.error('Failed to load UI config', e);
-      return {};
-    }
+      if (uiconf.sections?.[0]?.content?.[0]) uiconf.sections[0].content[0].value = servicePort;
+      if (uiconf.sections?.[1]?.content?.[0]) uiconf.sections[1].content[0].value = radikoUser;
+      if (uiconf.sections?.[1]?.content?.[1]) uiconf.sections[1].content[1].value = radikoPass;
+
+      defer.resolve(uiconf);
+    })
+    .fail((error: any) => {
+      this.logger.error('getUIConfig failed:', error);
+      defer.reject(error);
+    });
+
+    return defer.promise;
   }
 
+  
   getConfigurationFiles(): string[] {
     return ['config.json'];
   }
