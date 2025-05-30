@@ -6,29 +6,32 @@ import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
 import { PROG_URL } from './consts/radikoUrls';
-import type { RadikoProgramData } from './models/RadikoProgramData';
-import type { RadikoXMLData } from './models/RadikoXMLStation';
+import type { RadikoProgramData } from './models/RadikoProgramModel';
+import type { RadikoXMLData } from './models/RadikoXMLStationModel';
+
+const EMPTY_PROGRAM: RadikoProgramData = {
+  station: '',
+  id: '',
+  ft: '',
+  tt: '',
+  title: '',
+  pfm: '',
+};
 
 export default class RdkProg {
-  private logger: Console;
-  private db = Datastore.create({ inMemoryOnly: true });
-  private lastStation: string | null = null;
-  private lastTime: string | null = null;
-  private cachedProgram: RadikoProgramData | null = null;
+  private readonly logger: Console;
+  private readonly db = Datastore.create({ inMemoryOnly: true });
+
+  private lastStation = '';
+  private lastTime = '';
+  private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
   constructor(logger: Console) {
     this.logger = logger;
     this.initDBIndexes();
   }
 
-  private initDBIndexes(): void {
-    this.db.ensureIndex({ fieldName: 'id', unique: true });
-    this.db.ensureIndex({ fieldName: 'station' });
-    this.db.ensureIndex({ fieldName: 'ft' });
-    this.db.ensureIndex({ fieldName: 'tt' });
-  }
-
-  async getCurProgram(station: string): Promise<RadikoProgramData | null> {
+  async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
     const currentTime = this.getCurrentTime();
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
@@ -39,16 +42,20 @@ export default class RdkProg {
           tt: { $gte: currentTime },
         });
 
-        this.cachedProgram = isRadikoProgramData(result) ? result : null;
+        if (isRadikoProgramData(result)) {
+          this.cachedProgram = result;
+        } else {
+          this.cachedProgram = { ...EMPTY_PROGRAM };
+        }
+
+        this.lastStation = station;
+        this.lastTime = currentTime;
       } catch (error) {
         this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
       }
-
-      this.lastStation = station;
-      this.lastTime = currentTime;
     }
 
-    return this.cachedProgram;
+    return this.cachedProgram.id ? this.cachedProgram : undefined;
   }
 
   async putProgram(prog: RadikoProgramData): Promise<void> {
@@ -62,9 +69,8 @@ export default class RdkProg {
   }
 
   async clearOldProgram(): Promise<void> {
-    const currentTime = this.getCurrentTime();
     try {
-      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
+      await this.db.remove({ tt: { $lt: this.getCurrentTime() } }, { multi: true });
     } catch (error) {
       this.logger.error('JP_Radio::DB delete error', error);
     }
@@ -79,7 +85,6 @@ export default class RdkProg {
     });
 
     const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
-    // 並列数5に制限
     const limit = pLimit(5);
 
     const tasks = areaIDs.map((areaID) =>
@@ -88,10 +93,13 @@ export default class RdkProg {
         try {
           const response = await got(url);
           const xmlData: RadikoXMLData = parser.parse(response.body);
+          const stations = xmlData?.radiko?.stations?.station ?? [];
 
-          for (const stationData of xmlData.radiko.stations.station) {
+          for (const stationData of stations) {
             const stationId = stationData['@id'];
             const progRaw = stationData.progs?.prog;
+            if (!progRaw) continue;
+
             const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
 
             for (const prog of progs) {
@@ -101,7 +109,7 @@ export default class RdkProg {
                 ft: prog['@ft'],
                 tt: prog['@to'],
                 title: prog['title'],
-                pfm: prog['pfm'] || '',
+                pfm: prog['pfm'] ?? '',
               };
               await this.putProgram(program);
             }
@@ -123,6 +131,13 @@ export default class RdkProg {
   async allData(): Promise<string> {
     const data = await this.db.find({});
     return JSON.stringify(data, null, 2);
+  }
+
+  private initDBIndexes(): void {
+    this.db.ensureIndex({ fieldName: 'id', unique: true });
+    this.db.ensureIndex({ fieldName: 'station' });
+    this.db.ensureIndex({ fieldName: 'ft' });
+    this.db.ensureIndex({ fieldName: 'tt' });
   }
 
   private getCurrentTime(): string {

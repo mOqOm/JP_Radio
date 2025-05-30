@@ -1,6 +1,7 @@
 import libQ from 'kew';
 import VConf from 'v-conf';
 import JpRadio from './lib/radio';
+import { BrowseResult } from './lib/models/BrowseResultModel';
 
 export = ControllerJpRadio;
 
@@ -170,28 +171,16 @@ class ControllerJpRadio {
     });
   }
 
-  async handleBrowseUri(curUri: string): Promise<any> {
+  async handleBrowseUri(curUri: string): Promise<BrowseResult | {}> {
     const [baseUri] = curUri.split('?');
-    if (baseUri === 'radiko') {
-      const timestamp = Date.now();
-      if (!this.appRadio) return {};
-      const items = await this.appRadio.radioStations();
-      const updatedItems = items.map((item: any) => ({
-        ...item,
-        uri: `${item.uri}?ts=${timestamp}`
-      }));
 
-      return {
-        navigation: {
-          lists: [{
-            title: 'LIVE',
-            availableListViews: ['grid', 'list'],
-            items: updatedItems
-          }]
-        },
-        uri: `radiko?ts=${timestamp}`
-      };
+    if (baseUri === 'radiko') {
+      if (!this.appRadio) {
+        return {};
+      }
+      return await this.appRadio.radioStations();
     }
+
     return {};
   }
 

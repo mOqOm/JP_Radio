@@ -32,25 +32,55 @@ class JpRadio {
         __classPrivateFieldGet(this, _JpRadio_instances, "m", _JpRadio_setupRoutes).call(this);
     }
     async radioStations() {
-        if (!this.rdk?.stations)
-            return [];
-        const results = await Promise.all(Array.from(this.rdk.stations.entries()).map(async ([stationId, stationInfo]) => {
+        if (!this.rdk?.stations) {
+            return {
+                navigation: {
+                    lists: [{
+                            title: 'LIVE',
+                            availableListViews: ['grid', 'list'],
+                            items: []
+                        }]
+                },
+                uri: 'radiko'
+            };
+        }
+        const entries = Array.from(this.rdk.stations.entries());
+        // 地域名ごとにグループ化
+        const grouped = {};
+        await Promise.all(entries.map(async ([stationId, stationInfo]) => {
             const progData = await this.prg?.getCurProgram(stationId);
             const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
             const title = `${(0, lodash_1.capitalize)(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
-            return {
+            const item = {
                 service: 'webradio',
                 type: 'song',
                 title,
-                albumart: stationInfo.BannerURL,
+                albumart: stationInfo.BannerURL || '',
                 uri: `http://localhost:${this.port}/radiko/${stationId}`,
                 name: '',
                 samplerate: '',
                 bitdepth: 0,
                 channels: 0
             };
+            const region = stationInfo.RegionName || 'その他';
+            if (!grouped[region]) {
+                grouped[region] = [];
+            }
+            grouped[region].push(item);
         }));
-        return results;
+        // BrowseList を作成
+        const lists = Object.entries(grouped).map(([regionName, items]) => ({
+            title: regionName,
+            availableListViews: ['grid', 'list'],
+            items
+        }));
+        const result = {
+            navigation: {
+                lists
+            },
+            uri: 'radiko'
+        };
+        return result;
     }
     async start() {
         if (this.server) {

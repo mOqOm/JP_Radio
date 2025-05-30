@@ -64,7 +64,6 @@ class Radiko {
         this.areaData = new Map();
     }
     async init(acct = null, forceGetStations = false) {
-        this.cookieJar = new tough.CookieJar();
         if (acct) {
             this.logger.info('JP_Radio::Attempting login');
             const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
@@ -167,7 +166,9 @@ class Radiko {
         const fullRes = await (0, got_1.default)(radikoUrls_1.CHANNEL_FULL_URL);
         const fullParsed = xmlParser.parse(fullRes.body);
         const regionData = fullParsed.region.stations.map((region) => ({
-            region,
+            region_name: region['@region_name'],
+            region_id: region['@region_id'],
+            ascii_name: region['@ascii_name'],
             stations: region.station.map((s) => ({
                 id: s.id,
                 name: s.name,
@@ -179,7 +180,7 @@ class Radiko {
             })),
         }));
         // 2. 並列数制限付きで47エリア分の取得を並列化
-        const limit = (0, p_limit_1.default)(5); // 並列数5に制限
+        const limit = (0, p_limit_1.default)(5);
         const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
         await Promise.all(areaIDs.map((areaID) => limit(async () => {
             const res = await (0, got_1.default)((0, util_1.format)(radikoUrls_1.CHANNEL_AREA_URL, areaID));
@@ -190,18 +191,17 @@ class Radiko {
                 stations,
             });
         })));
-        // 3. this.areaDataとthis.areaIDは一時変数に展開して効率化
         const areaData = this.areaData;
         const currentAreaID = this.areaID ?? '';
         const allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
-        // 4. regionDataを元にstationsをセット
+        // 3. regionData をもとに stations を構成
         for (const region of regionData) {
             for (const station of region.stations) {
                 const id = station.id;
                 const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
                 if (this.loginState || allowedStations.includes(id)) {
                     this.stations.set(id, {
-                        RegionName: region.region.region_name,
+                        RegionName: region.region_name,
                         BannerURL: station.banner,
                         AreaID: station.area_id,
                         AreaName: areaName,

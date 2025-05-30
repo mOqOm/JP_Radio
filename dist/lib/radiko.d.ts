@@ -1,7 +1,7 @@
 import 'date-utils';
 import { ChildProcess } from 'child_process';
-import type { RegionData, StationMapData } from './models/Station';
-import type { LoginAccount } from './models/Auth';
+import type { StationInfo, RegionData } from './models/StationModel';
+import type { LoginAccount } from './models/AuthModel';
 export default class Radiko {
     private port;
     private logger;
@@ -10,7 +10,7 @@ export default class Radiko {
     private areaID;
     private cookieJar;
     private loginState;
-    stations: Map<string, StationMapData>;
+    stations: Map<string, StationInfo>;
     stationData: RegionData[];
     areaData: Map<string, {
         areaName: string;

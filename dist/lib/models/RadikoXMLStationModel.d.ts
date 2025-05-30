@@ -17,4 +17,4 @@ export interface RadikoXMLStation {
         }[];
     };
 }
-//# sourceMappingURL=RadikoXMLStation.d.ts.map
+//# sourceMappingURL=RadikoXMLStationModel.d.ts.map

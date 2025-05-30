@@ -8,4 +8,4 @@ export interface LoginState {
     };
     [key: string]: any;
 }
-//# sourceMappingURL=Auth.d.ts.map
+//# sourceMappingURL=AuthModel.d.ts.map
