@@ -10,20 +10,22 @@ const fast_xml_parser_1 = require("fast-xml-parser");
 const util_1 = require("util");
 const p_limit_1 = __importDefault(require("p-limit"));
 const radikoUrls_1 = require("./consts/radikoUrls");
+const EMPTY_PROGRAM = {
+    station: '',
+    id: '',
+    ft: '',
+    tt: '',
+    title: '',
+    pfm: '',
+};
 class RdkProg {
     constructor(logger) {
         this.db = nedb_promises_1.default.create({ inMemoryOnly: true });
-        this.lastStation = null;
-        this.lastTime = null;
-        this.cachedProgram = null;
+        this.lastStation = '';
+        this.lastTime = '';
+        this.cachedProgram = { ...EMPTY_PROGRAM };
         this.logger = logger;
         this.initDBIndexes();
-    }
-    initDBIndexes() {
-        this.db.ensureIndex({ fieldName: 'id', unique: true });
-        this.db.ensureIndex({ fieldName: 'station' });
-        this.db.ensureIndex({ fieldName: 'ft' });
-        this.db.ensureIndex({ fieldName: 'tt' });
     }
     async getCurProgram(station) {
         const currentTime = this.getCurrentTime();
@@ -34,15 +36,20 @@ class RdkProg {
                     ft: { $lte: currentTime },
                     tt: { $gte: currentTime },
                 });
-                this.cachedProgram = isRadikoProgramData(result) ? result : null;
+                if (isRadikoProgramData(result)) {
+                    this.cachedProgram = result;
+                }
+                else {
+                    this.cachedProgram = { ...EMPTY_PROGRAM };
+                }
+                this.lastStation = station;
+                this.lastTime = currentTime;
             }
             catch (error) {
                 this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
             }
-            this.lastStation = station;
-            this.lastTime = currentTime;
         }
-        return this.cachedProgram;
+        return this.cachedProgram.id ? this.cachedProgram : undefined;
     }
     async putProgram(prog) {
         try {
@@ -55,9 +62,8 @@ class RdkProg {
         }
     }
     async clearOldProgram() {
-        const currentTime = this.getCurrentTime();
         try {
-            await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
+            await this.db.remove({ tt: { $lt: this.getCurrentTime() } }, { multi: true });
         }
         catch (error) {
             this.logger.error('JP_Radio::DB delete error', error);
@@ -71,16 +77,18 @@ class RdkProg {
             allowBooleanAttributes: true,
         });
         const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
-        // 並列数5に制限
         const limit = (0, p_limit_1.default)(5);
         const tasks = areaIDs.map((areaID) => limit(async () => {
             const url = (0, util_1.format)(radikoUrls_1.PROG_URL, currentDate, areaID);
             try {
                 const response = await (0, got_1.default)(url);
                 const xmlData = parser.parse(response.body);
-                for (const stationData of xmlData.radiko.stations.station) {
+                const stations = xmlData?.radiko?.stations?.station ?? [];
+                for (const stationData of stations) {
                     const stationId = stationData['@id'];
                     const progRaw = stationData.progs?.prog;
+                    if (!progRaw)
+                        continue;
                     const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
                     for (const prog of progs) {
                         const program = {
@@ -89,7 +97,7 @@ class RdkProg {
                             ft: prog['@ft'],
                             tt: prog['@to'],
                             title: prog['title'],
-                            pfm: prog['pfm'] || '',
+                            pfm: prog['pfm'] ?? '',
                         };
                         await this.putProgram(program);
                     }
@@ -108,6 +116,12 @@ class RdkProg {
     async allData() {
         const data = await this.db.find({});
         return JSON.stringify(data, null, 2);
+    }
+    initDBIndexes() {
+        this.db.ensureIndex({ fieldName: 'id', unique: true });
+        this.db.ensureIndex({ fieldName: 'station' });
+        this.db.ensureIndex({ fieldName: 'ft' });
+        this.db.ensureIndex({ fieldName: 'tt' });
     }
     getCurrentTime() {
         return (0, date_fns_1.format)(new Date(), 'yyyyMMddHHmm');

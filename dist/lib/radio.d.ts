@@ -1,3 +1,4 @@
+import type { BrowseResult } from './models/BrowseResultModel';
 export default class JpRadio {
     #private;
     private readonly app;
@@ -10,7 +11,7 @@ export default class JpRadio {
     private prg;
     private rdk;
     constructor(port: number | undefined, logger: Console, acct: any | undefined, commandRouter: any);
-    radioStations(): Promise<any[]>;
+    radioStations(): Promise<BrowseResult>;
     start(): Promise<void>;
     stop(): Promise<void>;
 }

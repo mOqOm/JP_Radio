@@ -4,6 +4,7 @@ import IcyMetadata from 'icy-metadata';
 import { capitalize } from 'lodash';
 import RdkProg from './prog';
 import Radiko from './radiko';
+import type { BrowseItem, BrowseList, BrowseResult} from './models/BrowseResultModel';
 
 export default class JpRadio {
   private readonly app: Application;
@@ -98,30 +99,64 @@ export default class JpRadio {
     });
   }
 
-  async radioStations(): Promise<any[]> {
-    if (!this.rdk?.stations) return [];
+  async radioStations(): Promise<BrowseResult> {
+    if (!this.rdk?.stations) {
+      return {
+        navigation: {
+          lists: [{
+            title: 'LIVE',
+            availableListViews: ['grid', 'list'],
+            items: []
+          }]
+        },
+        uri: 'radiko'
+      };
+    }
 
-    const results = await Promise.all(
-      Array.from(this.rdk.stations.entries()).map(async ([stationId, stationInfo]) => {
-        const progData = await this.prg?.getCurProgram(stationId);
-        const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
-        const title = `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
+    const entries = Array.from(this.rdk.stations.entries());
 
-        return {
-          service: 'webradio',
-          type: 'song',
-          title,
-          albumart: stationInfo.BannerURL,
-          uri: `http://localhost:${this.port}/radiko/${stationId}`,
-          name: '',
-          samplerate: '',
-          bitdepth: 0,
-          channels: 0
-        };
-      })
-    );
+    // 地域名ごとにグループ化
+    const grouped: Record<string, BrowseItem[]> = {};
 
-    return results;
+    await Promise.all(entries.map(async ([stationId, stationInfo]) => {
+      const progData = await this.prg?.getCurProgram(stationId);
+      const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
+      const title = `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
+
+      const item: BrowseItem = {
+        service: 'webradio',
+        type: 'song',
+        title,
+        albumart: stationInfo.BannerURL || '',
+        uri: `http://localhost:${this.port}/radiko/${stationId}`,
+        name: '',
+        samplerate: '',
+        bitdepth: 0,
+        channels: 0
+      };
+
+      const region = stationInfo.RegionName || 'その他';
+      if (!grouped[region]) {
+        grouped[region] = [];
+      }
+      grouped[region].push(item);
+    }));
+
+    // BrowseList を作成
+    const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
+      title: regionName,
+      availableListViews: ['grid', 'list'],
+      items
+    }));
+
+    const result: BrowseResult = {
+      navigation: {
+        lists
+      },
+      uri: 'radiko'
+    };
+
+    return result;
   }
 
   async start(): Promise<void> {

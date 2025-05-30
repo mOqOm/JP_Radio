@@ -150,24 +150,10 @@ class ControllerJpRadio {
     async handleBrowseUri(curUri) {
         const [baseUri] = curUri.split('?');
         if (baseUri === 'radiko') {
-            const timestamp = Date.now();
-            if (!this.appRadio)
+            if (!this.appRadio) {
                 return {};
-            const items = await this.appRadio.radioStations();
-            const updatedItems = items.map((item) => ({
-                ...item,
-                uri: `${item.uri}?ts=${timestamp}`
-            }));
-            return {
-                navigation: {
-                    lists: [{
-                            title: 'LIVE',
-                            availableListViews: ['grid', 'list'],
-                            items: updatedItems
-                        }]
-                },
-                uri: `radiko?ts=${timestamp}`
-            };
+            }
+            return await this.appRadio.radioStations();
         }
         return {};
     }
