@@ -144,6 +144,7 @@ class JpRadio {
         }
     }
 }
+exports.default = JpRadio;
 _JpRadio_instances = new WeakSet(), _JpRadio_setupRoutes = function _JpRadio_setupRoutes() {
     this.app.get('/radiko/:stationID', async (req, res) => {
         const station = req.params['stationID'];
@@ -211,5 +212,4 @@ _JpRadio_instances = new WeakSet(), _JpRadio_setupRoutes = function _JpRadio_set
     await this.prg?.updatePrograms();
     await this.prg?.clearOldProgram();
 };
-exports.default = JpRadio;
 //# sourceMappingURL=radio.js.map

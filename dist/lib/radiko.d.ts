@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import 'date-utils';
 import { ChildProcess } from 'child_process';
 import type { StationInfo, RegionData } from './models/StationModel';

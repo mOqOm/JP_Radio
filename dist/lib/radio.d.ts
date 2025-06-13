@@ -10,7 +10,7 @@ export default class JpRadio {
     private readonly commandRouter;
     private prg;
     private rdk;
-    constructor(port: number | undefined, logger: Console, acct: any | undefined, commandRouter: any);
+    constructor(port: number | undefined, logger: Console, acct: any, commandRouter: any);
     radioStations(): Promise<BrowseResult>;
     start(): Promise<void>;
     stop(): Promise<void>;
