@@ -5,5 +5,6 @@ export interface RadikoProgramData {
     tt: string;
     title: string;
     pfm: string;
+    img: string;
 }
 //# sourceMappingURL=RadikoProgramModel.d.ts.map

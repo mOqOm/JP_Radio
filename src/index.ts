@@ -101,7 +101,7 @@ class ControllerJpRadio {
 
     const radikoUser = this.config.get('radikoUser');
     const radikoPass = this.config.get('radikoPass');
-    const servicePort = this.config.get('servicePort') || 9000;
+    const servicePort = this.config.get('servicePort');
     const account = radikoUser && radikoPass ? { mail: radikoUser, pass: radikoPass } : null;
 
     this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter);
@@ -156,7 +156,7 @@ class ControllerJpRadio {
 
       defer.resolve(uiconf);
     })
-    .catch((error: any) => {
+    .fail((error: any) => {
       this.logger.error('getUIConfig failed:', error);
       defer.reject(error);
     });
@@ -164,7 +164,6 @@ class ControllerJpRadio {
     return defer.promise;
   }
 
-  
   getConfigurationFiles(): string[] {
     return ['config.json'];
   }
@@ -175,21 +174,33 @@ class ControllerJpRadio {
       uri: 'radiko',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
-      albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
+      albumart: '/albumart?sourceicon=music_service/jp_radio/dist/assets/images/app_radiko.svg'
     });
   }
 
-  async handleBrowseUri(curUri: string): Promise<BrowseResult | {}> {
+  handleBrowseUri(curUri: string): Promise<any> {
+    const defer = libQ.defer();
     const [baseUri] = curUri.split('?');
 
     if (baseUri === 'radiko') {
       if (!this.appRadio) {
-        return {};
+        this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
+        defer.resolve({});
+      } else {
+        libQ.resolve()
+          .then(() => this.appRadio!.radioStations())
+          .then((result: any) => defer.resolve(result))
+          .fail((err: any) => {
+            this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
+            defer.reject(err);
+          });
       }
-      return await this.appRadio.radioStations();
+    } else {
+      this.logger.error('[JP_Radio] handleBrowseUri else');
+      defer.resolve({});
     }
 
-    return {};
+    return defer.promise;
   }
 
   clearAddPlayTrack(track: any): Promise<any> {

@@ -1,4 +1,3 @@
-import { BrowseResult } from './lib/models/BrowseResultModel';
 export = ControllerJpRadio;
 declare class ControllerJpRadio {
     private context;
@@ -24,7 +23,7 @@ declare class ControllerJpRadio {
     getUIConfig(): Promise<any>;
     getConfigurationFiles(): string[];
     addToBrowseSources(): void;
-    handleBrowseUri(curUri: string): Promise<BrowseResult | {}>;
+    handleBrowseUri(curUri: string): Promise<any>;
     clearAddPlayTrack(track: any): Promise<any>;
     seek(timepos: number): Promise<any>;
     stop(): void;

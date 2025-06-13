@@ -1,9 +1,10 @@
-import { format } from 'date-fns';
 import got from 'got';
 import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
+import { formatInTimeZone } from 'date-fns-tz';
+import { subHours } from 'date-fns';
 
 import { PROG_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramModel';
@@ -16,6 +17,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
   tt: '',
   title: '',
   pfm: '',
+  img: '',
 };
 
 export default class RdkProg {
@@ -110,6 +112,7 @@ export default class RdkProg {
                 tt: prog['@to'],
                 title: prog['title'],
                 pfm: prog['pfm'] ?? '',
+                img: prog['img'],
               };
               await this.putProgram(program);
             }
@@ -141,11 +144,14 @@ export default class RdkProg {
   }
 
   private getCurrentTime(): string {
-    return format(new Date(), 'yyyyMMddHHmm');
+    return formatInTimeZone(new Date(), 'Asia/Tokyo', 'yyyyMMddHHmm');
   }
 
   private getCurrentDate(): string {
-    return format(new Date(), 'yyyyMMdd');
+    const now = new Date();
+    // 現在時刻から5時間引いた日時を取得
+    const dateForSwitch = subHours(now, 5);
+    return formatInTimeZone(dateForSwitch, 'Asia/Tokyo', 'yyyyMMdd');
   }
 }
 

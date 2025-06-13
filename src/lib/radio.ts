@@ -5,6 +5,7 @@ import { capitalize } from 'lodash';
 import RdkProg from './prog';
 import Radiko from './radiko';
 import type { BrowseItem, BrowseList, BrowseResult} from './models/BrowseResultModel';
+import libQ from 'kew';
 
 export default class JpRadio {
   private readonly app: Application;
@@ -17,7 +18,7 @@ export default class JpRadio {
   private prg: RdkProg | null = null;
   private rdk: Radiko | null = null;
 
-  constructor(port = 9000, logger: Console, acct: any = null, commandRouter: any) {
+  constructor(port = 0, logger: Console, acct: any = null, commandRouter: any) {
     this.app = express();
     this.port = port;
     this.logger = logger;
@@ -99,9 +100,11 @@ export default class JpRadio {
     });
   }
 
-  async radioStations(): Promise<BrowseResult> {
+  radioStations(): Promise<BrowseResult> {
+    const defer = libQ.defer();
+
     if (!this.rdk?.stations) {
-      return {
+      defer.resolve({
         navigation: {
           lists: [{
             title: 'LIVE',
@@ -110,53 +113,70 @@ export default class JpRadio {
           }]
         },
         uri: 'radiko'
-      };
+      });
+      return defer.promise;
     }
 
     const entries = Array.from(this.rdk.stations.entries());
 
-    // 地域名ごとにグループ化
     const grouped: Record<string, BrowseItem[]> = {};
 
-    await Promise.all(entries.map(async ([stationId, stationInfo]) => {
-      const progData = await this.prg?.getCurProgram(stationId);
-      const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
-      const title = `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
+    const stationPromises = entries.map(async ([stationId, stationInfo]) => {
+      try {
+        const progData = await this.prg?.getCurProgram(stationId);
 
-      const item: BrowseItem = {
-        service: 'webradio',
-        type: 'song',
-        title,
-        albumart: stationInfo.BannerURL || '',
-        uri: `http://localhost:${this.port}/radiko/${stationId}`,
-        name: '',
-        samplerate: '',
-        bitdepth: 0,
-        channels: 0
-      };
+        const item: BrowseItem = {
+          service: 'webradio',
+          type: 'webradio',
+          // 番組タイトル
+          title: progData ? `${progData.title || ''}` : '',
+          // 地域名 / 局名
+          album: `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}`,
+          // パーソナリティ名
+          artist: progData?.pfm || ' ',
+          // 番組画像URL
+          albumart: progData?.img || '',
+          // 再生URI
+          uri: `http://localhost:${this.port}/radiko/${stationId}`,
+          // サンプルレート（未使用）
+          samplerate: '',
+          // ビット深度（未使用）
+          bitdepth: 0,
+          // チャンネル数（未使用）
+          channels: 0
+        };
 
-      const region = stationInfo.RegionName || 'その他';
-      if (!grouped[region]) {
-        grouped[region] = [];
+        const region = stationInfo.RegionName || 'その他';
+        if (!grouped[region]) {
+          grouped[region] = [];
+        }
+        grouped[region].push(item);
+      } catch (err) {
+        this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${err}`);
       }
-      grouped[region].push(item);
-    }));
+    });
 
-    // BrowseList を作成
-    const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
-      title: regionName,
-      availableListViews: ['grid', 'list'],
-      items
-    }));
+    libQ.all(stationPromises)
+      .then(() => {
+        const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
+          title: regionName,
+          availableListViews: ['grid', 'list'],
+          items
+        }));
 
-    const result: BrowseResult = {
-      navigation: {
-        lists
-      },
-      uri: 'radiko'
-    };
+        defer.resolve({
+          navigation: {
+            lists
+          },
+          uri: 'radiko'
+        });
+      })
+      .fail((err: any) => {
+        this.logger.error('[JP_Radio] radioStations error: ' + err);
+        defer.reject(err);
+      });
 
-    return result;
+    return defer.promise;
   }
 
   async start(): Promise<void> {
