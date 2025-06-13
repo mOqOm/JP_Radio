@@ -1,16 +1,14 @@
-export interface RadioStationItem {
+export interface BrowseItem {
     service: string;
     type: string;
     title: string;
-    albumart: string;
+    albumart?: string;
     uri: string;
-    name: string;
-    samplerate: string;
-    bitdepth: number;
-    channels: number;
-}
-export interface BrowseItem extends RadioStationItem {
-    uri: string;
+    artist?: string;
+    album?: string;
+    samplerate?: string;
+    bitdepth?: number;
+    channels?: number;
 }
 export interface BrowseList {
     title: string;

@@ -89,7 +89,7 @@ class ControllerJpRadio {
         }
         const radikoUser = this.config.get('radikoUser');
         const radikoPass = this.config.get('radikoPass');
-        const servicePort = this.config.get('servicePort') || 9000;
+        const servicePort = this.config.get('servicePort');
         const account = radikoUser && radikoPass ? { mail: radikoUser, pass: radikoPass } : null;
         this.appRadio = new radio_1.default(servicePort, this.logger, account, this.commandRouter);
         this.appRadio.start()
@@ -137,7 +137,7 @@ class ControllerJpRadio {
                 uiconf.sections[1].content[1].value = radikoPass;
             defer.resolve(uiconf);
         })
-            .catch((error) => {
+            .fail((error) => {
             this.logger.error('getUIConfig failed:', error);
             defer.reject(error);
         });
@@ -152,18 +152,32 @@ class ControllerJpRadio {
             uri: 'radiko',
             plugin_type: 'music_service',
             plugin_name: this.serviceName,
-            albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
+            albumart: '/albumart?sourceicon=music_service/jp_radio/dist/assets/images/app_radiko.svg'
         });
     }
-    async handleBrowseUri(curUri) {
+    handleBrowseUri(curUri) {
+        const defer = kew_1.default.defer();
         const [baseUri] = curUri.split('?');
         if (baseUri === 'radiko') {
             if (!this.appRadio) {
-                return {};
+                this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
+                defer.resolve({});
             }
-            return await this.appRadio.radioStations();
+            else {
+                kew_1.default.resolve()
+                    .then(() => this.appRadio.radioStations())
+                    .then((result) => defer.resolve(result))
+                    .fail((err) => {
+                    this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
+                    defer.reject(err);
+                });
+            }
         }
-        return {};
+        else {
+            this.logger.error('[JP_Radio] handleBrowseUri else');
+            defer.resolve({});
+        }
+        return defer.promise;
     }
     clearAddPlayTrack(track) {
         this.logger.info(`[${new Date().toISOString()}] JP_Radio::clearAddPlayTrack`, track);

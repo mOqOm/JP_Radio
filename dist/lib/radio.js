@@ -15,8 +15,9 @@ const icy_metadata_1 = __importDefault(require("icy-metadata"));
 const lodash_1 = require("lodash");
 const prog_1 = __importDefault(require("./prog"));
 const radiko_1 = __importDefault(require("./radiko"));
+const kew_1 = __importDefault(require("kew"));
 class JpRadio {
-    constructor(port = 9000, logger, acct = null, commandRouter) {
+    constructor(port = 0, logger, acct = null, commandRouter) {
         _JpRadio_instances.add(this);
         this.server = null;
         this.prg = null;
@@ -31,9 +32,10 @@ class JpRadio {
         });
         __classPrivateFieldGet(this, _JpRadio_instances, "m", _JpRadio_setupRoutes).call(this);
     }
-    async radioStations() {
+    radioStations() {
+        const defer = kew_1.default.defer();
         if (!this.rdk?.stations) {
-            return {
+            defer.resolve({
                 navigation: {
                     lists: [{
                             title: 'LIVE',
@@ -42,45 +44,63 @@ class JpRadio {
                         }]
                 },
                 uri: 'radiko'
-            };
+            });
+            return defer.promise;
         }
         const entries = Array.from(this.rdk.stations.entries());
-        // 地域名ごとにグループ化
         const grouped = {};
-        await Promise.all(entries.map(async ([stationId, stationInfo]) => {
-            const progData = await this.prg?.getCurProgram(stationId);
-            const progTitle = progData ? ` - ${progData.pfm || ''} - ${progData.title || ''}` : '';
-            const title = `${(0, lodash_1.capitalize)(stationInfo.AreaName)} / ${stationInfo.Name}${progTitle}`;
-            const item = {
-                service: 'webradio',
-                type: 'song',
-                title,
-                albumart: stationInfo.BannerURL || '',
-                uri: `http://localhost:${this.port}/radiko/${stationId}`,
-                name: '',
-                samplerate: '',
-                bitdepth: 0,
-                channels: 0
-            };
-            const region = stationInfo.RegionName || 'その他';
-            if (!grouped[region]) {
-                grouped[region] = [];
+        const stationPromises = entries.map(async ([stationId, stationInfo]) => {
+            try {
+                const progData = await this.prg?.getCurProgram(stationId);
+                const item = {
+                    service: 'webradio',
+                    type: 'webradio',
+                    // 番組タイトル
+                    title: progData ? `${progData.title || ''}` : '',
+                    // 地域名 / 局名
+                    album: `${(0, lodash_1.capitalize)(stationInfo.AreaName)} / ${stationInfo.Name}`,
+                    // パーソナリティ名
+                    artist: progData?.pfm || ' ',
+                    // 番組画像URL
+                    albumart: progData?.img || '',
+                    // 再生URI
+                    uri: `http://localhost:${this.port}/radiko/${stationId}`,
+                    // サンプルレート（未使用）
+                    samplerate: '',
+                    // ビット深度（未使用）
+                    bitdepth: 0,
+                    // チャンネル数（未使用）
+                    channels: 0
+                };
+                const region = stationInfo.RegionName || 'その他';
+                if (!grouped[region]) {
+                    grouped[region] = [];
+                }
+                grouped[region].push(item);
             }
-            grouped[region].push(item);
-        }));
-        // BrowseList を作成
-        const lists = Object.entries(grouped).map(([regionName, items]) => ({
-            title: regionName,
-            availableListViews: ['grid', 'list'],
-            items
-        }));
-        const result = {
-            navigation: {
-                lists
-            },
-            uri: 'radiko'
-        };
-        return result;
+            catch (err) {
+                this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${err}`);
+            }
+        });
+        kew_1.default.all(stationPromises)
+            .then(() => {
+            const lists = Object.entries(grouped).map(([regionName, items]) => ({
+                title: regionName,
+                availableListViews: ['grid', 'list'],
+                items
+            }));
+            defer.resolve({
+                navigation: {
+                    lists
+                },
+                uri: 'radiko'
+            });
+        })
+            .fail((err) => {
+            this.logger.error('[JP_Radio] radioStations error: ' + err);
+            defer.reject(err);
+        });
+        return defer.promise;
     }
     async start() {
         if (this.server) {

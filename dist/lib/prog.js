@@ -3,12 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const date_fns_1 = require("date-fns");
 const got_1 = __importDefault(require("got"));
 const nedb_promises_1 = __importDefault(require("nedb-promises"));
 const fast_xml_parser_1 = require("fast-xml-parser");
 const util_1 = require("util");
 const p_limit_1 = __importDefault(require("p-limit"));
+const date_fns_tz_1 = require("date-fns-tz");
+const date_fns_1 = require("date-fns");
 const radikoUrls_1 = require("./consts/radikoUrls");
 const EMPTY_PROGRAM = {
     station: '',
@@ -17,6 +18,7 @@ const EMPTY_PROGRAM = {
     tt: '',
     title: '',
     pfm: '',
+    img: '',
 };
 class RdkProg {
     constructor(logger) {
@@ -98,6 +100,7 @@ class RdkProg {
                             tt: prog['@to'],
                             title: prog['title'],
                             pfm: prog['pfm'] ?? '',
+                            img: prog['img'],
                         };
                         await this.putProgram(program);
                     }
@@ -124,10 +127,13 @@ class RdkProg {
         this.db.ensureIndex({ fieldName: 'tt' });
     }
     getCurrentTime() {
-        return (0, date_fns_1.format)(new Date(), 'yyyyMMddHHmm');
+        return (0, date_fns_tz_1.formatInTimeZone)(new Date(), 'Asia/Tokyo', 'yyyyMMddHHmm');
     }
     getCurrentDate() {
-        return (0, date_fns_1.format)(new Date(), 'yyyyMMdd');
+        const now = new Date();
+        // 現在時刻から5時間引いた日時を取得
+        const dateForSwitch = (0, date_fns_1.subHours)(now, 5);
+        return (0, date_fns_tz_1.formatInTimeZone)(dateForSwitch, 'Asia/Tokyo', 'yyyyMMdd');
     }
 }
 exports.default = RdkProg;
