@@ -10,6 +10,8 @@ import { PROG_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramModel';
 import type { RadikoXMLData } from './models/RadikoXMLStationModel';
 
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radioTime';
+
 const EMPTY_PROGRAM: RadikoProgramData = {
   station: '',
   id: '',
@@ -34,19 +36,23 @@ export default class RdkProg {
   }
 
   async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
-    const currentTime = this.getCurrentTime();
+     // yyyyMMddHHmm
+    const currentTime = getCurrentRadioTime().substr(0,12);
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
-        const result = await this.db.findOne({
+        // TODO: TBS,YFM,MBS,NORTHWAVE,etcでヒットしない問題
+        //       (常にってわけじゃなく時々なのが非常に厄介)
+        const result: RadikoProgramData | null = await this.db.findOne({
           station,
-          ft: { $lte: currentTime },
-          tt: { $gte: currentTime },
+          ft: { $lt: currentTime + '01' },
+          tt: { $gt: currentTime + '01' },
         });
 
-        if (isRadikoProgramData(result)) {
+        if (result) {
           this.cachedProgram = result;
         } else {
+          this.logger.error(`JP_Radio::RdkProg.getCurProgram: ## ${station}:${currentTime} cannot find. ##`);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 
@@ -72,21 +78,25 @@ export default class RdkProg {
 
   async clearOldProgram(): Promise<void> {
     try {
-      await this.db.remove({ tt: { $lt: this.getCurrentTime() } }, { multi: true });
+      // TODO: TBS,MBS消しすぎてない??
+      const currentTime = getCurrentRadioTime().substr(0, 12); // yyyyMMddHHmm
+      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
     } catch (error) {
       this.logger.error('JP_Radio::DB delete error', error);
     }
   }
 
-  async updatePrograms(): Promise<void> {
-    const currentDate = this.getCurrentDate();
+  async updatePrograms(areaIDs: Array<string>, stationsMap: any, whenBoot: boolean): Promise<void> {
+    // boot時はラジオ時間で，cron時は実時間で取得
+    const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
+    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
+
     const parser = new XMLParser({
       attributeNamePrefix: '@',
       ignoreAttributes: false,
       allowBooleanAttributes: true,
     });
 
-    const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     const limit = pLimit(5);
 
     const tasks = areaIDs.map((areaID) =>
@@ -99,6 +109,11 @@ export default class RdkProg {
 
           for (const stationData of stations) {
             const stationId = stationData['@id'];
+            // 広域局の多重処理をスキップ
+            const s = stationsMap?.get(stationId);
+            if (s.AreaID != areaID && s.region_name != '全国' && s.AreaFree != '0')
+              continue;
+
             const progRaw = stationData.progs?.prog;
             if (!progRaw) continue;
 

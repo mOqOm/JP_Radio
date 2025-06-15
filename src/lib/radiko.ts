@@ -15,6 +15,8 @@ import {
   AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_URL
 } from './consts/radikoUrls';
 
+import { AreaKanji } from './consts/areaName';
+
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
   ignoreAttributes: false,
@@ -57,6 +59,7 @@ export default class Radiko {
   }
 
   private async login(acct: LoginAccount): Promise<CookieJar> {
+    this.logger.info('JP_Radio::Radiko.login');
     const jar = new tough.CookieJar();
     try {
       await got.post(LOGIN_URL, {
@@ -72,6 +75,7 @@ export default class Radiko {
   }
 
   private async checkLogin(): Promise<LoginState | null> {
+    this.logger.info('JP_Radio::Radiko.checkLogin');
     if (!this.cookieJar) {
       this.logger.info('JP_Radio::premium account not set');
       return null;
@@ -104,14 +108,17 @@ export default class Radiko {
   }
 
   private async getToken(): Promise<[string, string]> {
+    this.logger.info('JP_Radio::Radiko.getToken');
     const auth1Headers = await this.auth1();
     const [partialKey, token] = this.getPartialKey(auth1Headers);
     const result = await this.auth2(token, partialKey);
     const [areaID] = result.trim().split(',');
+    this.logger.info(`JP_Radio::Radiko.getToken: areaID=${areaID}`);
     return [token, areaID];
   }
 
   private async auth1(): Promise<Record<string, string>> {
+    this.logger.info('JP_Radio::Radiko.auth1');
     const res = await got.get(AUTH1_URL, {
       cookieJar: this.cookieJar,
       headers: {
@@ -125,6 +132,7 @@ export default class Radiko {
   }
 
   private getPartialKey(headers: Record<string, string>): [string, string] {
+    this.logger.info('JP_Radio::Radiko.getPartialKey');
     const token = headers['x-radiko-authtoken'];
     const offset = parseInt(headers['x-radiko-keyoffset'], 10);
     const length = parseInt(headers['x-radiko-keylength'], 10);
@@ -133,6 +141,7 @@ export default class Radiko {
   }
 
   private async auth2(token: string, partialKey: string): Promise<string> {
+    this.logger.info('JP_Radio::Radiko.auth2');
     const res = await got.get(AUTH2_URL, {
       cookieJar: this.cookieJar,
       headers: {
@@ -146,6 +155,7 @@ export default class Radiko {
   }
 
   private async getStations(): Promise<void> {
+    this.logger.info('JP_Radio::Radiko.getStations');
     this.stations = new Map();
     this.areaData = new Map();
 
@@ -195,15 +205,18 @@ export default class Radiko {
       for (const station of region.stations) {
         const id = station.id;
         const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
+        const areaKanji = AreaKanji.get(station.area_id) ?? areaName;
 
         if (this.loginState || allowedStations.includes(id)) {
-          this.stations.set(id, {
-            RegionName: region.region_name,
-            BannerURL: station.banner,
-            AreaID: station.area_id,
-            AreaName: areaName,
-            Name: station.name,
-            AsciiName: station.ascii_name,
+          this.stations.set(id, {           // 'TBS'
+            RegionName: region.region_name, // '関東'
+            BannerURL: station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
+            AreaID: station.area_id,    // 'JP13'
+            AreaName: areaName,           // 'TOKYO'
+            AreaKanji: areaKanji,          // '東京'
+            Name: station.name,       // 'TBSラジオ'
+            AsciiName: station.ascii_name, // 'TBS RADIO'
+            AreaFree: station.areafree,   // '1'
           });
         }
       }
@@ -212,11 +225,16 @@ export default class Radiko {
     this.stationData = regionData;
   }
 
+  async getStationName(stationID: string): Promise<string> {
+    return this.stations?.get(stationID)?.Name ?? '';
+  }
+
   async getStationAsciiName(stationID: string): Promise<string> {
     return this.stations?.get(stationID)?.AsciiName ?? '';
   }
 
   async play(station: string): Promise<ChildProcess | null> {
+    this.logger.info('JP_Radio::Radiko.play');
     if (!this.stations?.has(station)) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
       return null;
@@ -237,6 +255,8 @@ export default class Radiko {
     }
 
     const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
+
+    this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
 
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
