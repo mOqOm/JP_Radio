@@ -21,7 +21,7 @@ export default class JpRadio {
   private prg: RdkProg | null = null;
   private rdk: Radiko | null = null;
   private station: string = '';
-  private task2_cnt: number = 0;
+  private task2Cnt: number = 0;
 
   private readonly serviceName: any;
 
@@ -117,8 +117,8 @@ export default class JpRadio {
   async #pushSongState(): Promise<void> {
     const state = this.commandRouter.stateMachine.getState();
     // 番組の切り替わりで更新
-    if (state.seek >= state.duration * 1000 || --this.task2_cnt <= 0) {
-      this.task2_cnt = 10;  // 念のため10分間隔で強制更新
+    if (state.seek >= state.duration * 1000 || --this.task2Cnt <= 0) {
+      this.task2Cnt = 10;  // 念のため10分間隔で強制更新
       const progData = await this.prg?.getCurProgram(this.station);
       if (progData) {
         const stationName = await this.rdk?.getStationName(this.station);
@@ -126,7 +126,7 @@ export default class JpRadio {
         const t0 = formatTimeString(progData.ft);
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
-        const artist = `${stationName} / ${t0.substr(0, 5)}-${t1.substr(0, 5)}`;
+        const artist = `${stationName} / ${t0.substring(0, 5)}-${t1.substring(0, 5)}`;
         this.logger.info(`JP_Radio::JpRadio.#pushSongState: "${artist}", now=${now}`);
 
         state.title = progData.title + performer;

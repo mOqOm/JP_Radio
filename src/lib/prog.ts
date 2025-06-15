@@ -37,7 +37,7 @@ export default class RdkProg {
 
   async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
      // yyyyMMddHHmm
-    const currentTime = getCurrentRadioTime().substr(0,12);
+    const currentTime = getCurrentRadioTime().substring(0,12);
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
@@ -79,7 +79,8 @@ export default class RdkProg {
   async clearOldProgram(): Promise<void> {
     try {
       // TODO: TBS,MBS消しすぎてない??
-      const currentTime = getCurrentRadioTime().substr(0, 12); // yyyyMMddHHmm
+      // yyyyMMddHHmm
+      const currentTime = getCurrentRadioTime().substring(0, 12);
       await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
     } catch (error) {
       this.logger.error('JP_Radio::DB delete error', error);
