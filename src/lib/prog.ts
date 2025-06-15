@@ -36,8 +36,8 @@ export default class RdkProg {
   }
 
   async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
-     // yyyyMMddHHmm
-    const currentTime = getCurrentRadioTime().substring(0,12);
+    // yyyyMMddHHmm
+    const currentTime = getCurrentRadioTime().substring(0, 12);
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
@@ -87,7 +87,7 @@ export default class RdkProg {
     }
   }
 
-  async updatePrograms(areaIDs: Array<string>, stationsMap: any, whenBoot: boolean): Promise<void> {
+  async updatePrograms(areaIdArray: Array<string>, stationsMap: any, whenBoot: boolean): Promise<void> {
     // boot時はラジオ時間で，cron時は実時間で取得
     const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
     this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
@@ -100,9 +100,9 @@ export default class RdkProg {
 
     const limit = pLimit(5);
 
-    const tasks = areaIDs.map((areaID) =>
+    const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
-        const url = utilFormat(PROG_URL, currentDate, areaID);
+        const url = utilFormat(PROG_URL, currentDate, areaId);
         try {
           const response = await got(url);
           const xmlData: RadikoXMLData = parser.parse(response.body);
@@ -112,8 +112,9 @@ export default class RdkProg {
             const stationId = stationData['@id'];
             // 広域局の多重処理をスキップ
             const s = stationsMap?.get(stationId);
-            if (s.AreaID != areaID && s.region_name != '全国' && s.AreaFree != '0')
+            if (s.AreaId != areaId && s.region_name != '全国' && s.AreaFree != '0') {
               continue;
+            }
 
             const progRaw = stationData.progs?.prog;
             if (!progRaw) continue;
@@ -134,7 +135,7 @@ export default class RdkProg {
             }
           }
         } catch (error) {
-          this.logger.error(`JP_Radio::Failed to update program for ${areaID}`, error);
+          this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
         }
       })
     );

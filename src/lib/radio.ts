@@ -298,8 +298,9 @@ export default class JpRadio {
   async #pgupdate(whenBoot = false): Promise<void> {
     if (this.prg) {
       this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
-      if (whenBoot)
+      if (whenBoot) {
         this.commandRouter.pushToastMessage('success', 'JP Radio', '番組データ：取得中...');
+      }
 
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
       const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
