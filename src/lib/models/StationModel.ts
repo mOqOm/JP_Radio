@@ -72,6 +72,8 @@ export interface StationInfo {
   BannerURL: string;
   AreaID: string;
   AreaName: string;
+  AreaKanji : string;
   Name: string;
   AsciiName: string;
+  AreaFree  : string;
 }

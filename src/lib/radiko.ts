@@ -36,15 +36,15 @@ export default class Radiko {
     private port: number,
     private logger: Console,
     private acct: LoginAccount
-  ) {}
+  ) { }
 
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
     if (acct) {
       this.logger.info('JP_Radio::Attempting login');
       const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
-      this.cookieJar = jar;
-      return this.checkLogin();
-    });
+        this.cookieJar = jar;
+        return this.checkLogin();
+      });
       this.loginState = loginOK;
     }
 

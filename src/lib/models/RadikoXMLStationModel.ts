@@ -7,6 +7,7 @@ export interface RadikoXMLData {
 }
 
 export interface RadikoXMLStation {
+  // station id
   '@id': string;
   progs: {
     prog: {
