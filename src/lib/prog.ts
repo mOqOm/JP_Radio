@@ -111,8 +111,13 @@ export default class RdkProg {
           for (const stationData of stations) {
             const stationId = stationData['@id'];
             // 広域局の多重処理をスキップ
-            const s = stationsMap?.get(stationId);
-            if (s.areaId != areaId && s.region_name != '全国' && s.AreaFree != '0') {
+            const station = stationsMap?.get(stationId);
+
+            if (!station) {
+              continue; // 情報がなければスキップ
+            }
+
+            if (station.areaId != areaId && station.region_name != '全国' && station.AreaFree != '0') {
               continue;
             }
 
