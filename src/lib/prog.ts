@@ -112,7 +112,7 @@ export default class RdkProg {
             const stationId = stationData['@id'];
             // 広域局の多重処理をスキップ
             const s = stationsMap?.get(stationId);
-            if (s.AreaId != areaId && s.region_name != '全国' && s.AreaFree != '0') {
+            if (s.areaId != areaId && s.region_name != '全国' && s.AreaFree != '0') {
               continue;
             }
 

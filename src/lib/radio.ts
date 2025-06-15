@@ -303,12 +303,12 @@ export default class JpRadio {
       }
 
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
-      const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+      const areaIdArray = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
       //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
 
       const stationsMap = this.rdk ? this.rdk.stations : null;
       const t0 = new Date();
-      await this.prg.updatePrograms(areaIDs, stationsMap, whenBoot);
+      await this.prg.updatePrograms(areaIdArray, stationsMap, whenBoot);
       await this.prg.clearOldProgram();
       const t1 = new Date();
       const tw = t1.getTime() - t0.getTime();

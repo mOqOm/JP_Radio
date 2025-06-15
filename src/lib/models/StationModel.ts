@@ -70,7 +70,7 @@ export interface RegionData {
 export interface StationInfo {
   RegionName: string;
   BannerURL: string;
-  AreaID: string;
+  AreaId: string;
   AreaName: string;
   AreaKanji : string;
   Name: string;
