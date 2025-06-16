@@ -30,9 +30,9 @@ export function getCurrentRadioDate(): string {
 
 // 深夜0:00～5:00は日付を変えずに24:00～29:00
 export function cnvRadioTime(src: string, today: string): string {
-  var d = src.substr(0, 8);  // yyyyMMdd
-  var h = src.substr(8, 2);  // HH
-  const d0 = today.substr(0, 8);
+  var d = src.substring(0, 8);  // yyyyMMdd
+  var h = src.substring(8, 2);  // HH
+  const d0 = today.substring(0, 8);
   if(d != d0) {
     h = String(parseInt(h) + 24);
     d = d0;
@@ -42,9 +42,9 @@ export function cnvRadioTime(src: string, today: string): string {
 
 // 'yyyyMMddHHmmss' => 'HH:mm:ss'
 export function formatTimeString(t: string): string {
-  const h = t.substr( 8, 2);
-  const m = t.substr(10, 2);
-  const s = t.substr(12, 2);
+  const h = t.substring( 8, 2);
+  const m = t.substring(10, 2);
+  const s = t.substring(12, 2);
   return `${h}:${m}:${s}`;
 }
 
