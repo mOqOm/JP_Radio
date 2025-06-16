@@ -48,11 +48,21 @@ export default class JpRadio {
   #setupRoutes(): void {
     this.logger.info('JP_Radio::JpRadio.#setupRoutes');
 
-    this.app.get('/radiko/:stationID', async (req: Request, res: Response): Promise<void> => {
+    this.app.get('/radiko/all/stations', async (_req, res) => {
+      try {
+        const data = await this.prg?.allData();
+        res.json(data); // 自動で JSON に変換
+      } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve station data' });
+      }
+    });
+
+
+    this.app.get('/radiko/play/:stationID', async (req: Request, res: Response): Promise<void> => {
       const station = req.params['stationID'];
       this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.originalUrl=${req.originalUrl}`);
 
-      if (!this.rdk || !this.rdk.stations?.has(this.station)) {
+      if (!this.rdk || !this.rdk.stations?.has(station)) {
         const msg = !this.rdk
           ? 'JP_Radio::Radiko instance not initialized'
           : `JP_Radio::${this.station} not in available stations`;
@@ -68,6 +78,7 @@ export default class JpRadio {
       res.send("Hello, world. You're at the radiko_app index.");
     });
   }
+
   async #startStream(res: Response): Promise<void> {
     this.logger.info('JP_Radio::JpRadio.#startStream');
     if (this.rdk) {
@@ -193,7 +204,7 @@ export default class JpRadio {
           // 番組画像URL
           albumart: progData?.img || '',
           // 再生URI
-          uri: `http://localhost:${this.port}/radiko/${stationId}`,
+          uri: `http://localhost:${this.port}/radiko/play/${stationId}`,
           // サンプルレート（未使用）
           samplerate: '',
           // ビット深度（未使用）

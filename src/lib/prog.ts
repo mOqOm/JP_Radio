@@ -153,9 +153,8 @@ export default class RdkProg {
     await this.db.persistence.compactDatafile();
   }
 
-  async allData(): Promise<string> {
-    const data = await this.db.find({});
-    return JSON.stringify(data, null, 2);
+  async allData(): Promise<any[]> {
+    return await this.db.find({});
   }
 
   private initDBIndexes(): void {

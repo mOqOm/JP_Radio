@@ -225,12 +225,12 @@ export default class Radiko {
     this.stationData = regionData;
   }
 
-  async getStationName(stationID: string): Promise<string> {
-    return this.stations?.get(stationID)?.Name ?? '';
+  async getStationName(stationId: string): Promise<string> {
+    return this.stations?.get(stationId)?.Name ?? '';
   }
 
-  async getStationAsciiName(stationID: string): Promise<string> {
-    return this.stations?.get(stationID)?.AsciiName ?? '';
+  async getStationAsciiName(stationId: string): Promise<string> {
+    return this.stations?.get(stationId)?.AsciiName ?? '';
   }
 
   async play(station: string): Promise<ChildProcess | null> {
