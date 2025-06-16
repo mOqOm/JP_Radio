@@ -9,6 +9,7 @@ import { subHours } from 'date-fns';
 import { PROG_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramModel';
 import type { RadikoXMLData } from './models/RadikoXMLStationModel';
+import type { StationInfo } from './models/StationModel';
 
 import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radioTime';
 
@@ -87,7 +88,7 @@ export default class RdkProg {
     }
   }
 
-  async updatePrograms(areaIdArray: Array<string>, stationsMap: any, whenBoot: boolean): Promise<void> {
+  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<void> {
     // boot時はラジオ時間で，cron時は実時間で取得
     const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
     this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
@@ -117,7 +118,7 @@ export default class RdkProg {
               continue; // 情報がなければスキップ
             }
 
-            if (station.areaId != areaId && station.region_name != '全国' && station.AreaFree != '0') {
+            if (station.AreaId != areaId && station.RegionName != '全国' && station.AreaFree != '0') {
               continue;
             }
 

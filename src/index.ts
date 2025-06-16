@@ -263,16 +263,16 @@ class ControllerJpRadio {
     //this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     var defer = libQ.defer();
 
-    // uri=http://localhost:9000/radiko/FMT/tt/sn/aa
-    //      0   1        2         3     4  5  6  7
+    // uri=http://localhost:9000/radiko/play/FMT/tt/sn/aa
+    //      0   1        2         3     4    5  6  7  8
     const uris = uri.split('/');
     const param = {
       hp: uris[2],  // 'localhost:9000'
       id: uris[3],  // 'radiko'
-      st: uris[4],  // stationID
-      tt: decodeURIComponent(uris[5]), // title & performer
-      sn: decodeURIComponent(uris[6]), // stationName & time
-      aa: decodeURIComponent(uris[7]), // albumart
+      st: uris[5],  // stationID
+      tt: decodeURIComponent(uris[6]), // title & performer
+      sn: decodeURIComponent(uris[7]), // stationName & time
+      aa: decodeURIComponent(uris[8]), // albumart
     };
 
     if (param.id == 'radiko') {
@@ -283,7 +283,7 @@ class ControllerJpRadio {
         name: param.tt,
         artist: param.sn,
         albumart: param.aa,
-        uri: `http://${param.hp}/${param.id}/${param.st}`,
+        uri: `http://${param.hp}/${param.id}/play/${param.st}`,
       };
       defer.resolve(response);
 

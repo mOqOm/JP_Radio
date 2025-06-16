@@ -5,6 +5,7 @@ import RdkProg from './prog';
 import Radiko from './radiko';
 import libQ from 'kew';
 import type { BrowseItem, BrowseList, BrowseResult } from './models/BrowseResultModel';
+import type { StationInfo } from './models/StationModel';
 
 import { DELAY_sec, getCurrentRadioTime, formatTimeString, getTimeSpan } from './radioTime';
 
@@ -59,10 +60,10 @@ export default class JpRadio {
 
 
     this.app.get('/radiko/play/:stationID', async (req: Request, res: Response): Promise<void> => {
-      const station = req.params['stationID'];
+      this.station = req.params['stationID'];
       this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.originalUrl=${req.originalUrl}`);
 
-      if (!this.rdk || !this.rdk.stations?.has(station)) {
+      if (!this.rdk || !this.rdk.stations?.has(this.station)) {
         const msg = !this.rdk
           ? 'JP_Radio::Radiko instance not initialized'
           : `JP_Radio::${this.station} not in available stations`;
@@ -317,18 +318,19 @@ export default class JpRadio {
       const areaIdArray = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
       //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
 
-      const stationsMap = this.rdk ? this.rdk.stations : null;
-      const t0 = new Date();
+      const stationsMap = this.rdk?.stations ?? new Map<string, StationInfo>();
+
+      const updateStartTime = new Date();
       await this.prg.updatePrograms(areaIdArray, stationsMap, whenBoot);
-      await this.prg.clearOldProgram();
-      const t1 = new Date();
-      const tw = t1.getTime() - t0.getTime();
+      //await this.prg.clearOldProgram();
+      const updateEndTime = new Date();
+      const processingTime = updateEndTime.getTime() - updateStartTime.getTime();
 
       if (whenBoot) {
-        this.commandRouter.pushToastMessage('success', 'JP Radio', `番組データ：取得完了！ ${tw}ms`);
+        this.commandRouter.pushToastMessage('success', 'JP Radio', `番組データ：取得完了！ ${processingTime}ms`);
       }
 
-      this.logger.info(`JP_Radio::JpRadio.#pgupdate: complete. ### ${tw}ms ###`);
+      this.logger.info(`JP_Radio::JpRadio.#pgupdate: complete. ### ${processingTime}ms ###`);
     }
   }
 }

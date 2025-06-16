@@ -234,7 +234,7 @@ export default class Radiko {
   }
 
   async play(station: string): Promise<ChildProcess | null> {
-    this.logger.info('JP_Radio::Radiko.play');
+    this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
     if (!this.stations?.has(station)) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
       return null;
