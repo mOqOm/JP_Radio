@@ -1,5 +1,5 @@
 # JP RADIO Volumio4 plugin
-Japanese radio relay server for Volumio4
+Japanese radio relay server for Volumio3
 
 > **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
 

@@ -9,6 +9,9 @@ import { subHours } from 'date-fns';
 import { PROG_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramModel';
 import type { RadikoXMLData } from './models/RadikoXMLStationModel';
+import type { StationInfo } from './models/StationModel';
+
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radioTime';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   station: '',
@@ -34,19 +37,23 @@ export default class RdkProg {
   }
 
   async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
-    const currentTime = this.getCurrentTime();
+    // yyyyMMddHHmm
+    const currentTime = getCurrentRadioTime().substring(0, 12);
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
-        const result = await this.db.findOne({
+        // TODO: TBS,YFM,MBS,NORTHWAVE,etcでヒットしない問題
+        //       (常にってわけじゃなく時々なのが非常に厄介)
+        const result: RadikoProgramData | null = await this.db.findOne({
           station,
-          ft: { $lte: currentTime },
-          tt: { $gte: currentTime },
+          ft: { $lt: currentTime + '01' },
+          tt: { $gt: currentTime + '01' },
         });
 
-        if (isRadikoProgramData(result)) {
+        if (result) {
           this.cachedProgram = result;
         } else {
+          this.logger.error(`JP_Radio::RdkProg.getCurProgram: ## ${station}:${currentTime} cannot find. ##`);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 
@@ -72,44 +79,70 @@ export default class RdkProg {
 
   async clearOldProgram(): Promise<void> {
     try {
-      await this.db.remove({ tt: { $lt: this.getCurrentTime() } }, { multi: true });
+      // TODO: TBS,MBS消しすぎてない??
+      // yyyyMMddHHmm
+      const currentTime = getCurrentRadioTime().substring(0, 12);
+      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
     } catch (error) {
       this.logger.error('JP_Radio::DB delete error', error);
     }
   }
 
-  async updatePrograms(): Promise<void> {
-    const currentDate = this.getCurrentDate();
+  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<void> {
+    // boot時はラジオ時間で，cron時は実時間で取得
+    const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
+    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
+
     const parser = new XMLParser({
       attributeNamePrefix: '@',
       ignoreAttributes: false,
       allowBooleanAttributes: true,
     });
 
-    const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     const limit = pLimit(5);
+    var doneAreaFree = new Set();
 
-    const tasks = areaIDs.map((areaID) =>
+    const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
-        const url = utilFormat(PROG_URL, currentDate, areaID);
+        const url = utilFormat(PROG_URL, currentDate, areaId);
         try {
           const response = await got(url);
           const xmlData: RadikoXMLData = parser.parse(response.body);
           const stations = xmlData?.radiko?.stations?.station ?? [];
 
           for (const stationData of stations) {
-            const stationId = stationData['@id'];
+            const stationId = String(stationData['@id']);  // FM802対策
+            // 広域局の多重処理をスキップ
+            const station = stationsMap?.get(stationId);
+
+            if (!station) {
+              continue; // 情報がなければスキップ(nonAreaFreeでエリア外)
+            }
+
+            // 一般局，全国広域(RN1,RN2,JOAK-FM)
+            if(station.AreaId != areaId && station.AreaFree != '0'
+              || station.RegionName == '全国' && areaId != 'JP13'){
+              continue;
+            }
+
+             // NHK地方局(JO**)
+            if(station.AreaFree == '0' && doneAreaFree.has(stationId)) {
+              continue;
+            } else {
+              doneAreaFree.add(stationId);
+            }
+
             const progRaw = stationData.progs?.prog;
             if (!progRaw) continue;
 
             const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
-
+            const today = progs[0]['@ft'].substring(0, 8);  // yyyyMMdd
             for (const prog of progs) {
               const program: RadikoProgramData = {
-                station: stationId,
+                station: String(stationId),   // FM802対策
                 id: stationId + prog['@id'],
-                ft: prog['@ft'],
-                tt: prog['@to'],
+                ft: cnvRadioTime(prog['@ft'], today),
+                tt: cnvRadioTime(prog['@to'], today),
                 title: prog['title'],
                 pfm: prog['pfm'] ?? '',
                 img: prog['img'],
@@ -118,7 +151,7 @@ export default class RdkProg {
             }
           }
         } catch (error) {
-          this.logger.error(`JP_Radio::Failed to update program for ${areaID}`, error);
+          this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
         }
       })
     );
@@ -131,9 +164,8 @@ export default class RdkProg {
     await this.db.persistence.compactDatafile();
   }
 
-  async allData(): Promise<string> {
-    const data = await this.db.find({});
-    return JSON.stringify(data, null, 2);
+  async allData(): Promise<any[]> {
+    return await this.db.find({});
   }
 
   private initDBIndexes(): void {

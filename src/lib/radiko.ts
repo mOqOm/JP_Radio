@@ -15,6 +15,8 @@ import {
   AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_URL
 } from './consts/radikoUrls';
 
+import { AreaKanji } from './consts/areaName';
+
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
   ignoreAttributes: false,
@@ -24,7 +26,7 @@ const xmlParser = new XMLParser({
 
 export default class Radiko {
   private token: string | null = null;
-  private areaID: string | null = null;
+  private areaId: string | null = null;
   private cookieJar: CookieJar = new tough.CookieJar();
   private loginState: LoginState | null = null;
 
@@ -36,27 +38,32 @@ export default class Radiko {
     private port: number,
     private logger: Console,
     private acct: LoginAccount
-  ) {}
+  ) { }
 
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
     if (acct) {
       this.logger.info('JP_Radio::Attempting login');
       const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
-      this.cookieJar = jar;
-      return this.checkLogin();
-    });
+        this.cookieJar = jar;
+        return this.checkLogin();
+      });
       this.loginState = loginOK;
     }
 
-    if (forceGetStations || !this.areaID) {
-      const [token, areaID] = await this.getToken();
+    if (forceGetStations || !this.areaId) {
+      const [token, areaId] = await this.getToken();
       this.token = token;
-      this.areaID = areaID;
+      this.areaId = areaId;
       await this.getStations();
     }
   }
 
+  async getMyAreaId(): Promise<string> {
+    return this.areaId + '/' + (this.loginState ? this.loginState.member_type.type : '');
+  }
+
   private async login(acct: LoginAccount): Promise<CookieJar> {
+    this.logger.info('JP_Radio::Radiko.login');
     const jar = new tough.CookieJar();
     try {
       await got.post(LOGIN_URL, {
@@ -72,6 +79,7 @@ export default class Radiko {
   }
 
   private async checkLogin(): Promise<LoginState | null> {
+    this.logger.info('JP_Radio::Radiko.checkLogin');
     if (!this.cookieJar) {
       this.logger.info('JP_Radio::premium account not set');
       return null;
@@ -104,14 +112,17 @@ export default class Radiko {
   }
 
   private async getToken(): Promise<[string, string]> {
+    this.logger.info('JP_Radio::Radiko.getToken');
     const auth1Headers = await this.auth1();
     const [partialKey, token] = this.getPartialKey(auth1Headers);
     const result = await this.auth2(token, partialKey);
-    const [areaID] = result.trim().split(',');
-    return [token, areaID];
+    const [areaId] = result.trim().split(',');
+    this.logger.info(`JP_Radio::Radiko.getToken: areaId=${areaId}`);
+    return [token, areaId];
   }
 
   private async auth1(): Promise<Record<string, string>> {
+    this.logger.info('JP_Radio::Radiko.auth1');
     const res = await got.get(AUTH1_URL, {
       cookieJar: this.cookieJar,
       headers: {
@@ -125,6 +136,7 @@ export default class Radiko {
   }
 
   private getPartialKey(headers: Record<string, string>): [string, string] {
+    this.logger.info('JP_Radio::Radiko.getPartialKey');
     const token = headers['x-radiko-authtoken'];
     const offset = parseInt(headers['x-radiko-keyoffset'], 10);
     const length = parseInt(headers['x-radiko-keylength'], 10);
@@ -133,6 +145,7 @@ export default class Radiko {
   }
 
   private async auth2(token: string, partialKey: string): Promise<string> {
+    this.logger.info('JP_Radio::Radiko.auth2');
     const res = await got.get(AUTH2_URL, {
       cookieJar: this.cookieJar,
       headers: {
@@ -146,6 +159,7 @@ export default class Radiko {
   }
 
   private async getStations(): Promise<void> {
+    this.logger.info('JP_Radio::Radiko.getStations');
     this.stations = new Map();
     this.areaData = new Map();
 
@@ -158,7 +172,7 @@ export default class Radiko {
       region_id: region['@region_id'],
       ascii_name: region['@ascii_name'],
       stations: region.station.map((s: any) => ({
-        id: s.id,
+        id: String(s.id),   // FM802対策
         name: s.name,
         ascii_name: s.ascii_name,
         areafree: s.areafree,
@@ -173,12 +187,12 @@ export default class Radiko {
     const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
 
     await Promise.all(
-      areaIDs.map((areaID) =>
+      areaIDs.map((areaId) =>
         limit(async () => {
-          const res = await got(format(CHANNEL_AREA_URL, areaID));
+          const res = await got(format(CHANNEL_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
           const stations = parsed.stations.station.map((s: any) => s.id);
-          this.areaData.set(areaID, {
+          this.areaData.set(areaId, {
             areaName: parsed.stations['@area_name'],
             stations,
           });
@@ -187,7 +201,7 @@ export default class Radiko {
     );
 
     const areaData = this.areaData;
-    const currentAreaID = this.areaID ?? '';
+    const currentAreaID = this.areaId ?? '';
     const allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
 
     // 3. regionData をもとに stations を構成
@@ -195,15 +209,18 @@ export default class Radiko {
       for (const station of region.stations) {
         const id = station.id;
         const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
+        const areaKanji = AreaKanji.get(station.area_id) ?? areaName;
 
         if (this.loginState || allowedStations.includes(id)) {
-          this.stations.set(id, {
-            RegionName: region.region_name,
-            BannerURL: station.banner,
-            AreaID: station.area_id,
-            AreaName: areaName,
-            Name: station.name,
-            AsciiName: station.ascii_name,
+          this.stations.set(id, {          // 'TBS'
+            RegionName: region.region_name,// '関東'
+            BannerURL: station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
+            AreaId: station.area_id,       // 'JP13'
+            AreaName: areaName,            // 'TOKYO'
+            AreaKanji: areaKanji,          // '東京'
+            Name: station.name,            // 'TBSラジオ'
+            AsciiName: station.ascii_name, // 'TBS RADIO'
+            AreaFree: station.areafree,    // '1'
           });
         }
       }
@@ -212,11 +229,16 @@ export default class Radiko {
     this.stationData = regionData;
   }
 
-  async getStationAsciiName(stationID: string): Promise<string> {
-    return this.stations?.get(stationID)?.AsciiName ?? '';
+  async getStationName(stationId: string): Promise<string> {
+    return this.stations?.get(stationId)?.Name ?? '';
+  }
+
+  async getStationAsciiName(stationId: string): Promise<string> {
+    return this.stations?.get(stationId)?.AsciiName ?? '';
   }
 
   async play(station: string): Promise<ChildProcess | null> {
+    this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
     if (!this.stations?.has(station)) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
       return null;
@@ -224,11 +246,11 @@ export default class Radiko {
 
     let m3u8: string | null = null;
     for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.areaID] = await this.getToken();
+      if (!this.token) [this.token, this.areaId] = await this.getToken();
       m3u8 = await this.genTempChunkM3u8URL(format(PLAY_URL, station), this.token);
       if (m3u8) break;
       this.logger.info('JP_Radio::Retrying stream fetch with new token');
-      [this.token, this.areaID] = await this.getToken();
+      [this.token, this.areaId] = await this.getToken();
     }
 
     if (!m3u8) {
@@ -237,6 +259,8 @@ export default class Radiko {
     }
 
     const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
+
+    this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
 
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
