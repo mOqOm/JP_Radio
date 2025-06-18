@@ -58,6 +58,10 @@ export default class Radiko {
     }
   }
 
+  async getMyAreaId(): Promise<string> {
+    return this.areaId + '/' + (this.loginState ? this.loginState.member_type.type : '');
+  }
+
   private async login(acct: LoginAccount): Promise<CookieJar> {
     this.logger.info('JP_Radio::Radiko.login');
     const jar = new tough.CookieJar();
@@ -168,7 +172,7 @@ export default class Radiko {
       region_id: region['@region_id'],
       ascii_name: region['@ascii_name'],
       stations: region.station.map((s: any) => ({
-        id: s.id,
+        id: String(s.id),   // FM802対策
         name: s.name,
         ascii_name: s.ascii_name,
         areafree: s.areafree,
@@ -208,15 +212,15 @@ export default class Radiko {
         const areaKanji = AreaKanji.get(station.area_id) ?? areaName;
 
         if (this.loginState || allowedStations.includes(id)) {
-          this.stations.set(id, {           // 'TBS'
-            RegionName: region.region_name, // '関東'
+          this.stations.set(id, {          // 'TBS'
+            RegionName: region.region_name,// '関東'
             BannerURL: station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
-            AreaId: station.area_id,    // 'JP13'
-            AreaName: areaName,           // 'TOKYO'
+            AreaId: station.area_id,       // 'JP13'
+            AreaName: areaName,            // 'TOKYO'
             AreaKanji: areaKanji,          // '東京'
-            Name: station.name,       // 'TBSラジオ'
+            Name: station.name,            // 'TBSラジオ'
             AsciiName: station.ascii_name, // 'TBS RADIO'
-            AreaFree: station.areafree,   // '1'
+            AreaFree: station.areafree,    // '1'
           });
         }
       }

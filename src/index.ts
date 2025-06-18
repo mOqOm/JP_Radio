@@ -2,7 +2,7 @@ import libQ from 'kew';
 import VConf from 'v-conf';
 import JpRadio from './lib/radio';
 import { BrowseResult } from './lib/models/BrowseResultModel';
-import { getCurrentRadioTime, formatTimeString, getTimeSpan } from './lib/radioTime';
+//import { getCurrentRadioTime, formatTimeString, getTimeSpan } from './lib/radioTime';
 
 export = ControllerJpRadio;
 
@@ -260,7 +260,7 @@ class ControllerJpRadio {
   }
 
   explodeUri(uri: string): Promise<any> {
-    //this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
+    this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     var defer = libQ.defer();
 
     // uri=http://localhost:9000/radiko/play/FMT/tt/sn/aa

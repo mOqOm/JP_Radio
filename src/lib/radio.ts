@@ -60,7 +60,7 @@ export default class JpRadio {
 
 
     this.app.get('/radiko/play/:stationID', async (req: Request, res: Response): Promise<void> => {
-      this.station = req.params['stationID'];
+      this.station = String(req.params['stationID']);   // FM802対策
       this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.originalUrl=${req.originalUrl}`);
 
       if (!this.rdk || !this.rdk.stations?.has(this.station)) {
@@ -139,12 +139,13 @@ export default class JpRadio {
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
         const artist = `${stationName} / ${t0.substring(0, 5)}-${t1.substring(0, 5)}`;
+        this.logger.info(`JP_Radio::JpRadio.#pushSongState: ${t0}-${t1}`);
         this.logger.info(`JP_Radio::JpRadio.#pushSongState: "${artist}", now=${now}`);
 
-        state.title = progData.title + performer;
+        state.title = progData.title;// + performer;
         state.artist = artist;
         state.albumart = progData.img || state.albumart;
-        state.duration = getTimeSpan(t0, t1);        // sec
+        state.duration = getTimeSpan(t0, t1);      // sec
         state.seek = getTimeSpan(t0, now) * 1000;  // msec
 
         // workaround to allow state to be pushed when not in a volatile state
@@ -191,7 +192,43 @@ export default class JpRadio {
     const stationPromises = entries.map(async ([stationId, stationInfo]) => {
       try {
         const progData = await this.prg?.getCurProgram(stationId);
-
+        const progTitle = progData ? progData.title : '';
+        const progPfm   = progData ? progData.pfm : '';
+      //  const title     = progTitle + (progPfm ? ` - ${progPfm}` : '');
+        const areaName  = stationInfo.AreaKanji || stationInfo.AreaName;
+        const progImg   = progData ? progData.img : '';
+        const albumart  = progImg || stationInfo.BannerURL || '';
+        const t0 = progData ? formatTimeString(progData.ft).substr(0,5) : '';
+        const t1 = progData ? formatTimeString(progData.tt).substr(0,5) : '';
+        const stationAndTime = `${stationInfo.Name} ${t0}-${t1}`;
+      
+        const uri = `http://localhost:${this.port}/radiko/play/${stationId}`
+                  + '/' + encodeURIComponent(progTitle)
+                  + '/' + encodeURIComponent(stationAndTime)
+                  + '/' + encodeURIComponent(albumart)
+      
+        const item: BrowseItem = {
+          // explodeUriを呼び出す先のサービス名
+          service   : this.serviceName,
+          type      : 'song',
+          // 番組タイトル
+          title     : progTitle,
+          // パーソナリティ名
+          album: progPfm,
+          // 地域名 / 局名
+          artist    : `${areaName} / ${stationAndTime}`,
+          // 番組画像URL
+          albumart  : albumart,
+          // 再生URI
+          uri       : uri,
+          // サンプルレート（未使用）
+          samplerate: '',
+          // ビット深度（未使用）
+          bitdepth  : 0,
+          // チャンネル数（未使用）
+          channels  : 0
+        };
+/*
         const item: BrowseItem = {
           // explodeUriを呼び出す先のサービス名
           service: this.serviceName,
@@ -213,7 +250,7 @@ export default class JpRadio {
           // チャンネル数（未使用）
           channels: 0
         };
-
+*/
         const region = stationInfo.RegionName || 'その他';
         if (!grouped[region]) {
           grouped[region] = [];
@@ -311,11 +348,15 @@ export default class JpRadio {
     if (this.prg) {
       this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
       if (whenBoot) {
-        this.commandRouter.pushToastMessage('success', 'JP Radio', '番組データ：取得中...');
+        this.commandRouter.pushToastMessage('info', 'JP Radio', '番組データ：取得中...');
       }
 
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
-      const areaIdArray = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+      const myAreaId = await this.rdk?.getMyAreaId();  // JP**/AreaFree
+      const ids = myAreaId ? myAreaId.split('/') : [];
+      const areaIdArray = (ids[1] == 'AreaFree')
+                        ? Array.from({ length: 47 }, (_, i) => `JP${i + 1}`)
+                        : [ ids[0], 'JP13' ];
       //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
 
       const stationsMap = this.rdk?.stations ?? new Map<string, StationInfo>();

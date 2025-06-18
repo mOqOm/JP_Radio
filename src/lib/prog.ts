@@ -100,6 +100,7 @@ export default class RdkProg {
     });
 
     const limit = pLimit(5);
+    var doneAreaFree = new Set();
 
     const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
@@ -110,29 +111,38 @@ export default class RdkProg {
           const stations = xmlData?.radiko?.stations?.station ?? [];
 
           for (const stationData of stations) {
-            const stationId = stationData['@id'];
+            const stationId = String(stationData['@id']);  // FM802対策
             // 広域局の多重処理をスキップ
             const station = stationsMap?.get(stationId);
 
             if (!station) {
-              continue; // 情報がなければスキップ
+              continue; // 情報がなければスキップ(nonAreaFreeでエリア外)
             }
 
-            if (station.AreaId != areaId && station.RegionName != '全国' && station.AreaFree != '0') {
+            // 一般局，全国広域(RN1,RN2,JOAK-FM)
+            if(station.AreaId != areaId && station.AreaFree != '0'
+              || station.RegionName == '全国' && areaId != 'JP13'){
               continue;
+            }
+
+             // NHK地方局(JO**)
+            if(station.AreaFree == '0' && doneAreaFree.has(stationId)) {
+              continue;
+            } else {
+              doneAreaFree.add(stationId);
             }
 
             const progRaw = stationData.progs?.prog;
             if (!progRaw) continue;
 
             const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
-
+            const today = progs[0]['@ft'].substring(0, 8);  // yyyyMMdd
             for (const prog of progs) {
               const program: RadikoProgramData = {
-                station: stationId,
+                station: String(stationId),   // FM802対策
                 id: stationId + prog['@id'],
-                ft: prog['@ft'],
-                tt: prog['@to'],
+                ft: cnvRadioTime(prog['@ft'], today),
+                tt: cnvRadioTime(prog['@to'], today),
                 title: prog['title'],
                 pfm: prog['pfm'] ?? '',
                 img: prog['img'],
