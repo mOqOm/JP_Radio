@@ -221,6 +221,17 @@ class ControllerJpRadio {
         return this.mpdPlugin.sendMpdCommand('clear', []);
       })
       .then(() => {
+        const currentPosition = this.commandRouter.stateMachine.currentPosition;
+        if(currentPosition > 0) {
+          // 再生キューの並べ替え：対象局を先頭に
+          var arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+          const arrayCurrentItem = arrayQueue.splice(currentPosition, 1);
+          arrayQueue = arrayCurrentItem.concat(arrayQueue);
+          this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
+          this.commandRouter.stateMachine.playQueue.saveQueue();
+          this.commandRouter.stateMachine.currentPosition = 0;
+          this.commandRouter.volumioPushQueue(arrayQueue);
+        }
         return this.mpdPlugin.sendMpdCommand(`add "${safeUri}"`, []);
       })
       .then(() => {
@@ -260,7 +271,7 @@ class ControllerJpRadio {
   }
 
   explodeUri(uri: string): Promise<any> {
-    this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
+    //this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     var defer = libQ.defer();
 
     // uri=http://localhost:9000/radiko/play/FMT/tt/sn/aa
