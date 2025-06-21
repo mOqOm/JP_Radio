@@ -88,7 +88,7 @@ export default class RdkProg {
     }
   }
 
-  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<void> {
+  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<[number, number]> {
     // boot時はラジオ時間で，cron時は実時間で取得
     const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
     this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
@@ -101,6 +101,8 @@ export default class RdkProg {
 
     const limit = pLimit(5);
     var doneAreaFree = new Set();
+    var cntStation = 0;
+    var cntProgram = 0;
 
     const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
@@ -148,7 +150,9 @@ export default class RdkProg {
                 img: prog['img'],
               };
               await this.putProgram(program);
+              cntProgram++;
             }
+            cntStation++;
           }
         } catch (error) {
           this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
@@ -157,6 +161,7 @@ export default class RdkProg {
     );
 
     await Promise.all(tasks);
+    return [cntStation, cntProgram];
   }
 
   async dbClose(): Promise<void> {
