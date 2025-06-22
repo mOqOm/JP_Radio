@@ -8,7 +8,7 @@ import type { BrowseItem, BrowseList, BrowseResult } from './models/BrowseResult
 import type { StationInfo } from './models/StationModel';
 
 import { DELAY_sec, getCurrentRadioTime, formatTimeString, getTimeSpan } from './radioTime';
-
+import { AreaKanji } from './consts/areaName';
 
 export default class JpRadio {
   private readonly app: Application;
@@ -99,7 +99,7 @@ export default class JpRadio {
           this.logger.debug(`JP_Radio::JpRadio.#startStream: ffmpeg process ${ffmpeg.pid} exited.`);
         });
         ffmpeg.stdout.pipe(res);
-        this.logger.info(`JP_Radio::JpRadio.#startStream: ffmpeg=${ffmpeg.pid}`);
+        this.logger.info(`JP_Radio::JpRadio.#startStream: ffmpeg.pid=${ffmpeg.pid}`);
         // max60sも待ちたくないのですぐ呼ぶ
         setTimeout(this.#pushSongState.bind(this), 3000);
         this.task2.start();
@@ -135,11 +135,10 @@ export default class JpRadio {
       if (progData) {
         const stationName = await this.rdk?.getStationName(this.station);
         const performer = progData.pfm ? ` - ${progData.pfm}` : '';
-        const t0 = formatTimeString(progData.ft);
-        const t1 = formatTimeString(progData.tt);
+        const t0 = formatTimeString(progData.ft);  // HH:mm:ss
+        const t1 = formatTimeString(progData.tt);  // HH:mm:ss
         const now = formatTimeString(getCurrentRadioTime());
-        const stationAndTime = `${stationName} ${t0.substring(0, 5)}-${t1.substring(0, 5)}`;
-
+        const stationAndTime = `${stationName} / ${t0.substring(0, 5)}-${t1.substring(0, 5)} `;
         this.logger.info(`JP_Radio::JpRadio.#pushSongState: ${state.position}:"${stationAndTime}", now=${now}`);
 
         state.title = progData.title + performer;
@@ -163,32 +162,35 @@ export default class JpRadio {
         this.commandRouter.servicePushState(state, 'mpd');
       }
     }
-    this.#updateQueuInfo();
+    this.#updateQueueInfo();
   }
 
-  async #updateQueuInfo(): Promise<void> {
+  async #updateQueueInfo(): Promise<void> {
     var arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     var changeFlag = false;
     for(var i in arrayQueue) {
       const queueItem = arrayQueue[i];
+      // uri = /radiko/play/FMT
+      //      0   1     2    3
       const uris = queueItem.uri.split('/');
-      const progData = await this.prg?.getCurProgram(uris[5]);
+      const progData = await this.prg?.getCurProgram(uris[3]);
       if (progData) {
         const stationAndTime = queueItem.artist;
-        const t0 = formatTimeString(progData.ft);
-        const t1 = formatTimeString(progData.tt);
-        const progTime = `${t0.substring(0, 5)}-${t1.substring(0, 5)}`;
-        if(!stationAndTime.endsWith(progTime)) {
-          changeFlag = true;
+        const t0 = formatTimeString(progData.ft).substring(0, 5);  // HH:mm
+        const t1 = formatTimeString(progData.tt).substring(0, 5);  // HH:mm
+        if(!stationAndTime.endsWith(t1)) {
+          const progTime = `${t0.substring(0, 5)}-${t1.substring(0, 5)}`;
           const performer = progData.pfm ? ` - ${progData.pfm}` : '';
           queueItem.name = progData.title + performer;
-          queueItem.artist = stationAndTime.replace(/(\d+):(\d+)-(\d+):(\d+)/, progTime);
+          queueItem.artist = stationAndTime.replace(/(\d+):(\d+)-(\d+):(\d+)\s?/, progTime);
           queueItem.albumart = progData.img || queueItem.albumart
-          this.logger.info(`JP_Radio::JpRadio.#updateQueuInfo: arrayQueue[${i}]=${Object.values(queueItem)}`);
+          this.logger.info(`JP_Radio::JpRadio.#updateQueueInfo: arrayQueue[${i}]=${Object.values(queueItem)}`);
+          changeFlag = true;
         }
       }
     }
     if(changeFlag) {
+      this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
       this.commandRouter.stateMachine.playQueue.saveQueue();
       this.commandRouter.volumioPushQueue(arrayQueue);
     }
@@ -227,13 +229,14 @@ export default class JpRadio {
         const albumart  = progImg || stationInfo.BannerURL || '';
         const t0 = progData ? formatTimeString(progData.ft).substr(0,5) : '';
         const t1 = progData ? formatTimeString(progData.tt).substr(0,5) : '';
-        const stationAndTime = `${stationInfo.Name} ${t0}-${t1}`;
+        const stationAndTime = `${stationInfo.Name} / ${t0}-${t1}`;
       
-        const uri = `http://localhost:${this.port}/radiko/play/${stationId}`
+        const uri = `/radiko/prog/${stationId}`
                   + '/' + encodeURIComponent(progTitle)
                   + '/' + encodeURIComponent(stationAndTime)
                   + '/' + encodeURIComponent(albumart)
       
+        // ブラウズ画面に表示する情報
         const item: BrowseItem = {
           // explodeUriを呼び出す先のサービス名
           service   : this.serviceName,
@@ -374,16 +377,18 @@ export default class JpRadio {
   async #pgupdate(whenBoot = false): Promise<void> {
     if (this.prg) {
       this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
+
+      const myAreaId = await this.rdk?.getMyAreaId();  // JP**/AreaFree
+      const myAreaIds = myAreaId ? myAreaId.split('/') : [];
+      const areaName = myAreaIds[1] || AreaKanji.get(myAreaIds[0]);
       if (whenBoot) {
-        this.commandRouter.pushToastMessage('info', 'JP Radio', '番組表：取得中...');
+        this.commandRouter.pushToastMessage('info', 'JP Radio', `番組表 (${areaName})：取得中...`);
       }
 
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
-      const myAreaId = await this.rdk?.getMyAreaId();  // JP**/AreaFree
-      const ids = myAreaId ? myAreaId.split('/') : [];
-      const areaIdArray = (ids[1] == 'AreaFree')
+      const areaIdArray = (myAreaIds[1] == 'AreaFree')
                         ? Array.from({ length: 47 }, (_, i) => `JP${i + 1}`)
-                        : (ids[0] != 'JP13') ? [ ids[0], 'JP13' ] :  [ ids[0] ];
+                        : (myAreaIds[0] != 'JP13') ? [ myAreaIds[0], 'JP13' ] :  [ myAreaIds[0] ];
 //      const　areaIdArray = new Array('JP13', 'JP27') // デバッグ用(東京/大阪)
 //      const　areaIdArray = new Array('JP13', 'JP40') // デバッグ用(東京/福岡)
 
@@ -396,8 +401,8 @@ export default class JpRadio {
       const processingTime = updateEndTime - updateStartTime;
 
       if (whenBoot) {
-        this.commandRouter.pushToastMessage('success', 'JP Radio',
-            `番組表：完了！ ${cntStation}局 ${cntProgram}番組 ${Math.round(processingTime/1000)}秒`);
+        this.commandRouter.pushToastMessage('success', 'JP Radio', `番組表 (${areaName})：取得完了！`
+          + `　　　　　　　（${cntStation}局 / ${cntProgram}番組 / ${Math.round(processingTime/1000)}秒）`);
       }
 
       this.logger.info(`JP_Radio::JpRadio.#pgupdate: complete. ### ${cntStation}局 ${cntProgram}番組 ${processingTime}ms ###`);
