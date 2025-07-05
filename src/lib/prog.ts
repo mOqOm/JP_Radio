@@ -42,8 +42,7 @@ export default class RdkProg {
 
     if (station !== this.lastStation || currentTime !== this.lastTime) {
       try {
-        // TODO: TBS,YFM,MBS,NORTHWAVE,etcでヒットしない問題
-        //       (常にってわけじゃなく時々なのが非常に厄介)
+        // TODO: TBS,YFM,MBS,NORTHWAVE,etcで時々ヒットしない問題 ⇒ 解決！
         const result: RadikoProgramData | null = await this.db.findOne({
           station,
           ft: { $lt: currentTime + '01' },
@@ -68,18 +67,29 @@ export default class RdkProg {
   }
 
   async putProgram(prog: RadikoProgramData): Promise<void> {
-    try {
-      await this.db.insert(prog);
-    } catch (error: any) {
-      if (error?.errorType !== 'uniqueViolated') {
+    const RETRY_COUNT = 5;
+    for (var i=0; i<RETRY_COUNT; i++) {
+      try {
+        //this.logger.info(`JP_Radio::RdkProg.putProgram: ${prog.id}/${prog.ft} ${prog.title}`);
+        await this.db.insert(prog);
+        break ;
+
+      } catch (error: any) {
         this.logger.error('JP_Radio::DB insert error', error);
+        if (error?.errorType !== 'uniqueViolated') {
+          break ;
+        } else {
+          // TBS等の同一prog.id対策，sufixを追加してリトライ
+          const ids = `${prog.id}_0`.split('_');
+          prog.id = `${ids[0]}_${Number(ids[1])+1}`;
+          //this.logger.info(`JP_Radio::RdkProg.putProgram: Retrying new id ${prog.id}`);
+        }
       }
     }
   }
 
   async clearOldProgram(): Promise<void> {
     try {
-      // TODO: TBS,MBS消しすぎてない??
       // yyyyMMddHHmm
       const currentTime = getCurrentRadioTime().substring(0, 12);
       await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
