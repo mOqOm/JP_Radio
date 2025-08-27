@@ -1,24 +1,86 @@
-export const AreaKanji = new Map([
-  // 北海道・東北
-  ['JP1', '北海道'], ['JP2', '青森'], ['JP3', '岩手'],
-  ['JP4', '宮城'], ['JP5', '秋田'], ['JP6', '山形'], ['JP7', '福島'],
-  // 関東
-  ['JP8', '茨城'], ['JP9', '栃木'], ['JP10', '群馬'],
-  ['JP11', '埼玉'], ['JP12', '千葉'], ['JP13', '東京'], ['JP14', '神奈川'],
-  // 北陸・甲信越
-  ['JP15', '新潟'], ['JP16', '富山'], ['JP17', '石川'],
-  ['JP18', '福井'], ['JP19', '山梨'], ['JP20', '長野'],
-  // 中部
-  ['JP21', '岐阜'], ['JP22', '静岡'], ['JP23', '愛知'], ['JP24', '三重'],
-  // 近畿
-  ['JP25', '滋賀'], ['JP26', '京都'], ['JP27', '大阪'],
-  ['JP28', '兵庫'], ['JP29', '奈良'], ['JP30', '和歌山'],
-  // 中国
-  ['JP31', '鳥取'], ['JP32', '島根'], ['JP33', '岡山'],
-  ['JP34', '広島'], ['JP35', '山口'],
-  // 四国
-  ['JP36', '徳島'], ['JP37', '香川'], ['JP38', '愛媛'], ['JP39', '高知'],
-  // 九州・沖縄
-  ['JP40', '福岡'], ['JP41', '佐賀'], ['JP42', '長崎'], ['JP43', '熊本'],
-  ['JP44', '大分'], ['JP45', '宮崎'], ['JP46', '鹿児島'], ['JP47', '沖縄']
-]);
+"use strict";
+
+export const AreaNames = [
+  {
+    region: "RADIKO_AREA.REGION1",
+    areas: [
+      "RADIKO_AREA.JP1",
+      "RADIKO_AREA.JP2",
+      "RADIKO_AREA.JP3",
+      "RADIKO_AREA.JP4",
+      "RADIKO_AREA.JP5",
+      "RADIKO_AREA.JP6",
+      "RADIKO_AREA.JP7"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION2",
+    areas: [
+      "RADIKO_AREA.JP8",
+      "RADIKO_AREA.JP9",
+      "RADIKO_AREA.JP10",
+      "RADIKO_AREA.JP11",
+      "RADIKO_AREA.JP12",
+      "RADIKO_AREA.JP13",
+      "RADIKO_AREA.JP14"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION3",
+    areas: [
+      "RADIKO_AREA.JP15",
+      "RADIKO_AREA.JP16",
+      "RADIKO_AREA.JP17",
+      "RADIKO_AREA.JP18",
+      "RADIKO_AREA.JP19",
+      "RADIKO_AREA.JP20"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION4",
+    areas: [
+      "RADIKO_AREA.JP21",
+      "RADIKO_AREA.JP22",
+      "RADIKO_AREA.JP23",
+      "RADIKO_AREA.JP24"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION5",
+    areas: [
+      "RADIKO_AREA.JP25",
+      "RADIKO_AREA.JP26",
+      "RADIKO_AREA.JP27",
+      "RADIKO_AREA.JP28",
+      "RADIKO_AREA.JP29",
+      "RADIKO_AREA.JP30"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION6",
+    areas: [
+      "RADIKO_AREA.JP31",
+      "RADIKO_AREA.JP32",
+      "RADIKO_AREA.JP33",
+      "RADIKO_AREA.JP34",
+      "RADIKO_AREA.JP35",
+      "RADIKO_AREA.JP36",
+      "RADIKO_AREA.JP37",
+      "RADIKO_AREA.JP38",
+      "RADIKO_AREA.JP39"
+    ]
+  },
+  {
+    region: "RADIKO_AREA.REGION7",
+    areas: [
+      "RADIKO_AREA.JP40",
+      "RADIKO_AREA.JP41",
+      "RADIKO_AREA.JP42",
+      "RADIKO_AREA.JP43",
+      "RADIKO_AREA.JP44",
+      "RADIKO_AREA.JP45",
+      "RADIKO_AREA.JP46",
+      "RADIKO_AREA.JP47"
+    ]
+  }
+];

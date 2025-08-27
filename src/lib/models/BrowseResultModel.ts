@@ -12,6 +12,7 @@ export interface BrowseItem {
   uri: string;
   // プレイヤー内部で使われる任意の名前（未使用でも可）
   artist?: string;
+  // プレイヤー内部で使われる任意の名前（未使用でも可）
   album?: string;
   // サンプルレート（例: '44.1kHz'）
   samplerate?: string;
@@ -19,6 +20,8 @@ export interface BrowseItem {
   bitdepth?: number;
   // チャンネル数（例: 2）
   channels?: number;
+  // 番組時間（秒）
+  duration?: number;
 }
 
 // Browse ページ内の 1 つのリスト（カテゴリや地域別に表示される）

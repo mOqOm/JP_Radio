@@ -7,16 +7,17 @@ export interface RadikoXMLData {
 }
 
 export interface RadikoXMLStation {
-  // station id
-  '@id': string;
+  '@id': string;  // station id
   progs: {
+    date: string;
     prog: {
-      '@id': string;
+      '@id': string;  // prog id
       '@ft': string;
       '@to': string;
       title: string;
-      pfm?: string;
-      img: string;
+      info : string;  // TODO:
+      pfm  : string;
+      img  : string;
     }[];
-  };
+  }[];
 }
