@@ -61,6 +61,7 @@ export interface RegionData {
     ascii_name: string;
     areafree: string;
     timefree: string;
+    logo: string;
     banner: string;
     area_id: string;
   }>;
@@ -70,10 +71,12 @@ export interface RegionData {
 export interface StationInfo {
   RegionName: string;
   BannerURL: string;
+  LogoURL: string;
   AreaId: string;
   AreaName: string;
   AreaKanji : string;
   Name: string;
   AsciiName: string;
   AreaFree  : string;
+  TimeFree: string;
 }

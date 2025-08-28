@@ -1,24 +1,22 @@
+"use strict";
 import got from 'got';
 import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
-import { formatInTimeZone } from 'date-fns-tz';
-import { subHours } from 'date-fns';
 
-import { PROG_URL } from './consts/radikoUrls';
+import { PROG_DATE_AREA_URL, PROG_NOW_AREA_URL, PROG_TODAY_AREA_URL, PROG_DAILY_STATION_URL, PROG_WEEKLY_STATION_URL } from './consts/radikoUrls';
 import type { RadikoProgramData } from './models/RadikoProgramModel';
 import type { RadikoXMLData } from './models/RadikoXMLStationModel';
-import type { StationInfo } from './models/StationModel';
-
-import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radioTime';
+import { RadioTime } from './radioTime';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
-  station: '',
-  id: '',
+  stationId: '',
+  progId: '',
   ft: '',
-  tt: '',
+  to: '',
   title: '',
+  info: '',
   pfm: '',
   img: '',
 };
@@ -26,8 +24,13 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 export default class RdkProg {
   private readonly logger: Console;
   private readonly db = Datastore.create({ inMemoryOnly: true });
+  private readonly xmlParser = new XMLParser({
+      attributeNamePrefix   : '@',
+      ignoreAttributes      : false,
+      allowBooleanAttributes: true,
+    });
 
-  private lastStation = '';
+  private lastStationId = '';
   private lastTime = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
@@ -36,179 +39,196 @@ export default class RdkProg {
     this.initDBIndexes();
   }
 
-  async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
-    // yyyyMMddHHmm
-    const currentTime = getCurrentRadioTime().substring(0, 12);
+  public async getCurProgram(stationId: string): Promise<RadikoProgramData | undefined> {
+    //this.logger.info(`JP_Radio::RdkProg.getCurProgram: station=${stationId}`);
+    const currentTime = RadioTime.getCurrentRadioTime();
+    var result = await this.findProgram(stationId, currentTime);
+    if (!result) {
+      await this.getDailyStationPrograms(stationId, currentTime);
+      result = await this.findProgram(stationId, currentTime);
+    }
+    return result;
+  }
 
-    if (station !== this.lastStation || currentTime !== this.lastTime) {
+  public async findProgram(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
+    //this.logger.info(`JP_Radio::RdkProg.findProgram: station=${stationId}, time=${time}`);
+    const time = timeFull.slice(0, 12); // yyyyMMddHHmm
+    if (stationId !== this.lastStationId || time !== this.lastTime) {
       try {
-        // TODO: TBS,YFM,MBS,NORTHWAVE,etcで時々ヒットしない問題 ⇒ 解決！
         const result: RadikoProgramData | null = await this.db.findOne({
-          station,
-          ft: { $lt: currentTime + '01' },
-          tt: { $gt: currentTime + '01' },
+          stationId,
+          ft: { $lt: `${time}01` }, // yyyyMMddHHmmss
+          to: { $gt: `${time}01` },
         });
 
         if (result) {
           this.cachedProgram = result;
+          this.lastStationId = stationId;
+          this.lastTime = time;
         } else {
-          this.logger.error(`JP_Radio::RdkProg.getCurProgram: ## ${station}:${currentTime} cannot find. ##`);
+          this.logger.error(`JP_Radio::RdkProg.findProgram: ## ${stationId},${time} cannot find. ##`);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 
-        this.lastStation = station;
-        this.lastTime = currentTime;
       } catch (error) {
-        this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
+        this.logger.error(`JP_Radio::DB find error for station ${stationId}`, error);
+        this.cachedProgram = { ...EMPTY_PROGRAM };
       }
     }
-
-    return this.cachedProgram.id ? this.cachedProgram : undefined;
+    return this.cachedProgram.progId ? this.cachedProgram : undefined;
   }
 
-  async putProgram(prog: RadikoProgramData): Promise<void> {
-    const RETRY_COUNT = 5;
-    for (var i=0; i<RETRY_COUNT; i++) {
-      try {
-        //this.logger.info(`JP_Radio::RdkProg.putProgram: ${prog.id}/${prog.ft} ${prog.title}`);
-        await this.db.insert(prog);
-        break ;
-
-      } catch (error: any) {
-        this.logger.error('JP_Radio::DB insert error', error);
-        if (error?.errorType !== 'uniqueViolated') {
-          break ;
-        } else {
-          // TBS等の同一prog.id対策，sufixを追加してリトライ
-          const ids = `${prog.id}_0`.split('_');
-          prog.id = `${ids[0]}_${Number(ids[1])+1}`;
-          //this.logger.info(`JP_Radio::RdkProg.putProgram: Retrying new id ${prog.id}`);
-        }
-      }
-    }
-  }
-
-  async clearOldProgram(): Promise<void> {
+  private async putProgram(prog: RadikoProgramData): Promise<void> {
     try {
-      // yyyyMMddHHmm
-      const currentTime = getCurrentRadioTime().substring(0, 12);
-      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
+      await this.db.insert(prog);
+    } catch (error: any) {
+      if (error?.errorType !== 'uniqueViolated') {
+        this.logger.error('JP_Radio::DB insert error', error);
+      }
+    }
+  }
+
+  public async clearOldProgram(): Promise<void> {
+    try {
+      this.db.remove({ to: { $lt: RadioTime.getCurrentRadioTime() } }, { multi: true })
+      .then((numRemoved) => {
+        this.logger.info(`JP_Radio::RdkProg.clearOldProgram: Removed ${numRemoved} documents from DB`);
+      });
     } catch (error) {
       this.logger.error('JP_Radio::DB delete error', error);
     }
+    await this.dbCount();
   }
 
-  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<[number, number]> {
-    // boot時はラジオ時間で，cron時は実時間で取得
-    const currentDate = whenBoot ? getCurrentRadioDate() : getCurrentDate();
-    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}] ${currentDate}`);
-
-    const parser = new XMLParser({
-      attributeNamePrefix: '@',
-      ignoreAttributes: false,
-      allowBooleanAttributes: true,
-    });
-
+  public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
+    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}]`);
     const limit = pLimit(5);
-    var doneAreaFree = new Set();
-    var cntStation = 0;
-    var cntProgram = 0;
-
+    var doneStations = new Set();
     const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
-        const url = utilFormat(PROG_URL, currentDate, areaId);
-        try {
-          const response = await got(url);
-          const xmlData: RadikoXMLData = parser.parse(response.body);
-          const stations = xmlData?.radiko?.stations?.station ?? [];
-
-          for (const stationData of stations) {
-            const stationId = String(stationData['@id']);  // FM802対策
-            // 広域局の多重処理をスキップ
-            const station = stationsMap?.get(stationId);
-
-            if (!station) {
-              continue; // 情報がなければスキップ(nonAreaFreeでエリア外)
-            }
-
-            // 一般局，全国広域(RN1,RN2,JOAK-FM)
-            if(station.AreaId != areaId && station.AreaFree != '0'
-              || station.RegionName == '全国' && areaId != 'JP13'){
-              continue;
-            }
-
-             // NHK地方局(JO**)
-            if(station.AreaFree == '0' && doneAreaFree.has(stationId)) {
-              continue;
-            } else {
-              doneAreaFree.add(stationId);
-            }
-
-            const progRaw = stationData.progs?.prog;
-            if (!progRaw) continue;
-
-            const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
-            const today = progs[0]['@ft'].substring(0, 8);  // yyyyMMdd
-            for (const prog of progs) {
-              const program: RadikoProgramData = {
-                station: String(stationId),   // FM802対策
-                id: stationId + prog['@id'],
-                ft: cnvRadioTime(prog['@ft'], today),
-                tt: cnvRadioTime(prog['@to'], today),
-                title: prog['title'],
-                pfm: prog['pfm'] ?? '',
-                img: prog['img'],
-              };
-              await this.putProgram(program);
-              cntProgram++;
-            }
-            cntStation++;
-          }
-        } catch (error) {
-          this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
-        }
+        // boot時はラジオ時間で，cron時は実時間で取得
+        const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) : utilFormat(PROG_DATE_AREA_URL, RadioTime.getCurrentDate(), areaId);
+        const stations = await this.getPrograms(url, doneStations);
+        stations.forEach((s) => doneStations.add(s) );
       })
     );
-
     await Promise.all(tasks);
-    return [cntStation, cntProgram];
+    return doneStations.size;
   }
 
-  async dbClose(): Promise<void> {
-    this.logger.info('JP_Radio::DB compacting');
-    await this.db.persistence.compactDatafile();
+  public async getDateAreaPrograms(areaId: string, time: string): Promise<Set<string>> {
+    this.logger.info(`JP_Radio::RdkProg.getDateAreaPrograms`);
+    const date = time.slice(0, 8); // yyyyMMdd
+    const url = utilFormat(PROG_DATE_AREA_URL, date, areaId);
+    return await this.getPrograms(url);
   }
 
-  async allData(): Promise<any[]> {
+  public async getNowAreaPrograms(areaId: string): Promise<Set<string>> {
+    this.logger.info(`JP_Radio::RdkProg.getNowAreaPrograms`);
+    const url = utilFormat(PROG_NOW_AREA_URL, areaId);
+    return await this.getPrograms(url);
+  }
+
+  public async getTodayAreaPrograms(areaId: string): Promise<Set<string>> {
+    this.logger.info(`JP_Radio::RdkProg.getTodayAreaPrograms`);
+    const url = utilFormat(PROG_TODAY_AREA_URL, areaId);
+    return await this.getPrograms(url);
+  }
+
+  public async getDailyStationPrograms(stationId: string, time: string): Promise<Set<string>> {
+    this.logger.info(`JP_Radio::RdkProg.getDailyStationPrograms`);
+    const date = time.slice(0, 8); // yyyyMMdd
+    const url = utilFormat(PROG_DAILY_STATION_URL, date, stationId);
+    return await this.getPrograms(url);
+  }
+
+  public async getWeeklyStationPrograms(stationId: string): Promise<Set<string>> {
+    this.logger.info(`JP_Radio::RdkProg.getWeeklyStationPrograms`);
+    const url = utilFormat(PROG_WEEKLY_STATION_URL, stationId);
+    return await this.getPrograms(url);
+  }
+
+  private async getPrograms(url: string, skipStations: Set<any> = new Set()): Promise<Set<any>> {
+    this.logger.info(`JP_Radio::RdkProg.getPrograms: ${url}`);
+    var doneStations = new Set();
+    try {
+      const response = await got(url);
+      const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
+      const stationRaw = xmlData?.radiko?.stations?.station ?? [];
+      const stations = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
+
+      for (const stationData of stations) {
+        const stationId: string = stationData['@id'];
+        // 広域局の多重処理をスキップ
+        if (skipStations.has(stationId)) continue;
+
+        const stationProgs = Array.isArray(stationData.progs) ? stationData.progs : [stationData.progs];
+        for (const i in stationProgs) {
+          const progRaw = stationProgs[i].prog;
+          if (!progRaw) continue;
+          var prevTo = '';
+          const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
+          for (const prog of progs) {
+            const ft = RadioTime.convertRadioTime(prog['@ft'], '05');
+            if (prevTo && prevTo < ft) {
+              // 途切れた番組表をダミーで埋める
+              await this.putProgram({ stationId, progId:`${stationId}_${prevTo}`, ft:prevTo, to:ft, title:'' });
+            }
+            const to = RadioTime.convertRadioTime(prog['@to'], '29');
+            const id = `${stationId}${prog['@id']}${ft.slice(8,12)}`; // 同一progId対策(HHmmを付加)
+            const program: RadikoProgramData = {
+              stationId,
+              progId: id,
+              ft    : ft,
+              to    : to,
+              title : prog['title'],
+            //info  : prog['info'] ?? '',  // TODO: 番組情報
+              pfm   : prog['pfm'] ?? '',
+              img   : prog['img'] ?? ''
+            };
+            await this.putProgram(program);
+            prevTo = to;
+            //if (stationId == 'TBS')
+            //  this.logger.info(`JP_Radio::RdkProg.getPrograms: ${Object.entries(program)}`);
+          }
+          if (prevTo.slice(8) < '290000') {
+            // 29:00までダミーで埋める
+            await this.putProgram({ stationId, progId:`${stationId}_${prevTo}`, ft:prevTo, to:`${prevTo.slice(0,8)}290000`, title:'' });
+          }
+        }
+        doneStations.add(stationId);
+      }
+    } catch (error) {
+      this.logger.error(`JP_Radio::Failed to update program for ${url}`, error);
+    }
+    await this.dbCount();
+    return doneStations;
+  }
+
+  public async dbClose(): Promise<void> {
+    //this.logger.info('JP_Radio::DB compacting');
+    //await this.db.persistence.compactDatafile();
+    await this.db.remove({}, { multi: true })
+    .then((numRemoved) => {
+      this.logger.info(`JP_Radio::RdkProg.dbClose: Removed ${numRemoved} documents from DB`);
+    });
+  }
+
+  public async allData(): Promise<any[]> {
     return await this.db.find({});
   }
 
+  public async dbCount(): Promise<number> {
+    const count = await this.db.count({});
+    this.logger.info(`JP_Radio::RdkProg.dbCount: ${count}`);
+    return count;
+  }
+
   private initDBIndexes(): void {
-    this.db.ensureIndex({ fieldName: 'id', unique: true });
-    this.db.ensureIndex({ fieldName: 'station' });
+    this.db.ensureIndex({ fieldName: 'progId', unique: true });
+    this.db.ensureIndex({ fieldName: 'stationId' });
     this.db.ensureIndex({ fieldName: 'ft' });
-    this.db.ensureIndex({ fieldName: 'tt' });
+    this.db.ensureIndex({ fieldName: 'to' });
   }
 
-  private getCurrentTime(): string {
-    return formatInTimeZone(new Date(), 'Asia/Tokyo', 'yyyyMMddHHmm');
-  }
-
-  private getCurrentDate(): string {
-    const now = new Date();
-    // 現在時刻から5時間引いた日時を取得
-    const dateForSwitch = subHours(now, 5);
-    return formatInTimeZone(dateForSwitch, 'Asia/Tokyo', 'yyyyMMdd');
-  }
-}
-
-function isRadikoProgramData(data: any): data is RadikoProgramData {
-  return (
-    typeof data?.station === 'string' &&
-    typeof data?.id === 'string' &&
-    typeof data?.ft === 'string' &&
-    typeof data?.tt === 'string' &&
-    typeof data?.title === 'string' &&
-    typeof data?.pfm === 'string'
-  );
 }
