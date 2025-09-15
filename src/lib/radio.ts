@@ -1,6 +1,6 @@
 "use strict";
 import express, { Application, Request, Response } from 'express';
-//import { parse as queryParse } from 'querystring';
+import { parse as queryParse } from 'querystring';
 import cron from 'node-cron';
 import RdkProg from './prog';
 import Radiko from './radiko';
@@ -122,7 +122,7 @@ export default class JpRadio {
     }
   }
 
-  //-----------------------------------------------------------------------
+//-----------------------------------------------------------------------
 
   public async pushSongState(forceUpdate: boolean = false): Promise<void> {
     const state = this.commandRouter.stateMachine.getState();
@@ -132,6 +132,10 @@ export default class JpRadio {
       if (state.status == 'play') {
         const stationName = this.rdk?.getStationName(this.playing.stationId);
         const [ft, to] = this.playing.timeFree.split('-');
+        const progData = await this.prg?.getProgramData(this.playing.stationId, ft, true);
+        if (progData) {
+
+        }
         const time = RadioTime.formatTimeString2([ft, to], '$1:$2-$4:$5');  // HH:mm-HH:mm
         const date = RadioTime.formatDateString(ft, this.confParam.dateFmt);
         const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
@@ -152,7 +156,7 @@ export default class JpRadio {
     } else {
       // ライブ：番組の切り替わりで更新
       if (state.seek >= state.duration * 1000 || forceUpdate) {
-        const progData = await this.prg?.getCurProgram(this.playing.stationId);
+        const progData = await this.prg?.getCurProgramData(this.playing.stationId, true);
         if (progData) {
           const stationName = this.rdk?.getStationName(this.playing.stationId);
           const time = RadioTime.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5'); // HH:mm-HH:mm
@@ -187,7 +191,7 @@ export default class JpRadio {
       if (queueItem.uri.includes('?'))  continue;
       // uri = http://localhost:9000/radiko/play/TBS
       const stationId = queueItem.uri.split('/').pop();
-      const progData = await this.prg?.getCurProgram(stationId);
+      const progData = await this.prg?.getCurProgramData(stationId, true);
       if (progData) {
         const stationAndTime = queueItem.artist;
         const progTime = RadioTime.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5');
@@ -210,206 +214,265 @@ export default class JpRadio {
 
 //-----------------------------------------------------------------------
 
-  private makeBrowseItem(mode: string, stationId: string, stationInfo: StationInfo | undefined, progData: RadikoProgramData | undefined): BrowseItem {
-    //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem: mode=${mode}, stationId=${stationId}`);
-    const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
-    const stationName = stationInfo ? stationInfo.Name : stationId;
-    const areaStation = `${areaName} / ${stationName}`;
-    if (mode.startsWith('timefree')) {
-      // mode = timefree or timefree_today
-      const albumart = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, stationInfo?.LogoURL);
-      const item: BrowseItem = {  // ブラウズ画面に表示する情報
-        service : this.serviceName,   // handleBrowseUriを呼び出す先のサービス名
-        type    : 'radio-category',   // このタイプはhandleBrowseUriを呼び出す
-        title   : stationName,        // 局名
-        artist  : areaStation,        // エリア名 / 局名
-        albumart: albumart,           // ロゴURL
-        uri     : `radiko/${mode.replace('free', 'table')}/${stationId}`
-      };
-      return item;
+  public async radioStations(mode: string): Promise<BrowseResult> {
+    this.logger.info(`JP_Radio::JpRadio.radioStations: ${mode}`);
+    const defer = libQ.defer();
+    // mode = live or timefree or timefree_today
+    if (this.rdk?.stations) {
+      // 地域名ごとにグループ化
+      const grouped: Record<string, BrowseItem[]> = {};
+      const stationEntries = Array.from(this.rdk.stations.entries());
+      const stationPromises = stationEntries.map(async ([stationId, stationInfo]) => {
+        try {
+          const region = stationInfo.RegionName || 'others';
+          if (!grouped[region]) grouped[region] = [];
+          grouped[region].push(
+            mode.startsWith('timefree')
+              ? this.makeBrowseItem_TimeFree(mode.replace('free', 'table'), stationId, stationInfo)
+              : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
+          );
+        } catch (err) {
+          this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${err}`);
+        }
+      });
+
+      libQ.all(stationPromises)
+        .then(() => {
+          const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => this.makeBrowseList(regionName, ['grid', 'list'], items));
+          defer.resolve(this.makeBrowseResult(lists));
+        })
+        .fail((err: any) => {
+          this.logger.error('[JP_Radio] radioStations error: ' + err);
+          defer.reject(err);
+        });
 
     } else {
-      // mode = live or timetable or timetable_today
-      const progTitle = progData ? progData.title : '?';
-      const progPfm   = progData ? progData.pfm! : '';
-      const progTime  = progData ? RadioTime.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5') : '';  // HH:mm-HH:mm
-      const albumart = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img);
-      const uri = `radiko/play/${stationId}`
-                + '?' + encodeURIComponent(progTitle)
-                + '&' + encodeURIComponent(progPfm)
-                + '&' + encodeURIComponent(`${stationName} / ${progTime}`)
-                + '&' + encodeURIComponent(albumart);
-      const item: BrowseItem = {  // ブラウズ画面に表示する情報
-        service : this.serviceName,               // explodeUriを呼び出す先のサービス名
-        type    : 'song',                         // 再生キューに複数リストアップ
-      //type    : 'webradio',                     // 再生キューに１つのみ
-        title   : progTitle,                      // 番組タイトル
-        album   : progPfm,                        // パーソナリティ名
-        artist  : `${areaStation} / ${progTime}`, // エリア名 / 局名 / 時間
-        albumart: albumart,                       // 番組画像URL
-        uri     : uri                             // 再生URI
-      };
-
-      if (mode.includes('table')) {
-        // タイムテーブル
-        if (!progData || !progData.ft || !progData.to || !stationInfo)
-          item.title = '？';
-        else {
-          const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioTime());
-          if (check == 0)     item.title = '★';  // ライブ
-          else if (check > 0) item.title = '⬜︎';  // 配信前
-          else {
-            const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioDate() + '050000') / 86400;
-            if (check >= -7)  item.title = '▷';   // タイムフリー（TODO: タイムフリー30はどうする？）
-            else              item.title = '×';   // 配信終了
-          }
-        }
-        const time = progData ? RadioTime.formatFullString2([progData.ft, progData.to], this.confParam.timeFmt) : '';
-        const duration = progData ? RadioTime.getTimeSpan(progData.ft, progData.to) : 0;  // sec
-        item.title += ` ${time} / ${progTitle}`;  // 日時 / 番組タイトル
-        item.artist = areaStation;                // エリア名 / 局名
-        item.duration = duration;                 // 番組時間
-        item.uri += (progData && progData.ft && progData.to) ? `&${progData.ft}&${progData.to}` : '';
-      }
-      return item;
+      defer.resolve(this.makeBrowseResult([]));
     }
-  }
-
-  public async radioStations(mode: string): Promise<BrowseResult> {
-    this.logger.info('JP_Radio::JpRadio.radioStations');
-    const defer = libQ.defer();
-    if (!this.rdk?.stations) {
-      defer.resolve({
-        navigation: {
-          prev: {
-            uri: 'radiko'
-          },
-          lists: [{
-            title: mode, // 'live' or 'timefree'
-            availableListViews: ['grid', 'list'],
-            items: []
-          }]
-        }
-      });
-      return defer.promise;
-    }
-
-    const entries = Array.from(this.rdk.stations.entries());
-    // 地域名ごとにグループ化
-    const grouped: Record<string, BrowseItem[]> = {};
-    const stationPromises = entries.map(async ([stationId, stationInfo]) => {
-      try {
-        const region = stationInfo.RegionName || 'others';
-        if (!grouped[region]) {
-          grouped[region] = [];
-        }
-        const progData = await this.prg?.getCurProgram(stationId);
-        const item = this.makeBrowseItem(mode, stationId, stationInfo, progData);
-        grouped[region].push(item);
-
-      } catch (err) {
-        this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${err}`);
-      }
-    });
-
-    libQ.all(stationPromises)
-      .then(() => {
-        const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
-          title: regionName,
-          availableListViews: ['grid', 'list'],
-          items
-        }));
-        defer.resolve({
-          navigation: {
-            prev: {
-              uri: 'radiko'
-            },
-            lists
-          }
-        });
-      })
-      .fail((err: any) => {
-        this.logger.error('[JP_Radio] radioStations error: ' + err);
-        defer.reject(err);
-      });
-
     return defer.promise;
   }
 
   public async radioFavouriteStations(mode: string): Promise<BrowseResult> {
     this.logger.info(`JP_Radio::JpRadio.radioFavouriteStations: ${mode}`);
     const defer = libQ.defer();
-    // TODO: お気に入り
+    const items: BrowseItem[][] = await this.commonRadioFavouriteStations(mode);
+    if (mode.startsWith('live')) {
+      defer.resolve(this.makeBrowseResult([
+        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_LIVE'), ['grid', 'list'], items[0])
+      ]));
+    } else if (mode.startsWith('timefree')) {
+      defer.resolve(this.makeBrowseResult([
+        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_STATION'), ['grid', 'list'], items[0]),
+        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_TIMEFREE'), ['list'], items[1])
+      ]));
+    }
     return defer.promise;
   }
 
-  public async radioTimeTable(mode: string): Promise<BrowseResult> {
-    this.logger.info(`JP_Radio::JpRadio.radioTimeTable: mode=${mode}`);
+  public async radioTimeTable(mode: string, stationId: string, begin: string | number, end: string | number): Promise<BrowseResult> {
+    this.logger.info(`JP_Radio::JpRadio.radioTimeTable: mode=${mode}, stationId=${stationId}, begin=${begin}, end=${end}`);
     const defer = libQ.defer();
-    // mode = timetabel/-7~0/TBS
-    const [baseMode, begin, end, stationId] = mode.split(/[/~]/);
     const stationInfo = this.rdk?.getStationInfo(stationId);
     if (stationInfo && this.prg) {
-      var lists = [];
-      const PROGRAM_COUNT_MAX = 100;
-      const week = RadioTime.getRadioWeek(begin, end);
-      var flagToastMsg = (week.length <= 1);
-      for (var i=0; i<week.length; i++) {
-        const wDate = week[i];
+      const lists: BrowseList[] = [];
+      const week = RadioTime.getRadioWeek(begin, end, 'M月d日(E)');
+      if (week.length > 1)
+        this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nStringFormat('MESSAGE.PROGRAM_DATA_GETTING2', stationInfo.Name));
+
+      const weekPromises = week.map(async (wDate: any) => {
+        // 日付毎に並列化
         var time = '0500';
-        var items = [];
+        var items: BrowseItem[] = [];
         do {  // 一日分（05:00～29:00）の番組表
-          const progData = await this.prg.findProgram(stationId, `${wDate.date}${time}`);
+          const progData = await this.prg!.getProgramData(stationId, `${wDate.date}${time}`, true);
           if (progData) {
-            const item = this.makeBrowseItem(baseMode, stationId, stationInfo, progData);
-            items.push(item);
-            time = progData.to.slice(8, 12);  // HHmm
-          } else {
-            if (time == '0500') {
-              // 過去の番組データ取得
-              if (!flagToastMsg) {
-                this.commandRouter.pushToastMessage('info', 'JP Radio',
-                  getI18nStringFormat('MESSAGE.PROGRAM_DATA_GETTING2', stationInfo.Name));
-                flagToastMsg = true;
-              }
-            //const result = await this.prg.getDailyStationPrograms(stationId, wDate.date);
-            const result = (wDate.index == -7)
-                ? await this.prg.getWeeklyStationPrograms(stationId)
-                : await this.prg.getDailyStationPrograms(stationId, wDate.date);
-              if (!result.has(stationId)) break;
-            } else {
-              // 番組表が途切れている場合 ⇒１分ずつ進めてみる
-              // ダミーで埋めたのでないはず
-              time = RadioTime.convertRadioTime(
-                RadioTime.addTime(RadioTime.revConvertRadioTime(`${wDate.date}${time}00`), 60)
-              ).slice(8, 12); // HHmm
+            const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo, progData);
+            if (mode.startsWith('prog')) {
+              item.type = 'radio-category';
+              item.uri  = item.uri.replace(/\/play\//, '/proginfo/');
             }
-          }
-        } while(time < '2900' && items.length < PROGRAM_COUNT_MAX);
+            items.push(item);
+            time = progData.to.slice(8, 12);  // 次の番組(HHmm)
+          } else break;
+        } while(time < '2900');
+        const title = (mode.startsWith('prog') ? getI18nString('BROWSER.PROG_INFO') : '')
+                    + wDate.kanji + ((wDate.index == 0) ? getI18nString('BROWSER.TODAY') : '');
+        lists.push(this.makeBrowseList(title, ['list'], items, wDate.date));
+      }); // weekPromises
 
-        const title = wDate.kanji.slice(5) + ((wDate.index == 0) ? getI18nString('BROWSER.TODAY') : '');
-        lists.push({ title, availableListViews: ['list'], items });
-      } // for
+      libQ.all(weekPromises).then(async () => {
+        lists.sort((a, b) => { return a.sortKey!.localeCompare(b.sortKey!); });  // '日付'でソート
+        // <<前へ，次へ>>
+        const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
+        const uri = `radiko/${mode}/${stationId}`;
+        lists.unshift(this.makeBrowseList('<<', ['list'], [
+          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.PREV_WEEK'), `${uri}/${Number(begin)-7}~${Number(end  )-7}`),
+          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.PREV_DAY' ), `${uri}/${Number(begin)-1}~${Number(begin)-1}`)
+        ]));
+        lists.push(this.makeBrowseList('>>', ['list'], [
+          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.NEXT_DAY' ), `${uri}/${Number(end  )+1}~${Number(end)+1}`),
+          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.NEXT_WEEK'), `${uri}/${Number(begin)+7}~${Number(end)+7}`)
+        ]));
 
-      const response = {
-        navigation: {
-          prev: {
-            uri: 'radiko'
-          },
-          lists
+        if (mode.startsWith('prog')) {
+          // 下段にお気に入り局
+          const [items]: BrowseItem[][] = await this.commonRadioFavouriteStations('timefree', true);
+          items.forEach((item) => item.uri = item.uri.replace('timetable', 'progtable') + `/${begin}~${end}` );
+          lists.push(this.makeBrowseList(getI18nString('BROWSER.PROG_FAVOURITES'), ['grid', 'list'], items));
         }
-      };
-      defer.resolve(response);
-
-    } else { // if (stationInfo && this.prg)
-      defer.reject();
+        defer.resolve(this.makeBrowseResult(lists));
+      });
+    } else {
+      defer.resolve([]);
     }
     return defer.promise;
   }
 
 //-----------------------------------------------------------------------
 
-public async start(): Promise<void> {
+  private async commonRadioFavouriteStations(mode: string, skipPrograms = false): Promise<BrowseItem[][]> {
+    this.logger.info(`JP_Radio::JpRadio.commonRadioFavouriteStations: ${mode}`);
+    const defer = libQ.defer();
+    // mode = live or timefree
+    const items: BrowseItem[][] = [[],[]];
+    const favouriteStations = await this.commandRouter.playListManager.getRadioFavouritesContent();
+    const stationPromises = favouriteStations.map(async (data: any) => {
+      // uri = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
+      const [liveUri, timefree] = data.uri.split('?');
+      if (liveUri.includes('/radiko/play/')) {
+        const stationId = liveUri.split('/').pop();
+        const stationInfo = this.rdk?.getStationInfo(stationId);
+        if (mode.startsWith('live')) {
+          // ライブ
+          if (!timefree) {  // タイムフリー番組は無視
+            const progData = await this.prg?.getCurProgramData(stationId, false);
+            const item = this.makeBrowseItem_Live('play', stationId, stationInfo, progData);
+            item.favourite = true;
+            items[0].push(item);
+          }
+        } else if (mode.startsWith('timefree')) {
+          // タイムフリー
+          if (!timefree) { // 日時指定の有無で放送局・番組に分けて表示
+            // 放送局
+            items[0].push(this.makeBrowseItem_TimeFree('timetable', stationId, stationInfo));
+          } else if (!skipPrograms) {
+            // 番組
+            const query = queryParse(timefree);
+            const ft = query.ft ? String(query.ft) : '';
+            const to = query.to ? String(query.to) : '';
+            const check1 = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioDate() + '050000');
+            const check2 = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime());
+            const retry = (-7 * 86400 <= check1 && check2 < 0);  // 配信期間内だけリトライする
+            const progData = await this.prg?.getProgramData(stationId, ft, retry);
+            const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo,
+              progData ? progData : { stationId, progId:'', ft, to, title:data.title, info:'', pfm:'', img:data.albumart } );
+            item.favourite = true;
+            items[1].push(item);
+          }
+        } 
+      }
+    }); // stationPromises
+
+    libQ.all(stationPromises).then(() => {
+      items[0].sort((a, b) => { return a.artist!.localeCompare(b.artist!); });  // 'エリア名/局名'でソート
+      items[1].sort((a, b) => { return a.time!.localeCompare(b.time!); });      // '日時'でソート
+      defer.resolve(items);
+    });
+    return defer.promise;
+  }
+
+  private makeBrowseItem_Live(mode: string, stationId: string, stationInfo: StationInfo | undefined, progData: RadikoProgramData | undefined): BrowseItem {
+    //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_Live: stationId=${stationId}`);
+    const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
+    const stationName = stationInfo ? stationInfo.Name : stationId;
+    const areaStation = `${areaName} / ${stationName}`;
+    const progTitle = progData ? progData.title : '?';
+    const progPfm   = progData ? progData.pfm! : '';
+    const progTime  = progData ? RadioTime.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5') : '';  // HH:mm-HH:mm
+    const albumart = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img);
+    return {  // ブラウズ画面に表示する情報
+      service : this.serviceName, // explodeUriを呼び出す先のサービス名
+      type    : 'song',           // 再生キューに複数リストアップ
+    //type    : 'webradio',       // 再生キューに１つのみ
+      title   : progTitle,        // 番組タイトル
+      album   : progPfm,          // パーソナリティ名
+      artist  : `${areaStation} / ${progTime}`, // エリア名 / 局名 / 時間
+      albumart: this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img),
+      uri     : `radiko/${mode}/${stationId}`
+              + '?' + encodeURIComponent(progTitle)
+              + '&' + encodeURIComponent(progPfm)
+              + '&' + encodeURIComponent(`${stationName} / ${progTime}`)
+              + '&' + encodeURIComponent(albumart)
+    };
+  }
+
+  private makeBrowseItem_TimeFree(mode: string, stationId: string, stationInfo: StationInfo | undefined): BrowseItem {
+    //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_TimeFree: stationId=${stationId}`);
+    const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
+    const stationName = stationInfo ? stationInfo.Name : stationId;
+    const albumart = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, stationInfo?.LogoURL);
+    return {  // ブラウズ画面に表示する情報
+      service : this.serviceName,   // handleBrowseUriを呼び出す先のサービス名
+      type    : 'radio-category',   // このタイプはhandleBrowseUriを呼び出す
+      title   : stationName,
+      artist  : `${areaName} / ${stationName}`,
+      albumart: albumart,
+      uri     : `radiko/${mode}/${stationId}`
+    };
+  }
+
+  private makeBrowseItem_TimeTable(mode: string, stationId: string, stationInfo: StationInfo | undefined, progData: RadikoProgramData | undefined): BrowseItem {
+    //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_TimeTable: stationId=${stationId}`);
+    const item = this.makeBrowseItem_Live(mode, stationId, stationInfo, progData);
+    const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
+    const stationName = stationInfo ? stationInfo.Name : stationId;
+    const areaStation = `${areaName} / ${stationName}`;
+    const progTitle = progData ? progData.title : '?';
+    if (progData?.ft && progData?.to) {
+      const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioTime());
+      if (check == 0)
+              item.title = '★';  // ライブ
+      else if (check > 0)
+              item.title = '⬜︎';  // 配信前
+      else {
+        const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioDate() + '050000');
+        if (check >= -7 * 86400)
+              item.title = '▷';   // タイムフリー（TODO: タイムフリー30はどうする？）
+        else  item.title = '×';   // 配信終了
+      }
+      item.uri += `&${progData.ft}&${progData.to}`;
+    } else  item.title = '？';
+    const time = progData ? RadioTime.formatFullString2([progData.ft, progData.to], this.confParam.timeFmt) : '';
+    const duration = progData ? RadioTime.getTimeSpan(progData.ft, progData.to) : 0;  // sec
+    item.title += ` ${time} / ${progTitle}`;  // 日時 / 番組タイトル
+    item.time = progData ? progData.ft : '';
+    item.artist = areaStation;                // エリア名 / 局名
+    item.duration = duration;                 // 番組時間
+    return item;
+  }
+
+  private makeBrowseItem_NoMenu(title: string, uri: string): BrowseItem {
+    const service = this.serviceName;
+    const type    = 'item-no-menu';
+    return { service, type, title, uri };
+  }
+
+  private makeBrowseList(title: string, availableListViews: string[], items: BrowseItem[], sortKey: string = ''): BrowseList {
+    return { title, availableListViews, items, sortKey };
+  }
+
+  private makeBrowseResult(lists: BrowseList[]): BrowseResult {
+    return {
+      navigation: {
+        prev : { uri: 'radiko' },
+        lists
+      }
+    };
+  }
+
+//-----------------------------------------------------------------------
+
+  public async start(): Promise<void> {
     this.logger.info(`JP_Radio::JpRadio.start`);
     if (this.server) {
       this.logger.info('JP_Radio::JpRadio.start: Already started');
@@ -421,17 +484,17 @@ public async start(): Promise<void> {
     this.prg = new RdkProg(this.logger);
     this.rdk = new Radiko(this.logger, this.confParam.areaIds);
     await this.#init();
- 
     return new Promise((resolve, reject) => {
       this.server = this.app
         .listen(this.confParam.port, () => {
           this.logger.info(`JP_Radio::start: Listening on port ${this.confParam.port}`);
-          this.commandRouter.servicePushState({
-            status: 'play',
-            service: this.serviceName,
-            title: 'Radiko starting...',
-            uri: ''
-          });
+        /*this.commandRouter.servicePushState({ // ここでPLAY再開は無理では？
+            status : 'play',
+          //service: this.serviceName,
+            service: 'webradio',
+            title  : 'Radiko starting...',
+            uri    : ''
+          }, this.serviceName);*/
           this.task1.start();
           const areaName = getI18nString(`RADIKO_AREA.${this.myInfo.areaId}`)
           const areaFree = this.myInfo.areafree ? ` / ${getI18nString('MESSAGE.AREA_FREE')}` : '';
@@ -519,5 +582,9 @@ public async start(): Promise<void> {
 
   public getMyInfo(): any {
     return this.myInfo;
+  }
+
+  public getPrg(): RdkProg | null {
+    return this.prg;
   }
 }
