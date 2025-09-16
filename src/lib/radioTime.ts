@@ -40,17 +40,17 @@ class clsRadioTime {
     return format(date.setTime(time), 'yyyyMMdd');
   }
 
-  // 今日から7日前までの日付配列
-  public getRadioWeek(begin: number | string, end: number | string): { index: number, date: string, kanji: string }[] {
+  // 今日からN日前までの日付配列
+  public getRadioWeek(begin: number | string, end: number | string, kanjiFmt: string = 'yyyy年M月d日(E)'): { index: number, date: string, kanji: string }[] {
     const now = new Date()
     const radioTime = now.getTime() - this.OFFSET_msec;
     const week = [];
     for (var i = Number(begin); i <= Number(end); i++) {
       const time = radioTime + i * 24 * HOUR_msec;
       week.push({
-        index: i,
+        index: i, // 0=今日
         date : format(time, 'yyyyMMdd'),
-        kanji: format(time, 'yyyy年M月d日(E)', {locale: ja})
+        kanji: format(time, kanjiFmt, {locale: ja})
       });
     }
     return week;
@@ -58,6 +58,7 @@ class clsRadioTime {
 
   // AM0:00～5:00は前日の24:00～29:00
   public convertRadioTime(src: string, am05: string = ''): string {
+    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     if (src.slice(8, 14) <= '050000') { // HHmmss
       if (src.slice(8, 10) != am05) { // HH
         return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d+)$/, (match, year, month, date, hour, minsec) => {
@@ -73,6 +74,7 @@ class clsRadioTime {
 
   // 24:00～29:00を翌日のAM0:00～5:00に戻す
   public revConvertRadioTime(src: string): string {
+    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     if (src.slice(8, 14) >= '240000') { // HHmmss
       return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d+)$/, (match, year, month, date, hour, minsec) => {
         var tomorrow = new Date(year, month-1, date); // 月は0-11で指定
@@ -86,13 +88,15 @@ class clsRadioTime {
 
   // 'yyyyMMddHHmmss' * '$1:$2:$3' => 'HH:mm:ss'
   public formatTimeString(src: string, fmt: string): string {
+    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     return src.replace(/^\d{8}(\d\d)(\d\d)(\d\d).*$/, fmt);
   }
 
   // ['yyyyMMddHHmmss'] * '$1:$2-$4:$5' => 'HH:mm-HH:mm'
   public formatTimeString2(srcArray: string[], fmt: string): string {
     var src = '', reg = '';
-    for (const s of srcArray) {
+    for (var s of srcArray) {
+      s += (s.length < 14) ? '0'.repeat(14 - s.length) : '';
       src += s.replace(/^\d{8}(\d{6}).*$/, '$1');
       reg += '(\\d{2})(\\d{2})(\\d{2})';
     }
@@ -101,18 +105,21 @@ class clsRadioTime {
 
   // 'yyyyMMddHHmmss' * '$1/$2/$3' => 'yyyy/MM/dd'
   public formatDateString(src: string, fmt: string): string {
+    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     return src.replace(/^(\d{4})(\d\d)(\d\d).*$/, fmt);
   }
 
   // 'yyyyMMddHHmmss' * '$1/$2/$3 $4:$5' => 'yyyy/MM/dd HH:mm'
   public formatFullString(src: string, fmt: string): string {
+    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, fmt);
   }
 
   // ['yyyyMMddHHmmss'] * '$1/$2/$3 $4:$5-$10:$11' => 'yyyy/MM/dd HH:mm-HH:mm'
   public formatFullString2(srcArray: string[], fmt: string): string {
     var src = '', reg = '';
-    for (const s of srcArray) {
+    for (var s of srcArray) {
+      s += (s.length < 14) ? '0'.repeat(14 - s.length) : '';
       src += s.replace(/^(\d{14}).*$/, '$1');
       reg += '(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})';
     }
@@ -122,7 +129,8 @@ class clsRadioTime {
   // 'yyyyMMddHHmmss'形式の時間差(sec)
   public getTimeSpan(t0: string, t1: string): number {
     const ta = [];
-    for (const t of [t0, t1]) {
+    for (var t of [t0, t1]) {
+      t += (t.length < 14) ? '0'.repeat(14 - t.length) : '';
       ta.push(t.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, (match, year, month, date, hour, min, sec) => {
         const time = new Date(year, month-1, date, hour, min, sec); // 月は0-11で指定
         return String(time.getTime());
@@ -134,12 +142,13 @@ class clsRadioTime {
   // 番組時間をチェック('yyyyMMddHHmmss'形式)
   public checkProgramTime(ft: string, to: string, currentTime: string): number {
     if (ft <= currentTime && currentTime < to)  return 0;  // 放送中
-    return this.getTimeSpan(currentTime, ft); // 過去:マイナス，未来:プラス
+    return this.getTimeSpan(currentTime, ft); // 過去:マイナス，未来:プラス(sec)
   }
 
   // yyyyMMddHHmmss'形式に経過秒を足す
   public addTime(src: string, elapsedSec: number | string): string {
     if (elapsedSec) {
+      src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
       return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, (match, year, month, date, hour, min, sec) => {
         var time = new Date(year, month-1, date, hour, min, sec); // 月は0-11で指定
         time.setTime(time.getTime() + Number(elapsedSec) * 1000);

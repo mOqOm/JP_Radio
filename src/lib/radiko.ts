@@ -2,11 +2,12 @@
 import 'date-utils';
 import { format } from 'util';
 import got, { OptionsOfJSONResponseBody, Response } from 'got';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execFile, ChildProcess } from 'child_process';
 import * as tough from 'tough-cookie';
 import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
+import fs from 'fs';
 
 import type { StationInfo, RegionData } from './models/StationModel';
 import type { LoginAccount, LoginState } from './models/AuthModel';
@@ -218,10 +219,11 @@ export default class Radiko {
         if (allowedStations.includes(station.id)) {
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
           const areaKanji = getI18nString(`RADIKO_AREA.${station.area_id}`);
+          const logoFile = this.saveStationLogoCache(station.logo, `${station.id}_logo.png`);
           this.stations.set(station.id, {   // 'TBS'
             RegionName: region.region_name, // '関東'
             BannerURL : station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
-            LogoURL   : station.logo,       // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png (TODO: 透過PNGは見栄えが悪いので白バックしたい）
+            LogoURL   : logoFile,           // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
             AreaId    : station.area_id,    // 'JP13'
             AreaName  : areaName,           // 'TOKYO'
             AreaKanji : areaKanji,          // '東京'
@@ -237,6 +239,22 @@ export default class Radiko {
     const endTime = Date.now();
     const processingTime = endTime - startTime;
     this.logger.info(`JP_Radio::Radiko.getStations: ## COMPLETED ${processingTime}ms ##`);
+  }
+
+  private saveStationLogoCache(logoUrl: string, logoFile: string): string {
+    const logoPath = `music_service/jp_radio/dist/assets/images/${logoFile}`;
+    const fullPath = '/data/plugins/' + logoPath;
+    try {
+      fs.statSync(fullPath); // ファイルの存在確認
+    } catch(e) {
+      // 透過PNGは見栄えが悪いので白バックPNGに変換して保存
+      execFile('ffmpeg', ['-n', '-i', logoUrl, fullPath,
+          '-filter_complex', 'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1'], (err: any) => {
+        if (err)  return logoUrl;
+      });
+      this.logger.info(`JP_Radio::Radiko.saveStationLogoCache: ${logoUrl} => ${logoFile}`);
+    }
+    return `/albumart?sourceicon=${logoPath}`;
   }
 
   public getStationInfo(stationId: string): StationInfo | undefined {
@@ -261,7 +279,7 @@ export default class Radiko {
     var url = format(PLAY_LIVE_URL, stationId);
     var aac = '';
     if (query.ft && query.to) {
-      const ft = RadioTime.revConvertRadioTime(query.ft);
+      const ft = RadioTime.addTime(RadioTime.revConvertRadioTime(query.ft), query.seek);
       const to = RadioTime.revConvertRadioTime(query.to);
       url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
       //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
@@ -278,8 +296,7 @@ export default class Radiko {
     }
     
     if (m3u8) {
-      // TODO: seekがイマイチ，要再検討
-      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, '-ss', `${query.seek ?? 0}`,
+      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, //'-ss', `${query.seek ?? 0}`,
         '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
       if (aac) args.push(aac);
       //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);

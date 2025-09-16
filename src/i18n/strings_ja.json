@@ -26,7 +26,23 @@
     "TIMEFREE": "タイムフリー",
     "TIMEFREE_TODAY": "タイムフリー（本日分）",
     "TIMEFREE_FAVOURITES": "タイムフリー（お気に入り）",
+    "FAVOURITES_LIVE": "お気に入り局（ライブ）",
+    "FAVOURITES_TIMEFREE": "お気に入り番組（タイムフリー）",
+    "FAVOURITES_STATION": "お気に入り局（タイムフリー）",
+    "PROG_INFO": "番組情報：",
+    "PROG_FAVOURITES": "お気に入り局",
+    "PREV_WEEK": "▲　前週　▲",
+    "PREV_DAY" : "△　前日　△",
+    "NEXT_DAY" : "▽　翌日　▽",
+    "NEXT_WEEK": "▼　翌週　▼",
     "TODAY": "（今日）"
+  },
+  "PROGINFO": {
+    "PERFORMER": "出演者：",
+    "PROG_INFO": "番組情報：",
+    "PLAY": "▷ 再生",
+    "ADD_TO_QUEUE": "☰ キューに追加",
+    "ADD_TO_FAVOURITES": "♡ お気に入りに追加"
   },
   "UI_SETTINGS": {
     "PLUGIN_CONFIGURATION": "JP Radio Plugin設定",
@@ -48,6 +64,8 @@
     "ALBUMART_TYPE1": "バナー",
     "ALBUMART_TYPE2": "放送局ロゴ",
     "ALBUMART_TYPE3": "番組画像",
+    "STATION_LOGO_LABEL": "放送局ロゴキャッシュをクリア",
+    "STATION_LOGO_DOC": "タイムフリー時に使用する放送局ロゴのキャッシュファイルをクリアします。次回起動時に新しいロゴを再取得します。",
     "TIMEFREE_SETTING_LABEL": "タイムフリー設定",
     "PROGRAM_PERIOD_FROM_LABEL": "番組表の期間（〇日前から）",
     "PROGRAM_PERIOD_TO_LABEL":   "番組表の期間（〇日後まで）",

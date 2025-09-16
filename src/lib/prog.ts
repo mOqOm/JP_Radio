@@ -18,7 +18,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
   title: '',
   info: '',
   pfm: '',
-  img: '',
+  img: ''
 };
 
 export default class RdkProg {
@@ -39,19 +39,23 @@ export default class RdkProg {
     this.initDBIndexes();
   }
 
-  public async getCurProgram(stationId: string): Promise<RadikoProgramData | undefined> {
-    //this.logger.info(`JP_Radio::RdkProg.getCurProgram: station=${stationId}`);
-    const currentTime = RadioTime.getCurrentRadioTime();
-    var result = await this.findProgram(stationId, currentTime);
-    if (!result) {
-      await this.getDailyStationPrograms(stationId, currentTime);
-      result = await this.findProgram(stationId, currentTime);
-    }
-    return result;
+  public async getCurProgramData(stationId: string, retry: boolean): Promise<RadikoProgramData | undefined> {
+    //this.logger.info(`JP_Radio::RdkProg.getCurProgramData: station=${stationId}`);
+    return await this.getProgramData(stationId, RadioTime.getCurrentRadioTime(), retry);
   }
 
-  public async findProgram(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
-    //this.logger.info(`JP_Radio::RdkProg.findProgram: station=${stationId}, time=${time}`);
+  public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData | undefined> {
+    //this.logger.info(`JP_Radio::RdkProg.getProgramData: station=${stationId}, time=${time}, retry=${retry}`);
+    var progData = await this.findProgramData(stationId, time);
+    if (!progData && retry) {
+      const result = await this.getDailyStationPrograms(stationId, time);
+      progData = result.has(stationId) ? await this.findProgramData(stationId, time) : undefined;
+    }
+    return progData;
+  }
+
+  private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
+    //this.logger.info(`JP_Radio::RdkProg.findProgramData: station=${stationId}, time=${timeFull}`);
     const time = timeFull.slice(0, 12); // yyyyMMddHHmm
     if (stationId !== this.lastStationId || time !== this.lastTime) {
       try {
@@ -60,7 +64,6 @@ export default class RdkProg {
           ft: { $lt: `${time}01` }, // yyyyMMddHHmmss
           to: { $gt: `${time}01` },
         });
-
         if (result) {
           this.cachedProgram = result;
           this.lastStationId = stationId;
@@ -77,6 +80,8 @@ export default class RdkProg {
     }
     return this.cachedProgram.progId ? this.cachedProgram : undefined;
   }
+
+//-----------------------------------------------------------------------
 
   private async putProgram(prog: RadikoProgramData): Promise<void> {
     try {
@@ -175,14 +180,11 @@ export default class RdkProg {
               await this.putProgram({ stationId, progId:`${stationId}_${prevTo}`, ft:prevTo, to:ft, title:'' });
             }
             const to = RadioTime.convertRadioTime(prog['@to'], '29');
-            const id = `${stationId}${prog['@id']}${ft.slice(8,12)}`; // 同一progId対策(HHmmを付加)
+            const progId = `${stationId}${prog['@id']}${ft.slice(8,12)}`; // 同一progId対策(HHmmを付加)
             const program: RadikoProgramData = {
-              stationId,
-              progId: id,
-              ft    : ft,
-              to    : to,
+              stationId, progId, ft, to,
               title : prog['title'],
-            //info  : prog['info'] ?? '',  // TODO: 番組情報
+              info  : prog['info'] ?? '',
               pfm   : prog['pfm'] ?? '',
               img   : prog['img'] ?? ''
             };

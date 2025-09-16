@@ -6,8 +6,12 @@ export interface BrowseItem {
   type: string;
   // タイトル（例: 放送局名 + 番組名）
   title: string;
+  // 番組開始日時（yyyyMMddHHmmss）
+  time?: string;
   // 表示用の画像 URL（例: 局のロゴや番組アートワーク）
   albumart?: string;
+  // アイコン（albumartの代替）
+  icon?: string;
   // 選択時に再生や遷移に使用される URI
   uri: string;
   // プレイヤー内部で使われる任意の名前（未使用でも可）
@@ -22,6 +26,8 @@ export interface BrowseItem {
   channels?: number;
   // 番組時間（秒）
   duration?: number;
+  // お気に入り（バーガーメニューの制御用）
+  favourite?: boolean;
 }
 
 // Browse ページ内の 1 つのリスト（カテゴリや地域別に表示される）
@@ -32,6 +38,8 @@ export interface BrowseList {
   availableListViews: string[];
   // 表示されるアイテムの配列
   items: BrowseItem[];
+  // ソート用のキーワード（番組表を日付順に並べ替えるのに使用）
+  sortKey?: string;
 }
 
 // Volumio の UI に表示される全体構造（リストの配列 + 戻るリンクなど）
@@ -47,5 +55,5 @@ export interface BrowseResult {
   // ナビゲーション構造（リストや戻るリンクを含む）
   navigation: BrowseNavigation;
   // 現在の URI
-  uri: string;
+  uri?: string;
 }

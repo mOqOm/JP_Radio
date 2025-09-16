@@ -4,7 +4,7 @@ export interface RadikoProgramData {
   ft: string;
   to: string;
   title: string;
-  info?: string;  // TODO:
+  info?: string;
   pfm?: string;
   img?: string;
 }
