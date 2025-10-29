@@ -8,5 +8,6 @@ export interface LoginState {
   member_type: {
     type: string;
   };
-  [key: string]: any; // 他のプロパティがある場合の保険
+  // 他のプロパティがある場合の保険
+  [key: string]: any;
 }

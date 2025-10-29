@@ -1,14 +1,14 @@
-"use strict";
 import got from 'got';
 import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
-import { PROG_DATE_AREA_URL, PROG_NOW_AREA_URL, PROG_TODAY_AREA_URL, PROG_DAILY_STATION_URL, PROG_WEEKLY_STATION_URL } from './consts/radikoUrls';
-import type { RadikoProgramData } from './models/RadikoProgramModel';
-import type { RadikoXMLData } from './models/RadikoXMLStationModel';
-import { RadioTime } from './radioTime';
+import { PROG_DATE_AREA_URL, PROG_NOW_AREA_URL, PROG_TODAY_AREA_URL, PROG_DAILY_STATION_URL, PROG_WEEKLY_STATION_URL } from '../constants/radiko-urls.constants';
+import type { RadikoProgramData } from '../models/radiko-program.model';
+import type { RadikoXMLData } from '../models/radiko-xml-station.model';
+import { RadioTime } from './radio-time';
+import { LoggerEx } from '../utils/logger';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   stationId: '',
@@ -22,7 +22,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 };
 
 export default class RdkProg {
-  private readonly logger: Console;
+  private readonly logger: LoggerEx;
   private readonly db = Datastore.create({ inMemoryOnly: true });
   private readonly xmlParser = new XMLParser({
       attributeNamePrefix   : '@',
@@ -34,7 +34,7 @@ export default class RdkProg {
   private lastTime = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
-  constructor(logger: Console) {
+  constructor(logger: LoggerEx) {
     this.logger = logger;
     this.initDBIndexes();
   }
@@ -74,7 +74,7 @@ export default class RdkProg {
         }
 
       } catch (error) {
-        this.logger.error(`JP_Radio::DB find error for station ${stationId}`, error);
+        this.logger.error(`JP_Radio::DB find error for station ${stationId}`);
         this.cachedProgram = { ...EMPTY_PROGRAM };
       }
     }
@@ -100,7 +100,7 @@ export default class RdkProg {
         this.logger.info(`JP_Radio::RdkProg.clearOldProgram: Removed ${numRemoved} documents from DB`);
       });
     } catch (error) {
-      this.logger.error('JP_Radio::DB delete error', error);
+      this.logger.error('JP_Radio::DB delete error');
     }
     await this.dbCount();
   }
@@ -201,7 +201,7 @@ export default class RdkProg {
         doneStations.add(stationId);
       }
     } catch (error) {
-      this.logger.error(`JP_Radio::Failed to update program for ${url}`, error);
+      this.logger.error(`JP_Radio::Failed to update program for ${url}`);
     }
     await this.dbCount();
     return doneStations;
@@ -232,5 +232,4 @@ export default class RdkProg {
     this.db.ensureIndex({ fieldName: 'ft' });
     this.db.ensureIndex({ fieldName: 'to' });
   }
-
 }

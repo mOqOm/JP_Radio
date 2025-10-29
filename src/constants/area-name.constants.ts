@@ -1,5 +1,3 @@
-"use strict";
-
 export const AreaNames = [
   {
     region: "RADIKO_AREA.REGION1",

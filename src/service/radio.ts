@@ -1,25 +1,24 @@
-"use strict";
 import express, { Application, Request, Response } from 'express';
 import { parse as queryParse } from 'querystring';
 import cron from 'node-cron';
 import RdkProg from './prog';
 import Radiko from './radiko';
 import libQ from 'kew';
-import type { LoginAccount } from './models/AuthModel';
-import type { BrowseItem, BrowseList, BrowseResult } from './models/BrowseResultModel';
-import type { StationInfo } from './models/StationModel';
-import type { RadikoProgramData } from './models/RadikoProgramModel';
+import type { LoginAccount } from '../models/auth.model';
+import type { BrowseItem, BrowseList, BrowseResult } from '../models/browse-result.model';
+import type { StationInfo } from '../models/station.model';
+import type { RadikoProgramData } from '../models/radiko-program.model';
 
 import { getI18nString, getI18nStringFormat } from './i18nStrings';
-import { RadioTime } from './radioTime';
-//import { time } from 'console';
+import { RadioTime } from './radio-time';
+import { LoggerEx } from '../utils/logger';
 
 export default class JpRadio {
   private readonly app: Application;
   private server: ReturnType<Application['listen']> | null = null;
   private readonly task1: ReturnType<typeof cron.schedule>;
   private readonly task2: ReturnType<typeof cron.schedule>;
-  private readonly logger: Console;
+  private readonly logger: LoggerEx;
   private readonly acct: LoginAccount | null;
   private readonly confParam: any;
   private readonly commandRouter: any;
@@ -30,7 +29,7 @@ export default class JpRadio {
   
   private readonly serviceName: any;
 
-  constructor(acct: LoginAccount | null, confParam: any, logger: Console, commandRouter: any, serviceName: any) {
+  constructor(acct: LoginAccount | null, confParam: any, logger: LoggerEx, commandRouter: any, serviceName: any) {
     this.app = express();
     this.acct = acct;
     this.confParam = confParam;
@@ -116,8 +115,8 @@ export default class JpRadio {
       });
       this.logger.info('JP_Radio::JpRadio.startStream: Streaming started');
 
-    } catch (err) {
-      this.logger.error('JP_Radio::JpRadio.startStream: Stream error', err);
+    } catch (error) {
+      this.logger.error('JP_Radio::JpRadio.startStream: Stream error');
       res.status(500).send('Internal server error');
     }
   }

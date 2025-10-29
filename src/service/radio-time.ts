@@ -14,7 +14,8 @@ class clsRadioTime {
 
   public setDelay(delay: number | string): void {
     this.DELAY_msec = Number(delay) * 1000;
-    this.OFFSET_msec = this.DELAY_msec + 5 * HOUR_msec; // 5hオフセット
+    // 5hオフセット
+    this.OFFSET_msec = this.DELAY_msec + 5 * HOUR_msec;
   }
 
   public getCurrentTime(): string {
