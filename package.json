@@ -2,7 +2,7 @@
   "name": "jp_radio",
   "version": "3.2.0",
   "description": "Japanese radio relay server for Volumio3",
-  "main": "./dist/index.js",
+  "main": "./dist/controllers/jp-radio-controller.js",
   "scripts": {
     "build": "rm -rf dist && npx tsc && bash finalize.sh"
   },
@@ -47,6 +47,7 @@
     "fast-xml-parser": "^5.2.3",
     "got": "^11.8.6",
     "icy-metadata": "^0.1.2",
+    "ini": "^6.0.0",
     "kew": "^0.7.0",
     "lodash": "^4.17.21",
     "nedb-promises": "^6.2.3",
