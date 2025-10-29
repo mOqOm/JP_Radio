@@ -35,7 +35,7 @@ export class MessageHelper {
    */
   constructor(lang: string = 'ja') {
     this.lang = lang;
-    this.baseDir = path.resolve(__dirname, '../../i18n');
+    this.baseDir = path.resolve(__dirname, '../i18n');
     this.loadMessages();
   }
 

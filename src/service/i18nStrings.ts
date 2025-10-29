@@ -6,9 +6,9 @@ var i18nStrings: string[];
 export function loadI18nStrings(dirname: string, langCode: string): void {
   const fs = require('fs-extra');
   try {
-    i18nStrings = fs.readJsonSync(`${dirname}/i18n/strings_${langCode}.json`);
+    i18nStrings = fs.readJsonSync(`${dirname}/../i18n/strings_${langCode}.json`);
   } catch (e) {
-    i18nStrings = fs.readJsonSync(`${dirname}/i18n/strings_en.json`);
+    i18nStrings = fs.readJsonSync(`${dirname}/../i18n/strings_en.json`);
   }
 }
 
