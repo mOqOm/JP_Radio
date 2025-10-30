@@ -78,12 +78,12 @@ class JpRadioController {
   }
 
   public onStart(): Promise<void> {
-    this.logger.info('JP_Radio::onStart: start...');
+    this.logger.debug('CTRLD0005');
     const startTime = Date.now();
     const defer = libQ.defer();
 
     if (!this.config) {
-      this.logger.error('Config not initialized onStart');
+      this.logger.error('CTRLE0002');
       defer.reject(new Error('Config not initialized'));
       return defer.promise;
     }
@@ -118,7 +118,7 @@ class JpRadioController {
         this.addToBrowseSources();
         const endTime = Date.now();
         const processingTime = endTime - startTime;
-        this.logger.info(`JP_Radio::onStart: ## COMPLETED ${processingTime}ms ##`);
+        this.logger.debug('CTRLD0006', processingTime);
         defer.resolve();
       })
       .catch((error) => {
@@ -149,7 +149,7 @@ class JpRadioController {
     // この関数，終了時に自動コールされないんだけど何で？
     //  => プラグイン管理でOFFにしたときにコールされるようだ
     //  => onVolumioShutdown,onVolumioRebootからコールするようにしてみた
-    this.logger.info(`JP_Radio::onStop:`);
+    this.logger.debug('CTRLD0007');
     if (this.appRadio) {
       try {
         await this.appRadio.stop();
@@ -259,7 +259,7 @@ class JpRadioController {
 
     })
     .fail((error: any) => {
-      this.logger.error('getUIConfig failed:', error);
+      this.logger.error('CTRLE0003', error);
       defer.reject(error);
     });
 
@@ -271,7 +271,7 @@ class JpRadioController {
   }
 
   public saveNetworkSetting(data: { servicePort: string; networkDelay: string }): void {
-    this.logger.info(`JP_Radio::saveNetworkSetting`);
+    this.logger.debug('CTRLD0008');
     if (this.config) {
       const newPort = Number(data.servicePort || 9000);
       const newDelay = Number(data.networkDelay || 20);
@@ -285,7 +285,7 @@ class JpRadioController {
   }
 
   public saveRadikoAccountSetting(data: { radikoUser: string; radikoPass: string }): void {
-    this.logger.info(`JP_Radio::saveRadikoAccount`);
+    this.logger.debug('CTRLD0009');
     if (this.config) {
       const updated = ['radikoUser', 'radikoPass'].some(
         (key) => this.config!.get(key) !== (data as any)[key]
@@ -299,7 +299,7 @@ class JpRadioController {
   }
 
   public saveAlbumartSetting(data: { albumartType: { value: string; label: string } }): void {
-    this.logger.info(`JP_Radio::saveAlbumartSetting`);
+    this.logger.debug('CTRLD0010');
     if (this.config) {
       if (this.config.get('albumartType') !== data.albumartType.value) {
         this.config.set('albumartType', data.albumartType.value);
@@ -309,10 +309,10 @@ class JpRadioController {
   }
 
   public clearStationLogoCache(data: any): void {
-    this.logger.info('JP_Radio::clearStationLogoCache');
+    this.logger.debug('CTRLD0011');
     exec(`/bin/rm -f ${__dirname}/assets/images/*_logo.png`, (err: any) => {
       if (err) {
-        this.logger.error('JP_Radio::clearStationLogoCache: ', err);
+        this.logger.error('CTRLE0004', err);
       } else {
         this.commandRouter.pushToastMessage('success', 'JP Radio', messageHelper.get('MESSAGE.STATION_LOGO_CLEAR'));
       }
@@ -320,7 +320,7 @@ class JpRadioController {
   }
 
   public saveTimeFreeSetting(data: { programPeriodFrom: string; programPeriodTo: string; timeFormat: { value: string; label: string }}): void {
-    this.logger.info('JP_Radio::saveTimeFreeSetting');
+    this.logger.debug('CTRLD0012');
     if (this.config) {
       const newProgramPeriodFrom = Number(data.programPeriodFrom || 7);
       const newProgramPeriodTo = Number(data.programPeriodTo || 0);
@@ -336,7 +336,7 @@ class JpRadioController {
   }
 
   public saveRadikoAreasSetting(data: any): void {
-    this.logger.info(`JP_Radio::saveRadikoAreasSetting`);
+    this.logger.debug('CTRLD0013');
     if (this.config) {
       var updated = false;
       for (const [key, value] of Object.entries(data)) {
@@ -389,7 +389,7 @@ class JpRadioController {
 //-----------------------------------------------------------------------
 
   public addToBrowseSources(): void {
-    this.logger.info(`JP_Radio::addToBrowseSources: pluginName=${this.serviceName}`);
+    this.logger.debug('CTRLD0014', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
       name: 'RADIKO',
       uri: 'radiko',
@@ -400,10 +400,10 @@ class JpRadioController {
   }
 
   public handleBrowseUri(curUri: string): Promise<any> {
-    this.logger.info(`JP_Radio::handleBrowseUri: curUri=${curUri}`);
+    this.logger.debug('CTRLD0015', curUri);
     const defer = libQ.defer();
     if (!this.appRadio) {
-      this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
+      this.logger.error('CTRLE0005');
       defer.resolve({});
       return defer.promise;
     }
@@ -422,7 +422,7 @@ class JpRadioController {
                     : this.appRadio!.radioStations(mode) )
           .then((result: any) => defer.resolve(result) )
           .fail((error: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            this.logger.error('CTRLE0006', error);
             defer.reject(error);
           });
 
@@ -449,7 +449,7 @@ class JpRadioController {
           })
           .then((result: any) => defer.resolve(result) )
           .fail((error: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            this.logger.error('CTRLE0007', error);
             defer.reject(error);
           });
 
@@ -460,7 +460,7 @@ class JpRadioController {
           .then(() => this.appRadio!.radioTimeTable(mode, stationId, from, to) )
           .then((result: any) => defer.resolve(result) )
           .fail((error: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            this.logger.error('CTRLE0008', error);
             defer.reject(error);
           });
 
@@ -472,13 +472,13 @@ class JpRadioController {
             .then((data) => this.showProgInfoModal(data) )
           })
           .fail((error: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            this.logger.error('CTRLE0009', error);
             defer.reject(error);
           });
       }
 
     } else { // base != 'radiko'
-      this.logger.error('[JP_Radio] handleBrowseUri else');
+      this.logger.error('CTRLE0010');
       defer.resolve({});
     }
     return defer.promise;
@@ -534,7 +534,7 @@ class JpRadioController {
   }
 
   public clearAddPlayTrack(track: any): any {
-    this.logger.info(`JP_Radio::clearAddPlayTrack: uri=${track.uri}`);
+    this.logger.debug('CTRLD0016', track.uri);
     const defer = libQ.defer();
     var uri = track.uri;
     // uri(Live)     = http://localhost:9000/radiko/play/TBS
@@ -618,7 +618,7 @@ class JpRadioController {
   public addToFavourites(data: any): any {
     //this.logger.info(`JP_Radio::addToFavourites: data=${Object.entries(data)}`);
     return this.explodeUri(data.uri).then((item) => {
-      this.logger.info(`JP_Radio::addToFavourites: item=${Object.entries(item)}`);
+      this.logger.info('CTRLD0018', Object.entries(item));
       const [liveUri, timefree] = item.uri.split('?');
       if (!timefree) {
         const stationId = liveUri.split('/').pop();
@@ -634,7 +634,7 @@ class JpRadioController {
   public removeFromFavourites(data: any): any {
     //this.logger.info(`JP_Radio::removeFromFavourites: data=${Object.entries(data)}`);
     return this.explodeUri(data.uri).then((item) => {
-      this.logger.info(`JP_Radio::removeFromFavourites: item=${Object.entries(item)}`);
+      this.logger.debug('CTRLD0019', Object.entries(item));
       return this.commandRouter.playListManager.commonRemoveFromPlaylist(
         this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', item.uri);
     });
@@ -643,7 +643,7 @@ class JpRadioController {
 //-----------------------------------------------------------------------
 
   public seek(timepos: number): Promise<any> {
-    this.logger.info(`JP_Radio::seek to ${timepos}`);
+    this.logger.debug('CTRLD0020', timepos);
     const defer = libQ.defer();
     this.mpdPlugin.sendMpdCommand('currentsong', []).then((data: any) => {
       // uri(TimeFree) = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
@@ -671,36 +671,36 @@ class JpRadioController {
   }
 
   public stop(): void {
-    this.logger.info(`JP_Radio::stop`);
+    this.logger.debug('CTRLD0021');
     return this.mpdPlugin.sendMpdCommand('stop', []);
   }
 
   public pause(): void {
-    this.logger.info(`JP_Radio::pause`);
+    this.logger.debug('CTRLD0022');
     return this.mpdPlugin.sendMpdCommand('pause', []);
   }
 
   public getState(): void {
-    this.logger.info(`JP_Radio::getState`);
+    this.logger.debug('CTRLD0023');
   }
 
   public parseState(sState: any): void {
-    this.logger.info(`JP_Radio::parseState: ${Object.entries(sState)}`);
+    this.logger.debug('CTRLD0024', Object.entries(sState));
   }
 
   public pushState(state: any): any {
-    this.logger.info(`JP_Radio::pushState: ${Object.entries(state)}`);
+    this.logger.debug('CTRLD0025', Object.entries(state));
     return this.commandRouter.servicePushState(state, this.serviceName);
   }
 
   public search(query: any): Promise<any> {
-    this.logger.info(`JP_Radio::search: ${Object.entries(query)}`);
+    this.logger.debug('CTRLD0026', Object.entries(query));
     return libQ.resolve();
   }
 
   // 再生画面の'...' => 'アーティストへ移動' or 'アルバムへ移動'
   public goto(data: any): Promise<any> {
-    this.logger.info(`JP_Radio::goto: ${Object.entries(data)}`);
+    this.logger.debug('CTRLD0027', Object.entries(data));
     const defer = libQ.defer();
     // uri = http://localhost:9000/radiko/play/TBS?ft=##&to=##
     if (data.uri.includes('/radiko/play/')) {
@@ -731,7 +731,7 @@ class JpRadioController {
   //-----------------------------------------------------------------------
 
   public async showProgInfoModal(data: any): Promise<void> {
-    this.logger.info(`JP_Radio::showProgInfoModal: ${Object.entries(data)}`);
+    this.logger.debug('CTRLD0028', Object.entries(data));
     const prg = this.appRadio?.getPrg();
     if (!prg) return;
 
@@ -803,7 +803,7 @@ class JpRadioController {
   }
 
   public play_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::play_formProgInfoModal: ${Object.entries(data)}`);
+    this.logger.debug('CTRLD0029', Object.entries(data));
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     arrayQueue.unshift(data);
     this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
@@ -812,7 +812,7 @@ class JpRadioController {
   }
 
   public addQueue_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::addQueue_formProgInfoModal: ${Object.entries(data)}`);
+    this.logger.debug('CTRLD0030', Object.entries(data));
     this.commandRouter.pushToastMessage('success', this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TITLE'),
       this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TEXT_1') + data.name + this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TEXT_2'));
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
@@ -823,7 +823,7 @@ class JpRadioController {
 }
 
   public addFavourites_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::addFavourites_formProgInfoModal: ${Object.entries(data)}`);
+    this.logger.debug('CTRLD0031', Object.entries(data));
     this.commandRouter.pushToastMessage('success', this.commandRouter.messageHelper.get('PLAYLIST.ADDED_TITLE'),
       data.name + this.commandRouter.messageHelper.get('PLAYLIST.ADDED_TO_FAVOURITES'));
     this.commandRouter.playListManager.commonAddToPlaylist(
