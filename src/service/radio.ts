@@ -9,7 +9,7 @@ import type { BrowseItem, BrowseList, BrowseResult } from '../models/browse-resu
 import type { StationInfo } from '../models/station.model';
 import type { RadikoProgramData } from '../models/radiko-program.model';
 
-import { getI18nString, getI18nStringFormat } from './i18nStrings';
+import { messageHelper } from '../utils/message-helper';
 import { RadioTime } from './radio-time';
 import { LoggerEx } from '../utils/logger';
 
@@ -257,12 +257,12 @@ export default class JpRadio {
     const items: BrowseItem[][] = await this.commonRadioFavouriteStations(mode);
     if (mode.startsWith('live')) {
       defer.resolve(this.makeBrowseResult([
-        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_LIVE'), ['grid', 'list'], items[0])
+        this.makeBrowseList(messageHelper.get('BROWSER.FAVOURITES_LIVE'), ['grid', 'list'], items[0])
       ]));
     } else if (mode.startsWith('timefree')) {
       defer.resolve(this.makeBrowseResult([
-        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_STATION'), ['grid', 'list'], items[0]),
-        this.makeBrowseList(getI18nString('BROWSER.FAVOURITES_TIMEFREE'), ['list'], items[1])
+        this.makeBrowseList(messageHelper.get('BROWSER.FAVOURITES_STATION'), ['grid', 'list'], items[0]),
+        this.makeBrowseList(messageHelper.get('BROWSER.FAVOURITES_TIMEFREE'), ['list'], items[1])
       ]));
     }
     return defer.promise;
@@ -276,7 +276,7 @@ export default class JpRadio {
       const lists: BrowseList[] = [];
       const week = RadioTime.getRadioWeek(begin, end, 'M月d日(E)');
       if (week.length > 1)
-        this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nStringFormat('MESSAGE.PROGRAM_DATA_GETTING2', stationInfo.Name));
+        this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.PROGRAM_DATA_GETTING2', stationInfo.Name));
 
       const weekPromises = week.map(async (wDate: any) => {
         // 日付毎に並列化
@@ -294,8 +294,8 @@ export default class JpRadio {
             time = progData.to.slice(8, 12);  // 次の番組(HHmm)
           } else break;
         } while(time < '2900');
-        const title = (mode.startsWith('prog') ? getI18nString('BROWSER.PROG_INFO') : '')
-                    + wDate.kanji + ((wDate.index == 0) ? getI18nString('BROWSER.TODAY') : '');
+        const title = (mode.startsWith('prog') ? messageHelper.get('BROWSER.PROG_INFO') : '')
+                    + wDate.kanji + ((wDate.index == 0) ? messageHelper.get('BROWSER.TODAY') : '');
         lists.push(this.makeBrowseList(title, ['list'], items, wDate.date));
       }); // weekPromises
 
@@ -305,19 +305,19 @@ export default class JpRadio {
         const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
         const uri = `radiko/${mode}/${stationId}`;
         lists.unshift(this.makeBrowseList('<<', ['list'], [
-          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.PREV_WEEK'), `${uri}/${Number(begin)-7}~${Number(end  )-7}`),
-          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.PREV_DAY' ), `${uri}/${Number(begin)-1}~${Number(begin)-1}`)
+          this.makeBrowseItem_NoMenu(space + messageHelper.get('BROWSER.PREV_WEEK'), `${uri}/${Number(begin)-7}~${Number(end  )-7}`),
+          this.makeBrowseItem_NoMenu(space + messageHelper.get('BROWSER.PREV_DAY' ), `${uri}/${Number(begin)-1}~${Number(begin)-1}`)
         ]));
         lists.push(this.makeBrowseList('>>', ['list'], [
-          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.NEXT_DAY' ), `${uri}/${Number(end  )+1}~${Number(end)+1}`),
-          this.makeBrowseItem_NoMenu(space + getI18nString('BROWSER.NEXT_WEEK'), `${uri}/${Number(begin)+7}~${Number(end)+7}`)
+          this.makeBrowseItem_NoMenu(space + messageHelper.get('BROWSER.NEXT_DAY' ), `${uri}/${Number(end  )+1}~${Number(end)+1}`),
+          this.makeBrowseItem_NoMenu(space + messageHelper.get('BROWSER.NEXT_WEEK'), `${uri}/${Number(begin)+7}~${Number(end)+7}`)
         ]));
 
         if (mode.startsWith('prog')) {
           // 下段にお気に入り局
           const [items]: BrowseItem[][] = await this.commonRadioFavouriteStations('timefree', true);
           items.forEach((item) => item.uri = item.uri.replace('timetable', 'progtable') + `/${begin}~${end}` );
-          lists.push(this.makeBrowseList(getI18nString('BROWSER.PROG_FAVOURITES'), ['grid', 'list'], items));
+          lists.push(this.makeBrowseList(messageHelper.get('BROWSER.PROG_FAVOURITES'), ['grid', 'list'], items));
         }
         defer.resolve(this.makeBrowseResult(lists));
       });
@@ -495,16 +495,16 @@ export default class JpRadio {
             uri    : ''
           }, this.serviceName);*/
           this.task1.start();
-          const areaName = getI18nString(`RADIKO_AREA.${this.myInfo.areaId}`)
-          const areaFree = this.myInfo.areafree ? ` / ${getI18nString('MESSAGE.AREA_FREE')}` : '';
-          const msg1 = getI18nString('MESSAGE.BOOT_COMPLETED');
-          const msg2 = getI18nStringFormat('MESSAGE.AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
+          const areaName = messageHelper.get(`RADIKO_AREA.${this.myInfo.areaId}`)
+          const areaFree = this.myInfo.areafree ? ` / ${messageHelper.get('MESSAGE.AREA_FREE')}` : '';
+          const msg1 = messageHelper.get('MESSAGE.BOOT_COMPLETED');
+          const msg2 = messageHelper.get('MESSAGE.AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
           this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + msg2);
           resolve();
         })
         .on('error', (err: any) => {
           this.logger.error('JP_Radio::start: App error:', err);
-          this.commandRouter.pushToastMessage('error', getI18nString('MESSAGE.ERR_BOOT_FAIL'), err.message || getI18nString('MESSAGE.ERR_UNKNOWN'));
+          this.commandRouter.pushToastMessage('error', messageHelper.get('MESSAGE.ERR_BOOT_FAIL'), err.message || messageHelper.get('MESSAGE.ERR_UNKNOWN'));
           reject(err);
         });
     });
@@ -521,7 +521,7 @@ export default class JpRadio {
       await this.prg?.dbClose();
       this.prg = null;
       this.rdk = null;
-    //this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.STOPED'));
+    //this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.STOPED'));
     }
   }
 

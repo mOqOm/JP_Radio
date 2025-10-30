@@ -5,7 +5,7 @@ import { format } from 'util';
 import { parse as queryParse } from 'querystring';
 import JpRadio from '../service/radio';
 import type { LoginAccount } from '../models/auth.model';
-import { loadI18nStrings, getI18nString, getI18nStringFormat } from '../service/i18nStrings';
+import { messageHelper } from '../utils/message-helper';
 import { AreaNames } from '../constants/area-name.constants';
 import { RadioTime } from '../service/radio-time';
 import type { BrowseResult } from '../models/browse-result.model';
@@ -30,11 +30,18 @@ class JpRadioController {
     this.commandRouter = context.coreCommand;
     this.configManager = context.configManager;
 
-    // Volumio標準Loggerをラップして LoggerEx を初期化
+    // LoggerEx 初期化（Volumio標準loggerをラップ）
     this.logger = new LoggerEx(context.logger);
 
-    // 初期言語設定（必要に応じて変更可能）
-    this.logger.setLanguage('ja');
+    // Volumio の sharedVars から言語コード取得
+    const lang = this.commandRouter.sharedVars.get('language_code') || 'ja';
+
+    // 共通 messageHelper に言語を設定
+    messageHelper.setLanguage(lang);
+
+    // LoggerEx 内でも messageHelper を参照できるように設定
+    // （LoggerEx 内のログ出力で i18n 文字列が使える）
+    this.logger.setLanguage(lang);
   }
 
 //-----------------------------------------------------------------------
@@ -60,7 +67,7 @@ class JpRadioController {
     const defer = libQ.defer();
     this.onStop().then(() => defer.resolve() );
     return defer.promise;
-}
+  }
 
   public onVolumioReboot(): Promise<void> {
     this.logger.debug('CTRLD0003');
@@ -80,7 +87,6 @@ class JpRadioController {
       defer.reject(new Error('Config not initialized'));
       return defer.promise;
     }
-    loadI18nStrings(__dirname, this.commandRouter.sharedVars.get('language_code'));
 
     this.mpdPlugin = this.commandRouter.pluginManager.getPlugin('music_service', 'mpd');
 
@@ -116,14 +122,23 @@ class JpRadioController {
         defer.resolve();
       })
       .catch((err) => {
-        this.logger.error('JP_Radio::Failed to start appRadio', err);
+        // ログ出力（stack も自動的に表示される）
+        this.logger.error('CTRLE0001', { error: err });
+
         if (err.code === 'EADDRINUSE') {
-          const message = getI18nStringFormat('MESSAGE.ERROR_PORT_IN_USE', this.confParam.port);
-          this.logger.error(`JP_Radio:: Port is already in use : ${message}`);
-          this.commandRouter.pushToastMessage('error', getI18nString('MESSAGE.ERROR_BOOT_FAILED'), message);
+          const message = messageHelper.get('MESSAGE.ERROR_PORT_IN_USE', { port: this.confParam.port });
+          this.logger.error('CTRLE0002', { message });
+          this.commandRouter.pushToastMessage(
+            'error',
+            messageHelper.get('MESSAGE.ERROR_BOOT_FAILED'),
+            message
+          );
         } else {
-          this.logger.error('JP_Radio::Failed to start appRadio', err);
-          this.commandRouter.pushToastMessage('error', getI18nString('MESSAGE.ERROR_BOOT_FAILED'), err.message || getI18nString('MESSAGE.ERROR_UNKNOWN'));
+          this.commandRouter.pushToastMessage(
+            'error',
+            messageHelper.get('MESSAGE.ERROR_BOOT_FAILED'),
+            err.message || messageHelper.get('MESSAGE.ERROR_UNKNOWN')
+          );
         }
         defer.reject(err);
       });
@@ -220,17 +235,17 @@ class JpRadioController {
           const regionId = item.region.split('.').pop();  // 'RADIKO_AREA.REGION2'
           contents.push({
             id   : regionId,  // 'REGION2'
-            label: getI18nString(item.region), // '関東'
+            label: messageHelper.get(item.region), // '関東'
           }); // contents[0]
           item.areas.forEach((radikoArea) => {
             const areaId = radikoArea.split('.').pop(); // 'RADIKO_AREA.JP13'
-            const areaName = getI18nString(radikoArea); // '≪ 関東 ≫'
+            const areaName = messageHelper.get(radikoArea); // '≪ 関東 ≫'
             const areaStations = this.appRadio?.getAreaStations(areaId!); // TBS,QRR,LFR,INT,FMT,...,JOAK
             const value = this.config.get(`radikoAreas.${areaId}`);
             contents.push({
               id         : areaId,  // 'JP13'
               element    : 'switch',
-              label      : `- ${areaName}${(myInfo.areaId == areaId) ? getI18nString('UI_SETTINGS.RADIKO_MY_AREA') : ''}`,
+              label      : `- ${areaName}${(myInfo.areaId == areaId) ? messageHelper.get('UI_SETTINGS.RADIKO_MY_AREA') : ''}`,
               value      : value,
               description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),
             }); // contents[1-]
@@ -299,7 +314,7 @@ class JpRadioController {
       if (err) {
         this.logger.error('JP_Radio::clearStationLogoCache: ', err);
       } else {
-        this.commandRouter.pushToastMessage('success', 'JP Radio', getI18nString('MESSAGE.STATION_LOGO_CLEAR'));
+        this.commandRouter.pushToastMessage('success', 'JP Radio', messageHelper.get('MESSAGE.STATION_LOGO_CLEAR'));
       }
     });
   }
@@ -340,18 +355,18 @@ class JpRadioController {
       await this.onStop();
       await this.onStart();
     } catch {
-      this.commandRouter.pushToastMessage('error', getI18nString('MESSAGE.RESTART_FAILED_TITLE'), getI18nString('MESSAGE.RESTART_FAILED_MESSAGE'));
+      this.commandRouter.pushToastMessage('error', messageHelper.get('MESSAGE.RESTART_FAILED_TITLE'), messageHelper.get('MESSAGE.RESTART_FAILED_MESSAGE'));
     }
   }
 
   private showRestartModal(): void {
     const message = {
-      title: getI18nString('MESSAGE.RESTART_MODAL_TITLE'),
-      message: getI18nString('MESSAGE.RESTART_MODAL_MESSAGE'),
+      title: messageHelper.get('MESSAGE.RESTART_MODAL_TITLE'),
+      message: messageHelper.get('MESSAGE.RESTART_MODAL_MESSAGE'),
       size: 'lg',
       buttons: [
         {
-          name: this.commandRouter.getI18nString('COMMON.RESTART'),
+          name: this.commandRouter.messageHelper.get('COMMON.RESTART'),
           class: 'btn btn-info',
           emit: 'callMethod',
           payload: {
@@ -361,7 +376,7 @@ class JpRadioController {
           }
         },
         {
-          name: this.commandRouter.getI18nString('COMMON.CANCEL'),
+          name: this.commandRouter.messageHelper.get('COMMON.CANCEL'),
           class: 'btn btn-warning',
           emit: 'closeModals',
           payload: ''
@@ -479,35 +494,35 @@ class JpRadioController {
             {
               service: this.serviceName,
               type   : 'radio-category',
-              title  : getI18nString('BROWSER.LIVE'),
+              title  : messageHelper.get('BROWSER.LIVE'),
               icon   : 'fa fa-microphone',
               uri    : 'radiko/live'
             },
             {
               service: this.serviceName,
               type   : 'radio-favourites',
-              title  : getI18nString('BROWSER.LIVE_FAVOURITES'),
+              title  : messageHelper.get('BROWSER.LIVE_FAVOURITES'),
               icon   : 'fa fa-heart',
               uri    : 'radiko/live/favourites'
             },
             {
               service: this.serviceName,
               type   : 'radio-category',
-              title  : getI18nString('BROWSER.TIMEFREE'),
+              title  : messageHelper.get('BROWSER.TIMEFREE'),
               icon   : 'fa fa-clock-o',
               uri    : 'radiko/timefree'
             },
             {
               service: this.serviceName,
               type   : 'radio-category',
-              title  : getI18nString('BROWSER.TIMEFREE_TODAY'),
+              title  : messageHelper.get('BROWSER.TIMEFREE_TODAY'),
               icon   : 'fa fa-map-marker',
               uri    : 'radiko/timefree_today'
             },
             {
               service: this.serviceName,
               type   : 'radio-favourites',
-              title  : getI18nString('BROWSER.TIMEFREE_FAVOURITES'),
+              title  : messageHelper.get('BROWSER.TIMEFREE_FAVOURITES'),
               icon   : 'fa fa-heartbeat',
               uri    : 'radiko/timefree/favourites'
             }
@@ -540,11 +555,11 @@ class JpRadioController {
             if (check > 0) {
               // 配信前の番組は再生できないのでライブ放送に切り替え
               uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.WARNING_SWITCH_LIVE1'));
+              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.WARNING_SWITCH_LIVE1'));
             } else if (check == 0) {
               // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
               uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.WARNING_SWITCH_LIVE2'));
+              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.WARNING_SWITCH_LIVE2'));
             }
           } else {
             // ライブ
@@ -733,16 +748,16 @@ class JpRadioController {
       }
       const progData = await prg.getProgramData(stationId, ft, true);
       if (!progData) return;
-      const pfm = progData.pfm ? getI18nString('PROGINFO.PERFORMER') + progData.pfm : '<br/>';
+      const pfm = progData.pfm ? messageHelper.get('PROGINFO.PERFORMER') + progData.pfm : '<br/>';
       data.uri = data.uri.replace(/\/proginfo\//, '/play/');
       const modalMessage = {
-        title  : getI18nString('PROGINFO.PROG_INFO') + progData.title,
+        title  : messageHelper.get('PROGINFO.PROG_INFO') + progData.title,
       //message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div style="text-align:right">${data.uri}</div>`,
         message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div align="right">${data.uri}</div>`,
         size   : 'lg',
         buttons: [
         {
-            name  : getI18nString('PROGINFO.PLAY'),
+            name  : messageHelper.get('PROGINFO.PLAY'),
             class : 'btn btn-info',
             emit  : 'callMethod',
             payload: {
@@ -752,7 +767,7 @@ class JpRadioController {
             } 
           },
           {
-            name  : getI18nString('PROGINFO.ADD_TO_QUEUE'),
+            name  : messageHelper.get('PROGINFO.ADD_TO_QUEUE'),
             class : 'btn btn-info',
             emit  : 'callMethod',
             payload: {
@@ -762,7 +777,7 @@ class JpRadioController {
             } 
           },
           {
-            name  : getI18nString('PROGINFO.ADD_TO_FAVOURITES'),
+            name  : messageHelper.get('PROGINFO.ADD_TO_FAVOURITES'),
             class : 'btn btn-info',
             emit  : 'callMethod',
             payload: {
@@ -772,7 +787,7 @@ class JpRadioController {
             } 
           },
           {
-            name : this.commandRouter.getI18nString('COMMON.CLOSE'),
+            name : this.commandRouter.messageHelper.get('COMMON.CLOSE'),
             class: 'btn btn-warning',
             emit : 'closeModals',
             payload: ''
@@ -798,8 +813,8 @@ class JpRadioController {
 
   public addQueue_formProgInfoModal(data: any): void {
     this.logger.info(`JP_Radio::addQueue_formProgInfoModal: ${Object.entries(data)}`);
-    this.commandRouter.pushToastMessage('success', this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TITLE'),
-      this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TEXT_1') + data.name + this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TEXT_2'));
+    this.commandRouter.pushToastMessage('success', this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TITLE'),
+      this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TEXT_1') + data.name + this.commandRouter.messageHelper.get('COMMON.ADD_QUEUE_TEXT_2'));
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     arrayQueue.push(data);
     this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
@@ -809,8 +824,8 @@ class JpRadioController {
 
   public addFavourites_formProgInfoModal(data: any): void {
     this.logger.info(`JP_Radio::addFavourites_formProgInfoModal: ${Object.entries(data)}`);
-    this.commandRouter.pushToastMessage('success', this.commandRouter.getI18nString('PLAYLIST.ADDED_TITLE'),
-      data.name + this.commandRouter.getI18nString('PLAYLIST.ADDED_TO_FAVOURITES'));
+    this.commandRouter.pushToastMessage('success', this.commandRouter.messageHelper.get('PLAYLIST.ADDED_TITLE'),
+      data.name + this.commandRouter.messageHelper.get('PLAYLIST.ADDED_TO_FAVOURITES'));
     this.commandRouter.playListManager.commonAddToPlaylist(
       this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites',
       'webradio', data.uri, data.name, data.albumart);

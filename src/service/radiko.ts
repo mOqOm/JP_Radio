@@ -16,7 +16,8 @@ import {
   AUTH_KEY, MAX_RETRY_COUNT
 } from '../constants/radiko-urls.constants';
 
-import { getI18nString } from './i18nStrings';
+import { messageHelper } from '../utils/message-helper';
+
 import { RadioTime } from './radio-time';
 import { LoggerEx } from '../utils/logger';
 
@@ -219,7 +220,7 @@ export default class Radiko {
       for (const station of region.stations) {
         if (allowedStations.includes(station.id)) {
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-          const areaKanji = getI18nString(`RADIKO_AREA.${station.area_id}`);
+          const areaKanji = messageHelper.get(`RADIKO_AREA.${station.area_id}`);
           const logoFile = this.saveStationLogoCache(station.logo, `${station.id}_logo.png`);
           this.stations.set(station.id, {   // 'TBS'
             RegionName: region.region_name, // '関東'

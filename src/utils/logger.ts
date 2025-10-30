@@ -1,7 +1,6 @@
 // Volumio標準Loggerの型をインポート
 import type { Logger } from 'volumio-logger';
-import { messageHelper } from './message-helper';
-
+import { messageHelper, MessageParams } from './message-helper';
 /**
  * MessageParams
  *  - Error オブジェクトも含めて柔軟に対応
