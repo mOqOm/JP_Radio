@@ -618,7 +618,7 @@ class JpRadioController {
   public addToFavourites(data: any): any {
     //this.logger.info(`JP_Radio::addToFavourites: data=${Object.entries(data)}`);
     return this.explodeUri(data.uri).then((item) => {
-      this.logger.info('CTRLD0018', Object.entries(item));
+      this.logger.debug('CTRLD0018', Object.entries(item));
       const [liveUri, timefree] = item.uri.split('?');
       if (!timefree) {
         const stationId = liveUri.split('/').pop();
