@@ -475,10 +475,10 @@ export default class JpRadio {
     this.logger.info(`JP_Radio::JpRadio.start`);
     if (this.server) {
       this.logger.info('JP_Radio::JpRadio.start: Already started');
-      this.commandRouter.pushToastMessage('warning', 'JP Radio', getI18nString('MESSAGE.ALREADY_STARTED'));
+      this.commandRouter.pushToastMessage('warning', 'JP Radio', messageHelper.get('MESSAGE.ALREADY_STARTED'));
       return;
     }
-    this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.BOOT_STARTING'));
+    this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.BOOT_STARTING'));
 
     this.prg = new RdkProg(this.logger);
     this.rdk = new Radiko(this.logger, this.confParam.areaIds);

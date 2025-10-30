@@ -121,12 +121,12 @@ class JpRadioController {
         this.logger.info(`JP_Radio::onStart: ## COMPLETED ${processingTime}ms ##`);
         defer.resolve();
       })
-      .catch((err) => {
+      .catch((error) => {
         // ログ出力（stack も自動的に表示される）
-        this.logger.error('CTRLE0001', { error: err });
+        this.logger.error('CTRLE0001', { error: error });
 
-        if (err.code === 'EADDRINUSE') {
-          const message = messageHelper.get('MESSAGE.ERROR_PORT_IN_USE', { port: this.confParam.port });
+        if (error.code === 'EADDRINUSE') {
+          const message = messageHelper.get('MESSAGE.ERROR_PORT_IN_USE', this.confParam.port);
           this.logger.error('CTRLE0002', { message });
           this.commandRouter.pushToastMessage(
             'error',
@@ -137,10 +137,10 @@ class JpRadioController {
           this.commandRouter.pushToastMessage(
             'error',
             messageHelper.get('MESSAGE.ERROR_BOOT_FAILED'),
-            err.message || messageHelper.get('MESSAGE.ERROR_UNKNOWN')
+            error.message || messageHelper.get('MESSAGE.ERROR_UNKNOWN')
           );
         }
-        defer.reject(err);
+        defer.reject(error);
       });
     return defer.promise;
   }
@@ -154,8 +154,8 @@ class JpRadioController {
       try {
         await this.appRadio.stop();
         this.appRadio = null;
-      } catch (error) {
-        this.logger.error('CTRLE0001', { error });
+      } catch (error: any) {
+        this.logger.error('CTRLE0001', { error: error });
       }
       this.commandRouter.stateMachine.playQueue.saveQueue();
       this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
@@ -421,9 +421,9 @@ class JpRadioController {
                     ? this.appRadio!.radioFavouriteStations(mode)
                     : this.appRadio!.radioStations(mode) )
           .then((result: any) => defer.resolve(result) )
-          .fail((err: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
-            defer.reject(err);
+          .fail((error: any) => {
+            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            defer.reject(error);
           });
 
       } else if (mode.startsWith('timefree')) {
@@ -448,9 +448,9 @@ class JpRadioController {
             }
           })
           .then((result: any) => defer.resolve(result) )
-          .fail((err: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
-            defer.reject(err);
+          .fail((error: any) => {
+            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            defer.reject(error);
           });
 
       } else if (mode.startsWith('progtable')) {
@@ -459,9 +459,9 @@ class JpRadioController {
         libQ.resolve()
           .then(() => this.appRadio!.radioTimeTable(mode, stationId, from, to) )
           .then((result: any) => defer.resolve(result) )
-          .fail((err: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
-            defer.reject(err);
+          .fail((error: any) => {
+            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            defer.reject(error);
           });
 
       } else if (mode.startsWith('proginfo')) {
@@ -471,9 +471,9 @@ class JpRadioController {
             this.explodeUri(curUri)
             .then((data) => this.showProgInfoModal(data) )
           })
-          .fail((err: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + err);
-            defer.reject(err);
+          .fail((error: any) => {
+            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+            defer.reject(error);
           });
       }
 
