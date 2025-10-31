@@ -204,4 +204,3 @@ class BroadcastTimeConverter  {
 
 // デフォルト20秒遅延
 export const broadcastTimeConverter = new BroadcastTimeConverter(20);
-
