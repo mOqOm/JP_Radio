@@ -24,7 +24,6 @@ describe('LoggerEx', () => {
 
         // messageHelper.get をモックして、渡された params を文字列に変換して返す
         jest.spyOn(messageHelper, 'get').mockImplementation((id: string, params?: any) => {
-            // テンプレート取得
             const template = (messageHelper as any).messages[id] ?? `[Unknown message ID: ${id}]`;
 
             if (params === undefined || params === null) return template;
@@ -37,11 +36,17 @@ describe('LoggerEx', () => {
                 });
             }
 
-            // オブジェクト → {key}置換
-            if (typeof params === 'object') {
-                return template.replace(/\{(\w+)\}/g, (_: string, key: string) => {
+            // オブジェクト → 名前付き置換 + JSON化
+            if (typeof params === 'object' && !Array.isArray(params)) {
+                // テンプレートのキー置換
+                let replaced = template.replace(/\{(\w+)\}/g, (_: string, key: string) => {
                     return params[key] !== undefined ? String(params[key]) : `{${key}}`;
                 });
+                // プレースホルダが残っている場合は JSON 表示
+                if (replaced.includes('{')) {
+                    replaced = JSON.stringify(params);
+                }
+                return replaced;
             }
 
             // 単値 → {0}置換
@@ -155,4 +160,29 @@ describe('LoggerEx', () => {
         process.stdout.write(`ログ: ${logged}\n`);
         expect(logged).toMatch(/12345/);
     });
+    
+    test('Success0005_オブジェクトをログに出力できること(Object.entries対応)', () => {
+        // メッセージテンプレート設定
+        (messageHelper as any).messages['TEST_OBJECT'] = '{0}';
+
+        // ログ対象オブジェクト
+        const obj = { user: 'Alice', action: 'Login', role: 'admin' };
+
+        logger.info('TEST_OBJECT', obj);
+
+        const logged = (logger as any).logger.info.mock.calls[0][0] as string;
+
+        process.stdout.write(`OBJログ: ${logged}\n`);
+
+        // JSON形式で出力されるはず
+        expect(logged).toMatch(/Alice/);
+        expect(logged).toMatch(/Login/);
+        expect(logged).toMatch(/admin/);
+
+        // Object.entries が展開されているかに近い表現
+        expect(logged).toMatch(/user/);
+        expect(logged).toMatch(/action/);
+        expect(logged).toMatch(/role/);
+    });
+
 });
