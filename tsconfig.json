@@ -1,5 +1,5 @@
 {
-  "include": ["src/**/*.ts", "types/**/*.d.ts"],
+  "include": ["src/**/*.ts", "types/**/*.d.ts", "test/**/*.spec.ts"],
   "compilerOptions": {
     "rootDir": "src",
     "target": "es2020",

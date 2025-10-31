@@ -4,7 +4,9 @@
   "description": "Japanese radio relay server for Volumio3",
   "main": "./dist/controllers/jp-radio-controller.js",
   "scripts": {
-    "build": "rm -rf dist && npx tsc && bash finalize.sh"
+    "build": "rm -rf dist && npx tsc && bash finalize.sh",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "mOqOm",
@@ -33,9 +35,12 @@
     "@types/express": "^4.17.17",
     "@types/fs-extra": "^9.0.13",
     "@types/ini": "^4.1.1",
+    "@types/jest": "^27.5.2",
     "@types/lodash": "^4.17.17",
     "@types/node": "^14.14.37",
     "@types/tough-cookie": "^4.0.5",
+    "jest": "^27.5.1",
+    "ts-jest": "^27.1.5",
     "ts-node": "^10.9.2",
     "typescript": "4.9.5"
   },
