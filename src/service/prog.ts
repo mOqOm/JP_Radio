@@ -9,6 +9,7 @@ import type { RadikoProgramData } from '../models/radiko-program.model';
 import type { RadikoXMLData } from '../models/radiko-xml-station.model';
 import { RadioTime } from './radio-time';
 import { LoggerEx } from '../utils/logger';
+import { MessageHelper } from '../utils/message-helper';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   stationId: '',
@@ -23,6 +24,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 
 export default class RdkProg {
   private readonly logger: LoggerEx;
+  private readonly messageHelper: MessageHelper;
   private readonly db = Datastore.create({ inMemoryOnly: true });
   private readonly xmlParser = new XMLParser({
       attributeNamePrefix   : '@',
@@ -34,8 +36,9 @@ export default class RdkProg {
   private lastTime = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
-  constructor(logger: LoggerEx) {
+  constructor(logger: LoggerEx, messageHelper: MessageHelper) {
     this.logger = logger;
+    this.messageHelper = messageHelper;
     this.initDBIndexes();
   }
 

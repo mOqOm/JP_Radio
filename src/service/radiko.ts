@@ -16,11 +16,9 @@ import {
   AUTH_KEY, MAX_RETRY_COUNT
 } from '../constants/radiko-urls.constants';
 
-import { messageHelper } from '../utils/message-helper';
-
 import { RadioTime } from './radio-time';
 import { LoggerEx } from '../utils/logger';
-
+import { MessageHelper } from '../utils/message-helper';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -31,6 +29,7 @@ const xmlParser = new XMLParser({
 
 export default class Radiko {
   private readonly logger: LoggerEx;
+  private readonly messageHelper: MessageHelper;
   private token: string = '';
   private myAreaId: string = '';
   private cookieJar: CookieJar = new tough.CookieJar();
@@ -40,8 +39,9 @@ export default class Radiko {
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
   private areaIDs: string[];
 
-  constructor(logger: LoggerEx, areaIDs: string[]) {
+  constructor(logger: LoggerEx, messageHelper: MessageHelper, areaIDs: string[]) {
     this.logger = logger;
+    this.messageHelper = messageHelper;
     this.areaIDs = areaIDs;
   }
 
@@ -220,7 +220,7 @@ export default class Radiko {
       for (const station of region.stations) {
         if (allowedStations.includes(station.id)) {
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-          const areaKanji = messageHelper.get(`RADIKO_AREA.${station.area_id}`);
+          const areaKanji = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
           const logoFile = this.saveStationLogoCache(station.logo, `${station.id}_logo.png`);
           this.stations.set(station.id, {   // 'TBS'
             RegionName: region.region_name, // '関東'

@@ -482,8 +482,8 @@ export default class JpRadio {
     }
     this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('MESSAGE.BOOT_STARTING'));
 
-    this.prg = new RdkProg(this.logger);
-    this.rdk = new Radiko(this.logger, this.confParam.areaIds);
+    this.prg = new RdkProg(this.logger, this.messageHelper);
+    this.rdk = new Radiko(this.logger, this.messageHelper, this.confParam.areaIds);
     await this.#init();
     return new Promise((resolve, reject) => {
       this.server = this.app
