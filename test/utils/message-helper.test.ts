@@ -61,4 +61,18 @@ describe('MessageHelper', () => {
         process.stdout.write(`TEST002出力（可変長引数）: ${msg}\n`);
         expect(msg).toBe('Values: 10, 20');
     });
+    
+    test('Success0008_オブジェクトをJSON化して返す', () => {
+        (helper as any).messages['TEST004'] = '{0}';
+
+        const obj = { user: 'Alice', action: 'Login', role: 'admin' };
+        const msg = helper.get('TEST004', obj);
+
+        process.stdout.write(`TEST004出力(オブジェクトJSON化): ${msg}\n`);
+
+        // JSON文字列に変換されていることを確認
+        expect(msg).toContain('"user":"Alice"');
+        expect(msg).toContain('"action":"Login"');
+        expect(msg).toContain('"role":"admin"');
+    });
 });
