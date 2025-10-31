@@ -21,9 +21,11 @@ class JpRadioController {
   private readonly configManager: any;
   private config: InstanceType<typeof VConf> | null = null;
   private confParam: { port: number, delay: number, aaType: string, ppFrom: number, ppTo: number, timeFmt: string, dateFmt: string, areaIds: string[] };
+  // サービス名(プラグイン呼び出しのuriに含まれる文字でもある)
   private readonly serviceName = 'jp_radio';
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
+  private readonly langCode: string;
 
   constructor(context: any) {
     this.context = context;
@@ -31,19 +33,19 @@ class JpRadioController {
     this.configManager = context.configManager;
 
     // LoggerEx 初期化（Volumio標準loggerをラップ）
-    this.logger = new LoggerEx(context.logger);
+    this.logger = new LoggerEx(context.logger, this.serviceName);
 
     // Volumio の sharedVars から言語コード取得
     //const lang = this.commandRouter.sharedVars.get('language_code') || 'ja';
 
-    const lang = 'ja'
+    this.langCode = 'ja';
 
     // 共通 messageHelper に言語を設定
-    messageHelper.setLanguage(lang);
+    messageHelper.setLanguage(this.langCode);
 
     // LoggerEx 内でも messageHelper を参照できるように設定
     // （LoggerEx 内のログ出力で i18n 文字列が使える）
-    this.logger.setLanguage(lang);
+    this.logger.setLanguage(this.langCode);
 
     // journalctl / livelog に debug も表示させる
     this.logger.enableForceDebug(true);
@@ -117,7 +119,7 @@ class JpRadioController {
       areaIds: areaIds
     };
 
-    this.appRadio = new JpRadio(account, this.confParam, this.logger, this.commandRouter, this.serviceName);
+    this.appRadio = new JpRadio(account, this.confParam, this.logger, this.commandRouter, this.serviceName, messageHelper);
     this.appRadio.start()
       .then(() => {
         this.addToBrowseSources();
@@ -172,12 +174,12 @@ class JpRadioController {
 
   public getUIConfig(): Promise<any> {
     const defer = libQ.defer();
-    const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
+    //const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
-    this.logger.debug('CTRLD0004', langCode);
+    this.logger.debug('CTRLD0004', this.langCode);
 
     this.commandRouter.i18nJson(
-      `${__dirname}/../i18n/strings_${langCode}.json`,
+      `${__dirname}/../i18n/strings_${this.langCode}.json`,
       `${__dirname}/../i18n/strings_en.json`,
       `${__dirname}/../UIConfig.json`
     )

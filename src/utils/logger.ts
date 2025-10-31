@@ -23,12 +23,17 @@ type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 export class LoggerEx {
   /** Volumio標準Logger */
   private logger: Logger;
+  /** サービス名の表示(初期値:null) */
+  private serviceName: string | null = null;
 
   /** debug を info に昇格するフラグ */
   private forceDebug = false;
 
-  constructor(volumioLogger: Logger) {
+  constructor(volumioLogger: Logger, serviceName?: string) {
     this.logger = volumioLogger;
+    if (serviceName !== undefined) {
+      this.serviceName = serviceName;
+    }
   }
 
   /** debug を強制的に info として出力させる */
@@ -99,11 +104,14 @@ export class LoggerEx {
 
     /**
      * 出力フォーマット:
-     * 標準: [タイムスタンプ] [レベル] [メッセージID] メッセージ本文
-     * 強制Debug時: [タイムスタンプ] [DEBUG-FORCED] [メッセージID] メッセージ本文
+     * - 標準: [タイムスタンプ] [サービス名] [レベル] [メッセージID] メッセージ本文
+     *   ※ serviceName が null/undefined の場合は [サービス名] は表示されません
+     * - 強制Debug時: [タイムスタンプ] [サービス名] [DEBUG-FORCED] [メッセージID] メッセージ本文
      */
     const tag = forcedDebug ? 'DEBUG-FORCED' : level.toUpperCase();
-    const formatted = `[${timestamp}] [JP_Radio] [${tag}] [${msgId}] ${message}`;
+    // サービス名がある場合だけ表示
+    const serviceTag = this.serviceName ? `[${this.serviceName}] ` : '';
+    const formatted = `[${timestamp}] ${serviceTag}[${tag}] [${msgId}] ${message}`;
 
     // 強制debug → info扱い
     if (forcedDebug) {
