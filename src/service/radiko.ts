@@ -17,7 +17,7 @@ import {
 } from '../constants/radiko-urls.constants';
 
 //import { RadioTime } from './radio-time';
-import { BroadcastTimeConverter } from '../utils/broadcast-time-converter';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
 import { LoggerEx } from '../utils/logger';
 import { MessageHelper } from '../utils/message-helper';
 
@@ -282,8 +282,8 @@ export default class Radiko {
     var url = format(PLAY_LIVE_URL, stationId);
     var aac = '';
     if (query.ft && query.to) {
-      const ft = BroadcastTimeConverter.addTime(BroadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
-      const to = BroadcastTimeConverter.revConvertRadioTime(query.to);
+      const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
+      const to = broadcastTimeConverter.revConvertRadioTime(query.to);
       url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
       //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
     }

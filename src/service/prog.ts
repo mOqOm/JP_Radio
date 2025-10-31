@@ -8,7 +8,7 @@ import { PROG_DATE_AREA_URL, PROG_NOW_AREA_URL, PROG_TODAY_AREA_URL, PROG_DAILY_
 import type { RadikoProgramData } from '../models/radiko-program.model';
 import type { RadikoXMLData } from '../models/radiko-xml-station.model';
 //import { RadioTime } from './radio-time';
-import { BroadcastTimeConverter } from '../utils/broadcast-time-converter';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
 
 import { LoggerEx } from '../utils/logger';
 import { MessageHelper } from '../utils/message-helper';
@@ -46,7 +46,7 @@ export default class RdkProg {
 
   public async getCurProgramData(stationId: string, retry: boolean): Promise<RadikoProgramData | undefined> {
     //this.logger.info(`JP_Radio::RdkProg.getCurProgramData: station=${stationId}`);
-    return await this.getProgramData(stationId, BroadcastTimeConverter.getCurrentRadioTime(), retry);
+    return await this.getProgramData(stationId, broadcastTimeConverter.getCurrentRadioTime(), retry);
   }
 
   public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData | undefined> {
@@ -100,7 +100,7 @@ export default class RdkProg {
 
   public async clearOldProgram(): Promise<void> {
     try {
-      this.db.remove({ to: { $lt: BroadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
+      this.db.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
       .then((numRemoved) => {
         this.logger.info(`JP_Radio::RdkProg.clearOldProgram: Removed ${numRemoved} documents from DB`);
       });
@@ -117,7 +117,7 @@ export default class RdkProg {
     const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
         // boot時はラジオ時間で，cron時は実時間で取得
-        const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) : utilFormat(PROG_DATE_AREA_URL, BroadcastTimeConverter.getCurrentDate(), areaId);
+        const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) : utilFormat(PROG_DATE_AREA_URL, broadcastTimeConverter.getCurrentDate(), areaId);
         const stations = await this.getPrograms(url, doneStations);
         stations.forEach((s) => doneStations.add(s) );
       })
@@ -179,12 +179,12 @@ export default class RdkProg {
           var prevTo = '';
           const progs = Array.isArray(progRaw) ? progRaw : [progRaw];
           for (const prog of progs) {
-            const ft = BroadcastTimeConverter.convertRadioTime(prog['@ft'], '05');
+            const ft = broadcastTimeConverter.convertRadioTime(prog['@ft'], '05');
             if (prevTo && prevTo < ft) {
               // 途切れた番組表をダミーで埋める
               await this.putProgram({ stationId, progId:`${stationId}_${prevTo}`, ft:prevTo, to:ft, title:'' });
             }
-            const to = BroadcastTimeConverter.convertRadioTime(prog['@to'], '29');
+            const to = broadcastTimeConverter.convertRadioTime(prog['@to'], '29');
             const progId = `${stationId}${prog['@id']}${ft.slice(8,12)}`; // 同一progId対策(HHmmを付加)
             const program: RadikoProgramData = {
               stationId, progId, ft, to,
