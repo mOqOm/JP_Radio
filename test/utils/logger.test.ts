@@ -24,20 +24,28 @@ describe('LoggerEx', () => {
 
         // messageHelper.get をモックして、渡された params を文字列に変換して返す
         jest.spyOn(messageHelper, 'get').mockImplementation((id: string, params?: any) => {
-            if (params === undefined || params === null) return id;
+            // テンプレート取得
+            const template = (messageHelper as any).messages[id] ?? `[Unknown message ID: ${id}]`;
 
-            // 配列の場合は {0},{1} ... と同じ順序で連結
+            if (params === undefined || params === null) return template;
+
+            // 配列 → {0},{1},...
             if (Array.isArray(params)) {
-                return params.map(p => String(p)).join(', ');
+                return template.replace(/\{(\d+)\}/g, (_: string, idx: string) => {
+                    const i = parseInt(idx, 10);
+                    return params[i] !== undefined ? String(params[i]) : `{${i}}`;
+                });
             }
 
-            // オブジェクトの場合は値をカンマ区切りで連結
+            // オブジェクト → {key}置換
             if (typeof params === 'object') {
-                return Object.values(params).map(v => String(v)).join(', ');
+                return template.replace(/\{(\w+)\}/g, (_: string, key: string) => {
+                    return params[key] !== undefined ? String(params[key]) : `{${key}}`;
+                });
             }
 
-            // 単値
-            return String(params);
+            // 単値 → {0}置換
+            return template.replace(/\{0\}/g, String(params));
         });
 
         // LoggerEx に dummyLogger とサービス名を渡して初期化
@@ -60,42 +68,57 @@ describe('LoggerEx', () => {
 
     /**
      * 1. 各ログレベルの string 引数が正しく出力されることを確認
+     *    同時に console にも実際の出力を表示
      */
     test('Success0001_String型が各ログレベルで表示されることを確認', () => {
+        // メッセージIDの設定
+        (messageHelper as any).messages['TEST001'] = '{0}';
+        (messageHelper as any).messages['TEST002'] = '{0}';
+        (messageHelper as any).messages['TEST003'] = '{0}';
+        (messageHelper as any).messages['TEST004'] = '{0}';
+
         // info
         logger.info('TEST001', 'InfoMessage');
-        expect((logger as any).logger.info).toHaveBeenCalledWith(
-            expect.stringMatching(/InfoMessage/)
-        );
+        const infoLogged = (logger as any).logger.info.mock.calls[0][0] as string;
+        process.stdout.write(`INFOログ: ${infoLogged}\n`);
+        // assert
+        expect(infoLogged).toMatch(/InfoMessage/);
 
         // warn
         logger.warn('TEST002', 'WarnMessage');
-        expect((logger as any).logger.warn).toHaveBeenCalledWith(
-            expect.stringMatching(/WarnMessage/)
-        );
+        const warnLogged = (logger as any).logger.warn.mock.calls[0][0] as string;
+        process.stdout.write(`WARNログ: ${warnLogged}\n`);
+        // assert
+        expect(warnLogged).toMatch(/WarnMessage/);
 
         // error
         logger.error('TEST003', 'ErrorMessage');
-        expect((logger as any).logger.error).toHaveBeenCalledWith(
-            expect.stringMatching(/ErrorMessage/)
-        );
+        const errorLogged = (logger as any).logger.error.mock.calls[0][0] as string;
+        process.stdout.write(`ERRORログ: ${errorLogged}\n`);
+        // assert
+        expect(errorLogged).toMatch(/ErrorMessage/);
 
         // debug
         logger.debug('TEST004', 'DebugMessage');
         // forceDebug は有効化していないので debug が呼ばれる
-        expect((logger as any).logger.debug).toHaveBeenCalledWith(
-            expect.stringMatching(/DebugMessage/)
-        );
+        const debugLogged = (logger as any).logger.debug.mock.calls[0][0] as string;
+        process.stdout.write(`DEBUGログ: ${debugLogged}\n`);
+        // assert
+        expect(debugLogged).toMatch(/DebugMessage/);
     });
 
     /**
      * 2. 配列 → {0},{1} 置換の確認
      */
     test('Success0002_配列を {0},{1} で置換できることを確認', () => {
+        // メッセージIDの設定
+        (messageHelper as any).messages['TEST005'] = '{0} : {1}';
+
         logger.enableForceDebug(true); // 強制 debug 出力を有効化
         logger.debug('TEST005', 'Station1', 'NowPlaying');
 
         const logged = (logger as any).logger.info.mock.calls[0][0] as string;
+        process.stdout.write(`ログ: ${logged}\n`);
         expect(logged).toMatch(/Station1/);
         expect(logged).toMatch(/NowPlaying/);
     });
@@ -104,11 +127,15 @@ describe('LoggerEx', () => {
      * 3. オブジェクト → 名前付き置換の確認
      */
     test('Success0003_オブジェクトを名前付き置換できることを確認', () => {
+        // メッセージIDの設定
+        (messageHelper as any).messages['TEST006'] = '{user}:{action}';
+
         logger.enableForceDebug(true);
 
         logger.debug('TEST006', { user: 'Alice', action: 'Play' });
 
         const logged = (logger as any).logger.info.mock.calls[0][0] as string;
+        process.stdout.write(`ログ: ${logged}\n`);
         expect(logged).toMatch(/Alice/);
         expect(logged).toMatch(/Play/);
     });
@@ -117,11 +144,15 @@ describe('LoggerEx', () => {
      * 4. 単値 → {0} 置換の確認
      */
     test('Success0004_単値を {0} で置換できることを確認', () => {
+        // メッセージIDの設定
+        (messageHelper as any).messages['TEST007'] = '{0}';
+
         logger.enableForceDebug(true);
 
         logger.debug('TEST007', 12345);
 
         const logged = (logger as any).logger.info.mock.calls[0][0] as string;
+        process.stdout.write(`ログ: ${logged}\n`);
         expect(logged).toMatch(/12345/);
     });
 });
