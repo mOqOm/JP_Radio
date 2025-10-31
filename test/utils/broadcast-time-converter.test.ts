@@ -4,7 +4,8 @@ describe('BroadcastTimeConverter', () => {
     beforeEach(() => {
         // 固定日時: 2025-01-10 04:30:00（深夜帯）
         jest.useFakeTimers().setSystemTime(new Date('2025-01-10T04:30:00+09:00'));
-        broadcastTimeConverter.setDelay(20);
+        // 遅延の設定
+        broadcastTimeConverter.setDelay(0);
     });
 
     afterEach(() => {
