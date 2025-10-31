@@ -17,7 +17,7 @@ export type MessageParams = Record<string, string | number>;
 export class MessageHelper {
   private messages: Record<string, string> = {};
   private lang: string = 'ja';
-  private readonly baseDir: string = path.resolve(__dirname, './i18n');
+  private readonly baseDir: string = path.resolve(__dirname, '../i18n');
 
   constructor(lang: string = 'ja') {
     this.setLanguage(lang);
@@ -32,7 +32,7 @@ export class MessageHelper {
   /** iniとjsonファイルからメッセージをロード */
   private loadMessages() {
     const iniPath = path.join(this.baseDir, `${this.lang}.ini`);
-    const jsonPath = path.join(this.baseDir, `${this.lang}.json`);
+    const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
     try {
       if (fs.existsSync(iniPath)) {
