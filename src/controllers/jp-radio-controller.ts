@@ -3,14 +3,18 @@ import VConf from 'v-conf';
 import { exec } from 'child_process';
 import { format } from 'util';
 import { parse as queryParse } from 'querystring';
-import JpRadio from '../service/radio';
-import type { LoginAccount } from '../models/auth.model';
-import { messageHelper } from '../utils/message-helper';
+// 定数のインポート
 import { AreaNames } from '../constants/area-name.constants';
-import { RadioTime } from '../service/radio-time';
+// Modelのインポート
+import type { LoginAccount } from '../models/auth.model';
 import type { BrowseResult } from '../models/browse-result.model';
+// Utilsのインポート
 import { LoggerEx } from '../utils/logger';
-
+import { messageHelper } from '../utils/message-helper';
+//import { RadioTime } from '../service/radio-time';
+import { BroadcastTimeConverter } from '../utils/broadcast-time-converter';
+// Seviceのインポート
+import JpRadio from '../service/radio';
 
 export = JpRadioController;
 
@@ -25,6 +29,7 @@ class JpRadioController {
   private readonly serviceName = 'jp_radio';
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
+  // 言語のコード('ja','en'等)
   private readonly langCode: string;
 
   constructor(context: any) {
@@ -220,11 +225,11 @@ class JpRadioController {
       if (uiconf.sections?.[sectionIdx]?.content?.[0]) uiconf.sections[sectionIdx].content[0].value = programPeriodFrom;
       if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = programPeriodTo;
       if (uiconf.sections?.[sectionIdx]?.content?.[2]) {
-        const today = RadioTime.getCurrentDate();
+        const today = BroadcastTimeConverter.getCurrentDate();
         const content = uiconf.sections[sectionIdx].content[2];
         content.value.value = timeFormat;
         for (const opt of content.options) {
-          opt.label = format(opt.label, RadioTime.formatFullString2([today+'120000', today+'130000'], opt.value));
+          opt.label = format(opt.label, BroadcastTimeConverter.formatFullString2([today+'120000', today+'130000'], opt.value));
           if (opt.value === timeFormat)
             content.value.label = opt.label;
         }
@@ -558,7 +563,7 @@ class JpRadioController {
             const query = queryParse(timefree);
             const ft = query.ft ? String(query.ft) : '';
             const to = query.to ? String(query.to) : '';
-            const check = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime());
+            const check = BroadcastTimeConverter.checkProgramTime(ft, to, BroadcastTimeConverter.getCurrentRadioTime());
             if (check > 0) {
               // 配信前の番組は再生できないのでライブ放送に切り替え
               uri = liveUri;
@@ -610,7 +615,7 @@ class JpRadioController {
       };
       if (ft && to) {
         // タイムフリー
-        response.artist += RadioTime.formatDateString(ft, ` @${this.confParam.dateFmt}`);
+        response.artist += BroadcastTimeConverter.formatDateString(ft, ` @${this.confParam.dateFmt}`);
         response.uri += `?ft=${ft}&to=${to}` + (sk ? `&seek=${sk}` : '');
       }
       //this.logger.info(`JP_Radio::explodeUri: response.uri=${response.uri}`);
@@ -715,10 +720,10 @@ class JpRadioController {
       const stationId = liveUri.split('/').pop();
       var d = 0;
       if (timefree) {
-        const currentDate = RadioTime.getCurrentRadioDate() + '000000';
+        const currentDate = BroadcastTimeConverter.getCurrentRadioDate() + '000000';
         const query = queryParse(timefree);
         const ftDate = query.ft ? String(query.ft).slice(0,8) + '000000' : currentDate;
-        d = -Math.floor(RadioTime.getTimeSpan(ftDate, currentDate) / 86400);
+        d = -Math.floor(BroadcastTimeConverter.getTimeSpan(ftDate, currentDate) / 86400);
       }
 
       if (data.type === 'artist') {
@@ -746,7 +751,7 @@ class JpRadioController {
     const [liveUri, timefree] = data.uri.split('?');
     const stationId = liveUri.split('/').pop();
     if ((liveUri.includes('/radiko/play/') || liveUri.includes('/radiko/proginfo/')) && stationId) {
-      var ft = RadioTime.getCurrentRadioTime();
+      var ft = BroadcastTimeConverter.getCurrentRadioTime();
       var to = ft;
       if (timefree) {
         const query = queryParse(timefree);
@@ -801,9 +806,9 @@ class JpRadioController {
           }
         ]
       };
-      if (RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioDate() + '050000') < -7 * 86400)
+      if (BroadcastTimeConverter.checkProgramTime(ft, to, BroadcastTimeConverter.getCurrentRadioDate() + '050000') < -7 * 86400)
         modalMessage.buttons.splice(0, 3); //「再生/キューに追加/お気に入りに追加」ボタンを消す
-      else if (RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime()) >= 0)
+      else if (BroadcastTimeConverter.checkProgramTime(ft, to, BroadcastTimeConverter.getCurrentRadioTime()) >= 0)
         modalMessage.buttons.splice(0, 1); //「再生」ボタンを消す
       this.commandRouter.broadcastMessage('openModal', modalMessage);
     }
