@@ -18,13 +18,22 @@ type LogLevel = 'info' | 'warn' | 'error' | 'debug';
  * - messageHelper と連携して i18n メッセージを出力
  * - Error オブジェクトを params.error に渡すと message と stack を自動展開
  * - `[string, unknown][]` 配列や単純 string / number も自動で MessageParams に変換
+ * - 単値 → {0}、配列 → {0},{1}... 置換対応
  */
 export class LoggerEx {
   /** Volumio標準Logger */
   private logger: Logger;
 
+  /** debug を info に昇格するフラグ */
+  private forceDebug = false;
+
   constructor(volumioLogger: Logger) {
     this.logger = volumioLogger;
+  }
+
+  /** debug を強制的に info として出力させる */
+  public enableForceDebug(enable = true): void {
+    this.forceDebug = enable;
   }
 
   /**
@@ -33,14 +42,11 @@ export class LoggerEx {
    * @param msgId メッセージID
    * @param params 任意のパラメータ
    *  - MessageParams
-   *  - [string, unknown][] 配列
-   *  - string / number（value として置換）
+   *  - [string, unknown][] 配列 or 任意配列
+   *  - string / number（{0} として置換）
+   *  - Error
    */
-  private log(
-    level: LogLevel,
-    msgId: string,
-    params?: MessageParams | [string, unknown][] | string | number | Error
-  ): void {
+  private log(level: LogLevel, msgId: string, params?: MessageParams | [string, unknown][] | string | number | Error): void {
     let finalParams: MessageParams = {};
 
     if (params !== undefined) {
@@ -48,24 +54,23 @@ export class LoggerEx {
       if (params instanceof Error) {
         finalParams.errorMessage = params.message;
         finalParams.errorStack = params.stack ?? '';
-      } 
-      // 単純 string / number は value キーに変換
-      else if (typeof params === 'string' || typeof params === 'number') {
-        finalParams.value = params;
-      } 
-      // [key,value][] 配列を変換
-      else if (Array.isArray(params) && params.length > 0 && Array.isArray(params[0])) {
-        try {
-          finalParams = Object.fromEntries(
-            (params as [string, unknown][]).map(([k, v]) => [k, typeof v === 'string' || typeof v === 'number' ? v : String(v)])
-          ) as MessageParams;
-        } catch (e) {
-          finalParams = {};
-          console.warn(`[LoggerEx] Failed to convert array to params`, e);
-        }
       }
-      // MessageParams はそのまま
-      else {
+
+      // 配列: {0}, {1}, ... として展開
+      else if (Array.isArray(params)) {
+        finalParams = params.reduce((acc, v, i) => {
+          acc[i] = typeof v === 'string' || typeof v === 'number' ? v : String(v);
+          return acc;
+        }, {} as MessageParams);
+      }
+
+      // 文字列 / 数値 → {0}
+      else if (typeof params === 'string' || typeof params === 'number') {
+        finalParams = { 0: params };
+      }
+
+      // オブジェクト → 名前付き置換
+      else if (typeof params === 'object') {
         finalParams = params as MessageParams;
       }
     }
@@ -79,14 +84,32 @@ export class LoggerEx {
       delete finalParams.error;
     }
 
+    // Debug 強制タグ
+    const forcedDebug = (finalParams as any).__forceDebug;
+    if (forcedDebug) {
+      // 表示用に削除
+      delete (finalParams as any).__forceDebug;
+    }
+
     // messageHelper から i18n メッセージを取得
     const message = messageHelper.get(msgId, finalParams);
 
     // タイムスタンプ生成
     const timestamp = new Date().toISOString();
 
-    // 出力フォーマット: [タイムスタンプ] [レベル] [メッセージID] メッセージ本文
-    const formatted = `[${timestamp}] [${level.toUpperCase()}] [${msgId}] ${message}`;
+    /**
+     * 出力フォーマット:
+     * 標準: [タイムスタンプ] [レベル] [メッセージID] メッセージ本文
+     * 強制Debug時: [タイムスタンプ] [DEBUG-FORCED] [メッセージID] メッセージ本文
+     */
+    const tag = forcedDebug ? 'DEBUG-FORCED' : level.toUpperCase();
+    const formatted = `[${timestamp}] [JP_Radio] [${tag}] [${msgId}] ${message}`;
+
+    // 強制debug → info扱い
+    if (forcedDebug) {
+      this.logger.info(formatted);
+      return;
+    }
 
     // Volumio Logger に出力
     switch (level) {
@@ -98,23 +121,31 @@ export class LoggerEx {
   }
 
   /** info ログ出力 */
-  public info(paramsId: string, params?: MessageParams | [string, unknown][] | string | number | Error): void {
+  public info(paramsId: string, params?: any): void {
     this.log('info', paramsId, params);
   }
 
   /** warn ログ出力 */
-  public warn(paramsId: string, params?: MessageParams | [string, unknown][] | string | number | Error): void {
+  public warn(paramsId: string, params?: any): void {
     this.log('warn', paramsId, params);
   }
 
   /** error ログ出力 */
-  public error(paramsId: string, params?: MessageParams | [string, unknown][] | string | number | Error): void {
+  public error(paramsId: string, params?: any): void {
     this.log('error', paramsId, params);
   }
 
   /** debug ログ出力 */
-  public debug(paramsId: string, params?: MessageParams | [string, unknown][] | string | number | Error): void {
-    this.log('debug', paramsId, params);
+  public debug(paramsId: string, params?: any): void {
+    if (this.forceDebug) {
+      // 強制時: debug を info で出しつつタグ付与
+      this.log('info', paramsId, {
+        ...(typeof params === 'object' && params ? params : {}),
+        __forceDebug: true
+      });
+    } else {
+      this.log('debug', paramsId, params);
+    }
   }
 
   /**

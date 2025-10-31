@@ -34,7 +34,9 @@ class JpRadioController {
     this.logger = new LoggerEx(context.logger);
 
     // Volumio の sharedVars から言語コード取得
-    const lang = this.commandRouter.sharedVars.get('language_code') || 'ja';
+    //const lang = this.commandRouter.sharedVars.get('language_code') || 'ja';
+
+    const lang = 'ja'
 
     // 共通 messageHelper に言語を設定
     messageHelper.setLanguage(lang);
@@ -42,6 +44,9 @@ class JpRadioController {
     // LoggerEx 内でも messageHelper を参照できるように設定
     // （LoggerEx 内のログ出力で i18n 文字列が使える）
     this.logger.setLanguage(lang);
+
+    // journalctl / livelog に debug も表示させる
+    this.logger.enableForceDebug(true);
   }
 
 //-----------------------------------------------------------------------
@@ -166,15 +171,15 @@ class JpRadioController {
 //-----------------------------------------------------------------------
 
   public getUIConfig(): Promise<any> {
-    this.logger.debug('CTRLD0004');
-
     const defer = libQ.defer();
     const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
+    this.logger.debug('CTRLD0004', langCode);
+
     this.commandRouter.i18nJson(
-      `${__dirname}/i18n/strings_${langCode}.json`,
-      `${__dirname}/i18n/strings_en.json`,
-      `${__dirname}/UIConfig.json`
+      `${__dirname}/../i18n/strings_${langCode}.json`,
+      `${__dirname}/../i18n/strings_en.json`,
+      `${__dirname}/../UIConfig.json`
     )
     .then((uiconf: any) => {
       // ネットワーク設定
