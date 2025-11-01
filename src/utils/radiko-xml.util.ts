@@ -1,8 +1,13 @@
-// src/utils/radiko-xml-util.ts
 import { XMLParser } from 'fast-xml-parser';
-import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
+
+// 定数のインポート
 import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
+
+// Modelのインポート
+import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
 import { RadikoProgramData } from '../models/radiko-program.model';
+
+// Utilsのインポート
 import { broadcastTimeConverter } from './broadcast-time-converter.util';
 import { DBUtil } from './db.util';
 
