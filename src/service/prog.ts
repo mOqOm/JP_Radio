@@ -83,11 +83,11 @@ export default class RdkProg {
           this.lastStationId = stationId;
           this.lastTime = time;
         } else {
-          this.logger.error(`RdkProg.findProgram: NOT FOUND ${stationId},${time}`);
+          this.logger.error('RKPG0001E0001', stationId, time);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
       } catch {
-        this.logger.error(`RdkProg.DB find error for station ${stationId}`);
+        this.logger.error('RKPG0001E0002', stationId);
         this.cachedProgram = { ...EMPTY_PROGRAM };
       }
     }
@@ -101,7 +101,7 @@ export default class RdkProg {
       await this.dbUtil.insert(prog);
     } catch (error: any) {
       if (error?.errorType !== 'uniqueViolated') {
-        this.logger.error('RdkProg.DB insert error', error);
+        this.logger.error('RKPG0001E0003', error);
       }
     }
   }
@@ -110,16 +110,16 @@ export default class RdkProg {
   public async clearOldProgram(): Promise<void> {
     try {
       this.dbUtil.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
-        .then(n => this.logger.info(`RdkProg.clearOldProgram: Removed ${n}`));
+        .then(n => this.logger.debug('RKPG0001D0001', n));
     } catch {
-      this.logger.error('RdkProg.DB delete error');
+      this.logger.error('RKPG0001E0004');
     }
     await this.dbCount();
   }
 
   /** 全エリア更新（boot / cron） */
   public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
-    this.logger.info(`RdkProg.updatePrograms: [${whenBoot ? 'boot' : 'cron'}]`);
+    this.logger.debug('RKPG0001D0002', (whenBoot ? 'boot' : 'cron'));
     const limit = pLimit(5);
     const doneStations = new Set<string>();
 
@@ -168,7 +168,7 @@ export default class RdkProg {
 
   /** URLからXML取得 → XML解析 → DB登録 */
   private async getPrograms(url: string, skipStations: Set<string> = new Set()): Promise<Set<string>> {
-    this.logger.info(`RdkProg.getPrograms: ${url}`);
+    this.logger.debug('RKPG0001D0003', url);
     const doneStations = new Set<string>();
 
     try {
@@ -184,9 +184,9 @@ export default class RdkProg {
 
     } catch (error) {
       if (error instanceof Error) {
-        this.logger.error(`RdkProg: Failed to update for URL ${url}`, error);
+        this.logger.error('RKPG0001E0005', url, error);
       } else {
-        this.logger.error(`RdkProg: Failed to update for URL ${url} - ${String(error)}`);
+        this.logger.error('RKPG0001E0005', url, String(error));
       }
     }
 
@@ -197,7 +197,7 @@ export default class RdkProg {
   /** DBクリア */
   public async dbClose(): Promise<void> {
     await this.db.remove({}, { multi: true })
-      .then(n => this.logger.info(`RdkProg.dbClose: Removed ${n}`));
+      .then(n => this.logger.debug('RKPG0001D0004', n));
   }
 
   /** 全件取得（デバッグ用） */
@@ -208,7 +208,7 @@ export default class RdkProg {
   /** 件数ログ出力 */
   public async dbCount(): Promise<number> {
     const count = await this.dbUtil.count({});
-    this.logger.info(`RdkProg.dbCount: ${count}`);
+    this.logger.info('RKPG0001D0005', count);
     return count;
   }
 
