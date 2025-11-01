@@ -20,10 +20,10 @@ describe('LoggerEx', () => {
 
     // LoggerEx のインスタンス作成
     const dummyLogger: Logger = {
-      info: jest.fn(),   // info ログ用モック
-      warn: jest.fn(),   // warn ログ用モック
-      error: jest.fn(),  // error ログ用モック
-      debug: jest.fn()   // debug ログ用モック
+      info: jest.fn(), // info ログ用モック
+      warn: jest.fn(), // warn ログ用モック
+      error: jest.fn(), // error ログ用モック
+      debug: jest.fn() // debug ログ用モック
     } as unknown as Logger;
 
     // LoggerEx に dummyLogger とサービス名を渡して初期化
@@ -59,21 +59,21 @@ describe('LoggerEx', () => {
     logger.info('TEST001', 'InfoMessage');
     const infoLogged = (logger as any).logger.info.mock.calls[0][0] as string;
     process.stdout.write(`INFOログ: ${infoLogged}\n`);
-    // assert
+    // Assert
     expect(infoLogged).toMatch(/InfoMessage/);
 
     // warn
     logger.warn('TEST002', 'WarnMessage');
     const warnLogged = (logger as any).logger.warn.mock.calls[0][0] as string;
     process.stdout.write(`WARNログ: ${warnLogged}\n`);
-    // assert
+    // Assert
     expect(warnLogged).toMatch(/WarnMessage/);
 
     // error
     logger.error('TEST003', 'ErrorMessage');
     const errorLogged = (logger as any).logger.error.mock.calls[0][0] as string;
     process.stdout.write(`ERRORログ: ${errorLogged}\n`);
-    // assert
+    // Assert
     expect(errorLogged).toMatch(/ErrorMessage/);
 
     // debug
@@ -81,7 +81,7 @@ describe('LoggerEx', () => {
     // forceDebug は有効化していないので debug が呼ばれる
     const debugLogged = (logger as any).logger.debug.mock.calls[0][0] as string;
     process.stdout.write(`DEBUGログ: ${debugLogged}\n`);
-    // assert
+    // Assert
     expect(debugLogged).toMatch(/DebugMessage/);
   });
 
@@ -110,7 +110,10 @@ describe('LoggerEx', () => {
 
     logger.enableForceDebug(true);
 
-    logger.info('TEST006', { user: 'Alice', action: 'Play' });
+    logger.info('TEST006', {
+      user: 'Alice',
+      action: 'Play'
+    });
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
     process.stdout.write(`ログ: ${logged}\n`);
@@ -133,13 +136,17 @@ describe('LoggerEx', () => {
     process.stdout.write(`ログ: ${logged}\n`);
     expect(logged).toMatch(/12345/);
   });
-  
+
   test('Success0005_オブジェクトをログに出力できること(Object.entries対応)', () => {
     // メッセージテンプレート設定
     (messageHelper as any).messages['TEST_OBJECT'] = '{0}';
 
     // ログ対象オブジェクト
-    const obj = { user: 'Alice', action: 'Login', role: 'admin' };
+    const obj = {
+      user: 'Alice',
+      action: 'Login',
+      role: 'admin'
+    };
 
     logger.info('TEST_OBJECT', obj);
 
