@@ -87,20 +87,21 @@ export class MessageHelper {
 
     // 数字インデックス置換 {0}, {1}, ...
     return template.replace(/\{(\d+)\}/g, (_, index) => {
-        const idx = parseInt(index, 10);
-        const val = params[idx];
+      const idx = parseInt(index, 10);
+      const val = params[idx];
 
-        if (val === undefined) return `{${index}}`;
+      if (val === undefined) return `{${index}}`;
 
-        if (typeof val === 'object' && val !== null) {
-            return JSON.stringify(val);
-        }
+      // オブジェクトかつ文字列化が必要な場合のみ JSON 化
+      if (typeof val === 'object' && val !== null) {
+          return Array.isArray(val) ? JSON.stringify(val) : JSON.stringify(val);
+      }
 
-        return String(val);
+      // 文字列・数値はそのまま
+      return String(val);
     });
   }
-
-}  
+}
 
 /** シングルトンインスタンス */
 export const messageHelper = new MessageHelper();

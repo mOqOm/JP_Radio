@@ -49,83 +49,44 @@ export class LoggerEx {
     public debug(msgId: string, ...params: (string | number | MessageParams | Error)[]): void {
         if (this.forceDebug) {
             // debug → info に昇格 + __forceDebug タグ付与
-            this.log('info', msgId, [...params, { __forceDebug: true }]);
+            this.log('info', msgId, ...params, { __forceDebug: true });
         } else {
-            this.log('debug', msgId, params);
+            this.log('debug', msgId, ...params);
         }
     }
 
     /** info ログ出力 */
     public info(msgId: string, ...params: (string | number | MessageParams | Error)[]): void {
-        this.log('info', msgId, params);
+        this.log('info', msgId, ...params);
     }
 
     /** warn ログ出力 */
     public warn(msgId: string, ...params: (string | number | MessageParams | Error)[]): void {
-        this.log('warn', msgId, params);
+        this.log('warn', msgId, ...params);
     }
 
     /** error ログ出力 */
     public error(msgId: string, ...params: (string | number | MessageParams | Error)[]): void {
-        this.log('error', msgId, params);
+        this.log('error', msgId, ...params);
     }
 
     /**
      * 内部ログ処理
      */
-    private log(level: LogLevel, msgId: string, params?: any): void {
-        let finalParams: MessageParams = {};
-
-        if (params !== undefined) {
-            // Error オブジェクトを安全に展開
-            if (params instanceof Error) {
-                finalParams.errorMessage = params.message;
-                finalParams.errorStack = params.stack ?? '';
-            }
-            // 配列の場合 (可変長引数)
-            else if (Array.isArray(params)) {
-                finalParams = params.reduce((acc, v, i) => {
-                    if (v instanceof Error) {
-                        acc.errorMessage = v.message;
-                        acc.errorStack = v.stack ?? '';
-                    } else if (typeof v === 'string' || typeof v === 'number') {
-                        acc[i] = v;
-                    } else if (typeof v === 'object') {
-                        // 配列内オブジェクトはマージ
-                        Object.assign(acc, v);
-                    }
-                    return acc;
-                }, {} as MessageParams);
-            }
-            // 単値
-            else if (typeof params === 'string' || typeof params === 'number') {
-                finalParams = { 0: params };
-            }
-            // オブジェクト
-            else if (typeof params === 'object') {
-                finalParams = params;
-            }
-        }
-
-        // __forceDebug がある場合はタグ付与
-        const forcedDebug = (finalParams as any).__forceDebug;
-        if (forcedDebug) {
-            delete (finalParams as any).__forceDebug;
-        }
-
+    private log(level: LogLevel, msgId: string, ...params: any[]): void {
         // messageHelper から i18n メッセージ取得
-        const message = messageHelper.get(msgId, finalParams);
+        const message = messageHelper.get(msgId, ...params);
 
         // タイムスタンプ生成
         const timestamp = new Date().toISOString();
 
         // 出力フォーマット
-        const tag = forcedDebug ? 'DEBUG-FORCED' : level.toUpperCase();
+        const tag = this.forceDebug ? 'DEBUG-FORCED' : level.toUpperCase();
         const serviceTag = this.serviceName ? `[${this.serviceName}] ` : '';
         const formatted = `[${timestamp}] ${serviceTag}[${tag}] [${msgId}] ${message}`;
 
         // 強制 debug → info 扱い
-        if (forcedDebug) {
+        if (this.forceDebug) {
             this.logger.info(formatted);
             return;
         }
