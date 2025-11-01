@@ -6,7 +6,7 @@ import Datastore from 'nedb-promises';
  * inMemoryOnly(true) により、メモリDBとして動作（永続化しない）
  */
 export class DBUtil<T> {
-  private db: Datastore;
+  private db: Datastore<T>;
 
   constructor() {
     // メモリ内データベース
