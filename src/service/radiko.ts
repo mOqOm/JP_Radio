@@ -49,36 +49,37 @@ export default class Radiko {
     this.areaIDs = areaIDs;
   }
 
-  public async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<string[]> {
-    this.logger.info('RADI0001I0001');
-    if (acct) {
-      this.logger.info('RADI0001I0002');
-      const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
-        this.cookieJar = jar;
-        return this.checkLogin();
-      });
-      this.loginState = loginOK;
-    }
+  public async init(acct: LoginAccount | null = null, forceGetStations = false):
+    Promise<string[]> {
+      this.logger.info('RADI0001I0001');
+      if (acct) {
+        this.logger.info('RADI0001I0002');
+        const loginOK = await this.checkLogin() ? ? await this.login(acct).then(
+          jar => {
+            this.cookieJar = jar;
+            return this.checkLogin();
+          });
+        this.loginState = loginOK;
+      }
 
-    if (forceGetStations || !this.myAreaId) {
-      [this.token, this.myAreaId] = await this.getToken();
-      await this.getStations();
+      if (forceGetStations || !this.myAreaId) {
+        [this.token, this.myAreaId] = await this.getToken();
+        await this.getStations();
+      }
+      return [this.myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? '']
     }
-    return [this.myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? '']
-  }
 
   private async login(acct: LoginAccount): Promise<CookieJar> {
     this.logger.info('RADI0001I0003');
     const jar = new tough.CookieJar();
     try {
-      await got.post(LOGIN_URL, {
-        cookieJar: jar,
-        form: acct
-      });
+      await got.post(LOGIN_URL, { cookieJar: jar, form: acct });
       return jar;
 
     } catch (err: any) {
-      if (err.statusCode === 302) return jar;
+      if (err.statusCode === 302) {
+        return jar;
+      }
       this.logger.error('RADI0001E0001', err);
       throw err;
     }
@@ -162,8 +163,6 @@ export default class Radiko {
     return res.body;
   }
 
-//-----------------------------------------------------------------------
-
   private async getStations(): Promise<void> {
     this.logger.info('RADI0001I0011');
     const startTime = Date.now();
@@ -175,17 +174,17 @@ export default class Radiko {
     const fullParsed = xmlParser.parse(fullRes.body);
     const regionData: RegionData[] = fullParsed.region.stations.map((region: any) => ({
       region_name: region['@region_name'],
-      region_id  : region['@region_id'],
-      ascii_name : region['@ascii_name'],
+      region_id: region['@region_id'],
+      ascii_name: region['@ascii_name'],
       stations: region.station.map((s: any) => ({
-        id        : String(s.id), // FM802対策
-        name      : s.name,
+        id: String(s.id), // FM802対策
+        name: s.name,
         ascii_name: s.ascii_name,
-        areafree  : s.areafree,
-        timefree  : s.timefree,
-        logo      : s.logo[2]['#text'],
-        banner    : s.banner,
-        area_id   : s.area_id,
+        areafree: s.areafree,
+        timefree: s.timefree,
+        logo: s.logo[2]['#text'],
+        banner: s.banner,
+        area_id: s.area_id,
       })),
     }));
 
@@ -194,7 +193,7 @@ export default class Radiko {
     const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     await Promise.all(
       areaIDs.map((areaId) =>
-        limit(async () => {
+        limit(async() => {
           const res = await got(format(STATION_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
           const stations = parsed.stations.station.map((s: any) => s.id);
@@ -226,18 +225,31 @@ export default class Radiko {
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
           const areaKanji = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
           const logoFile = this.saveStationLogoCache(station.logo, `${station.id}_logo.png`);
-          this.stations.set(station.id, {   // 'TBS'
-            RegionName: region.region_name, // '関東'
-            BannerURL : station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
-            LogoURL   : logoFile,           // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
-            AreaId    : station.area_id,    // 'JP13'
-            AreaName  : areaName,           // 'TOKYO'
-            AreaKanji : areaKanji,          // '東京'
-            Name      : station.name,       // 'TBSラジオ'
-            AsciiName : station.ascii_name, // 'TBS RADIO'
-            AreaFree  : station.areafree,   // '1'
-            TimeFree  : station.timefree    // '1'
-          });
+          this.stations.set(
+            // 'TBS'
+            station.id, {
+              // '関東'
+              RegionName: region.region_name,
+              // 'http://radiko.jp/res/banner/radiko_banner.png'
+              BannerURL: station.banner,
+              // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
+              LogoURL: logoFile,
+              // 'JP13'
+              AreaId: station.area_id,
+              // 'TOKYO'
+              AreaName: areaName,
+              // '東京'
+              AreaKanji: areaKanji,
+              // 'TBSラジオ'
+              Name: station.name,
+              // 'TBS RADIO'
+              AsciiName: station.ascii_name,
+              // '1'
+              AreaFree: station.areafree,
+              // '1'
+              TimeFree: station.timefree
+            }
+          );
         }
       }
     }
@@ -251,12 +263,15 @@ export default class Radiko {
     const logoPath = `music_service/jp_radio/dist/assets/images/${logoFile}`;
     const fullPath = '/data/plugins/' + logoPath;
     try {
-      fs.statSync(fullPath); // ファイルの存在確認
-    } catch(e) {
+      // ファイルの存在確認
+      fs.statSync(fullPath);
+    } catch (e) {
       // 透過PNGは見栄えが悪いので白バックPNGに変換して保存
       execFile('ffmpeg', ['-n', '-i', logoUrl, fullPath,
-          '-filter_complex', 'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1'], (err: any) => {
-        if (err)  return logoUrl;
+        '-filter_complex',
+        'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1'
+      ], (err: any) => {
+        if (err) return logoUrl;
       });
       this.logger.info('RADI0001I0013', logoUrl, logoFile);
     }
@@ -275,60 +290,63 @@ export default class Radiko {
     return this.stations?.get(stationId)?.AsciiName ?? '';
   }
 
-//-----------------------------------------------------------------------
+  //-----------------------------------------------------------------------
 
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
-    if (!this.stations?.has(stationId)) {
-      this.logger.warn('RADI0001W0001', stationId);
-      return null;
-    }
-    var url = format(PLAY_LIVE_URL, stationId);
-    var aac = '';
-    if (query.ft && query.to) {
-      const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
-      const to = broadcastTimeConverter.revConvertRadioTime(query.to);
-      url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
-      //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
-    }
-    this.logger.info('RADI0001I0014', url);
+      if (!this.stations ? .has(stationId)) {
+        this.logger.warn('RADI0001W0001', stationId);
+        return null;
+      }
+      var url = format(PLAY_LIVE_URL, stationId);
+      var aac = '';
+      if (query.ft && query.to) {
+        const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
+        const to = broadcastTimeConverter.revConvertRadioTime(query.to);
+        url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
+        //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
+      }
+      this.logger.info('RADI0001I0014', url);
 
-    let m3u8: string | null = null;
-    for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.myAreaId] = await this.getToken();
-      m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-      if (m3u8) break;
-      this.logger.info('RADI0001I0015');
-      this.token = '';
+      let m3u8: string | null = null;
+      for (let i = 0; i<MAX_RETRY_COUNT; i++) {
+        if (!this.token)[this.token, this.myAreaId] = await this.getToken();
+        m3u8 = await this.genTempChunkM3u8URL(url, this.token);
+        if (m3u8) break;
+        this.logger.info('RADI0001I0015');
+        this.token = '';
+      }
+
+      if (m3u8) {
+        const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`,
+          '-i', m3u8, //'-ss', `${query.seek ?? 0}`,
+          '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'
+        ];
+        if (aac) args.push(aac);
+        //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
+        return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
+      } else {
+        this.logger.error('RADI0001E0003');
+        return null;
+      }
     }
-    
-    if (m3u8) {
-      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, //'-ss', `${query.seek ?? 0}`,
-        '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
-      if (aac) args.push(aac);
-      //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
-      return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
-    } else {
-      this.logger.error('RADI0001E0003');
-      return null;
-    }
-  }
 
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
-    try {
-      const res = await got(url, {
-        headers: {
-          'X-Radiko-AuthToken': token,
-          'X-Radiko-App': 'pc_html5',
-          'X-Radiko-App-Version': '0.0.1',
-          'X-Radiko-User': 'dummy_user',
-          'X-Radiko-Device': 'pc',
-        },
-      });
-      //this.logger.info(`JP_Radio::Radiko.genTempChunkM3u8URL: ${res.body}`);
-      return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
-    } catch (error) {
-      this.logger.error('RADI0001E0004');
-      return null;
+      try {
+        const res = await got(url, {
+          headers: {
+            'X-Radiko-AuthToken': token,
+            'X-Radiko-App': 'pc_html5',
+            'X-Radiko-App-Version': '0.0.1',
+            'X-Radiko-User': 'dummy_user',
+            'X-Radiko-Device': 'pc',
+          },
+        });
+        //this.logger.info(`JP_Radio::Radiko.genTempChunkM3u8URL: ${res.body}`);
+        return res.body.split('\n').find(line => line.startsWith('http') &&
+          line.endsWith('.m3u8')) ? ? null;
+      } catch (error) {
+        this.logger.error('RADI0001E0004');
+        return null;
+      }
     }
-  }
 }
