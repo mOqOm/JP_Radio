@@ -8,18 +8,21 @@ import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
 
-import type { StationInfo, RegionData } from '../models/station.model';
-import type { LoginAccount, LoginState } from '../models/auth.model';
+// 定数のインポート
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
   AUTH_KEY, MAX_RETRY_COUNT
 } from '../constants/radiko-urls.constants';
 
-//import { RadioTime } from './radio-time';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
+// Modelのインポート
+import type { StationInfo, RegionData } from '../models/station.model';
+import type { LoginAccount, LoginState } from '../models/auth.model';
+
+// Utilsのインポート
 import { LoggerEx } from '../utils/logger';
 import { MessageHelper } from '../utils/message-helper';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
