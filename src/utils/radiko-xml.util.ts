@@ -3,8 +3,8 @@ import { XMLParser } from 'fast-xml-parser';
 import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
 import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
 import { RadikoProgramData } from '../models/radiko-program.model';
-import { broadcastTimeConverter } from './broadcast-time-converter';
-import { DBUtil } from './db-util';
+import { broadcastTimeConverter } from './broadcast-time-converter.util';
+import { DBUtil } from './db.util';
 
 export class RadikoXmlUtil {
   private readonly dbUtil: DBUtil<RadikoProgramData>;

@@ -13,9 +13,9 @@ import type { StationInfo } from '../models/station.model';
 import type { RadikoProgramData } from '../models/radiko-program.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger';
-import { MessageHelper } from '../utils/message-helper';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
+import { LoggerEx } from '../utils/logger.util';
+import { MessageHelper } from '../utils/message-helper.util';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
 
 export default class JpRadio {
   private readonly app: Application;

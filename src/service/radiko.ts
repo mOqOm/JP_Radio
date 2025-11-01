@@ -20,9 +20,9 @@ import type { StationInfo, RegionData } from '../models/station.model';
 import type { LoginAccount, LoginState } from '../models/auth.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger';
-import { MessageHelper } from '../utils/message-helper';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter';
+import { LoggerEx } from '../utils/logger.util';
+import { MessageHelper } from '../utils/message-helper.util';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
