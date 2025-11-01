@@ -3,12 +3,7 @@ import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 import Datastore from 'nedb-promises';
 
-import { LoggerEx } from '../utils/logger.util';
-import { MessageHelper } from '../utils/message-helper.util';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
-import { DBUtil } from '../utils/db.util';
-import { RadikoXmlUtil } from '../utils/radiko-xml.util';
-
+// 定数のインポート
 import {
   PROG_DATE_AREA_URL,
   PROG_NOW_AREA_URL,
@@ -17,7 +12,15 @@ import {
   PROG_WEEKLY_STATION_URL
 } from '../constants/radiko-urls.constants';
 
+// Modelのインポート
 import type { RadikoProgramData } from '../models/radiko-program.model';
+
+// Utilsのインポート
+import { LoggerEx } from '../utils/logger.util';
+import { MessageHelper } from '../utils/message-helper.util';
+import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
+import { DBUtil } from '../utils/db.util';
+import { RadikoXmlUtil } from '../utils/radiko-xml.util';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   stationId: '',
@@ -119,25 +122,24 @@ export default class RdkProg {
 
   /** 全エリア更新（boot / cron） */
   public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
-    this.logger.debug('RKPG0001D0002', (whenBoot ? 'boot' : 'cron'));
-    const limit = pLimit(5);
-    const doneStations = new Set<string>();
+      this.logger.debug('RKPG0001D0002', (whenBoot ? 'boot' : 'cron'));
+      const limit = pLimit(5);
+      const doneStations = new Set<string> ();
 
-    await Promise.all(
-      areaIdArray.map(areaId =>
-        limit(async () => {
-          const url = whenBoot
-            ? utilFormat(PROG_TODAY_AREA_URL, areaId)
-            : utilFormat(PROG_DATE_AREA_URL, broadcastTimeConverter.getCurrentDate(), areaId);
+      await Promise.all(
+        areaIdArray.map(areaId =>
+          limit(async() => {
+            const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) :
+              utilFormat(PROG_DATE_AREA_URL, broadcastTimeConverter.getCurrentDate(), areaId);
 
-          const stations = await this.getPrograms(url, doneStations);
-          stations.forEach(s => doneStations.add(s));
-        })
-      )
-    );
+            const stations = await this.getPrograms(url, doneStations);
+            stations.forEach(s => doneStations.add(s));
+          })
+        )
+      );
 
-    return doneStations.size;
-  }
+      return doneStations.size;
+    }
 
   /** 日付×エリア取得 */
   public async getDateAreaPrograms(areaId: string, time: string): Promise<Set<string>> {

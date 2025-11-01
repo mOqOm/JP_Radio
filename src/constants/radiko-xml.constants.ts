@@ -3,9 +3,12 @@
  * fast-xml-parser 用
  */
 export const RADIKO_XML_PARSER_OPTIONS = {
-  attributeNamePrefix: '@',   // XML属性は @ でプレフィックス
-  ignoreAttributes: false,    // 属性もオブジェクトに含める
-  allowBooleanAttributes: true, // boolean属性も許可
+  // XML属性は @ でプレフィックス
+  attributeNamePrefix: '@',
+  // 属性もオブジェクトに含める
+  ignoreAttributes: false,
+  // boolean属性も許可
+  allowBooleanAttributes: true,
 };
 
 /**
@@ -13,13 +16,22 @@ export const RADIKO_XML_PARSER_OPTIONS = {
  * XML -> RadikoProgramData へのマッピングに使用
  */
 export const RADIKO_XML_FIELDS = {
-  stationId: '@id',  // 局ID
-  progs: 'progs',    // 番組リスト
-  prog: 'prog',      // 番組情報
-  from: '@ft',       // 開始時刻
-  to: '@to',         // 終了時刻
-  title: 'title',    // 番組タイトル
-  info: 'info',      // 番組詳細
-  pfm: 'pfm',        // パーソナリティ
-  img: 'img',        // 画像URL
+  // 局ID
+  stationId: '@id',
+  // 番組リスト
+  progs: 'progs',
+  // 番組情報
+  prog: 'prog',
+  // 開始時刻
+  from: '@ft',
+  // 終了時刻
+  to: '@to',
+  // 番組タイトル
+  title: 'title',
+  // 番組詳細
+  info: 'info',
+  // パーソナリティ
+  pfm: 'pfm',
+  // 画像URL
+  img: 'img',
 };
