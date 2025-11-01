@@ -110,7 +110,7 @@ describe('LoggerEx', () => {
 
     logger.enableForceDebug(true);
 
-    logger.debug('TEST006', { user: 'Alice', action: 'Play' });
+    logger.info('TEST006', { user: 'Alice', action: 'Play' });
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
     process.stdout.write(`ログ: ${logged}\n`);
