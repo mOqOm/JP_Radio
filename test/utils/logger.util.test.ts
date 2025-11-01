@@ -26,37 +26,6 @@ describe('LoggerEx', () => {
       debug: jest.fn()   // debug ログ用モック
     } as unknown as Logger;
 
-    // messageHelper.get をモックして、渡された params を文字列に変換して返す
-    jest.spyOn(messageHelper, 'get').mockImplementation((id: string, params?: any) => {
-      const template = (messageHelper as any).messages[id] ?? `[Unknown message ID: ${id}]`;
-
-      if (params === undefined || params === null) return template;
-
-      // 配列 → {0},{1},...
-      if (Array.isArray(params)) {
-        return template.replace(/\{(\d+)\}/g, (_: string, idx: string) => {
-          const i = parseInt(idx, 10);
-          return params[i] !== undefined ? String(params[i]) : `{${i}}`;
-        });
-      }
-
-      // オブジェクト → 名前付き置換 + JSON化
-      if (typeof params === 'object' && !Array.isArray(params)) {
-        // テンプレートのキー置換
-        let replaced = template.replace(/\{(\w+)\}/g, (_: string, key: string) => {
-          return params[key] !== undefined ? String(params[key]) : `{${key}}`;
-        });
-        // プレースホルダが残っている場合は JSON 表示
-        if (replaced.includes('{')) {
-          replaced = JSON.stringify(params);
-        }
-        return replaced;
-      }
-
-      // 単値 → {0}置換
-      return template.replace(/\{0\}/g, String(params));
-    });
-
     // LoggerEx に dummyLogger とサービス名を渡して初期化
     logger = new LoggerEx(dummyLogger, 'jp_radio');
   });
