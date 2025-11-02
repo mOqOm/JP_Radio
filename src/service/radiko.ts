@@ -9,13 +9,14 @@ import fs from 'fs';
 
 // 定数のインポート
 import {
- STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
- MAX_RETRY_COUNT
+  STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
+  MAX_RETRY_COUNT
 } from '@/constants/radiko-urls.constants';
 
 // Modelのインポート
 import type { StationInfo, RegionData } from '@/models/station.model';
 import type { LoginAccount, LoginState } from '@/models/auth.model';
+import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
 
 // Logicのインポート
 import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
@@ -25,12 +26,7 @@ import { LoggerEx } from '@/utils/logger.util';
 import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
-const xmlParser = new XMLParser({
-  attributeNamePrefix: '@',
-  ignoreAttributes: false,
-  removeNSPrefix: true,
-  allowBooleanAttributes: true,
-});
+const xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
 
 export default class RadikoService {
   private readonly logger: LoggerEx;

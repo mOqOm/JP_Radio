@@ -9,6 +9,8 @@ export const RADIKO_XML_PARSER_OPTIONS = {
   ignoreAttributes: false,
   // boolean属性も許可
   allowBooleanAttributes: true,
+  // 名前空間のプレフィックスを削除（xmlnsなどを無視）
+  removeNSPrefix: true,
 };
 
 /**
