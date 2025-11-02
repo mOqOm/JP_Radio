@@ -10,17 +10,17 @@ import {
   PROG_TODAY_AREA_URL,
   PROG_DAILY_STATION_URL,
   PROG_WEEKLY_STATION_URL
-} from '../constants/radiko-urls.constants';
+} from '@/constants/radiko-urls.constants';
 
 // Modelのインポート
-import type { RadikoProgramData } from '../models/radiko-program.model';
+import type { RadikoProgramData } from '@/models/radiko-program.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger.util';
-import { MessageHelper } from '../utils/message-helper.util';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
-import { DBUtil } from '../utils/db.util';
-import { RadikoXmlUtil } from '../utils/radiko-xml.util';
+import { LoggerEx } from '@/utils/logger.util';
+import { MessageHelper } from '@/utils/message-helper.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
+import { DBUtil } from '@/utils/db.util';
+import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   stationId: '',

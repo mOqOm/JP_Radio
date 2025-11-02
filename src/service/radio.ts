@@ -7,15 +7,15 @@ import RdkProg from './prog';
 import Radiko from './radiko';
 
 // Modelのインポート
-import type { LoginAccount } from '../models/auth.model';
-import type { BrowseItem, BrowseList, BrowseResult } from '../models/browse-result.model';
-import type { StationInfo } from '../models/station.model';
-import type { RadikoProgramData } from '../models/radiko-program.model';
+import type { LoginAccount } from '@/models/auth.model';
+import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-result.model';
+import type { StationInfo } from '@/models/station.model';
+import type { RadikoProgramData } from '@/models/radiko-program.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger.util';
-import { MessageHelper } from '../utils/message-helper.util';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
+import { LoggerEx } from '@/utils/logger.util';
+import { MessageHelper } from '@/utils/message-helper.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
 export default class JpRadio {
   private readonly app: Application;
@@ -109,7 +109,7 @@ export default class JpRadio {
 
         this.playing.stationId = stationId;
         this.playing.timeFree = (query.ft && query.to) ? `${query.ft}-${query.to}` : '';
-        this.playing.seek = query.seek ? ? '';
+        this.playing.seek = query.seek ?? '';
 
         // max60sも待ちたくないのですぐ呼ぶ
         setTimeout(this.pushSongState.bind(this), 3000);
@@ -585,14 +585,14 @@ export default class JpRadio {
     }
   }
 
-  async# init(): Promise<void> {
+  async #init(): Promise<void> {
     this.logger.info('JP_Radio::JpRadio.#init start...');
     if (this.rdk)[this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.rdk.init(this.acct);
     await this.#pgupdate(true);
     this.logger.info(`JP_Radio::JpRadio.#init: ## COMPLETED myInfo=${Object.entries(this.myInfo)} ##`);
   }
 
-  async# pgupdate(whenBoot = false): Promise<void> {
+  async #pgupdate(whenBoot = false): Promise<void> {
     this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
     if (this.prg) {
       const updateStartTime = Date.now();

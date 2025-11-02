@@ -5,19 +5,19 @@ import { format } from 'util';
 import { parse as queryParse } from 'querystring';
 
 // 定数のインポート
-import { AreaNames } from '../constants/area-name.constants';
+import { AreaNames } from '@/constants/area-name.constants';
 
 // Modelのインポート
-import type { LoginAccount } from '../models/auth.model';
-import type { BrowseResult } from '../models/browse-result.model';
+import type { LoginAccount } from '@/models/auth.model';
+import type { BrowseResult } from '@/models/browse-result.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger.util';
-import { messageHelper } from '../utils/message-helper.util';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
+import { LoggerEx } from '@/utils/logger.util';
+import { messageHelper } from '@/utils/message-helper.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
 // Seviceのインポート
-import JpRadio from '../service/radio';
+import JpRadio from '@/service/radio';
 
 export = JpRadioController;
 

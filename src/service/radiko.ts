@@ -13,16 +13,16 @@ import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
   AUTH_KEY, MAX_RETRY_COUNT
-} from '../constants/radiko-urls.constants';
+} from '@/constants/radiko-urls.constants';
 
 // Modelのインポート
-import type { StationInfo, RegionData } from '../models/station.model';
-import type { LoginAccount, LoginState } from '../models/auth.model';
+import type { StationInfo, RegionData } from '@/models/station.model';
+import type { LoginAccount, LoginState } from '@/models/auth.model';
 
 // Utilsのインポート
-import { LoggerEx } from '../utils/logger.util';
-import { MessageHelper } from '../utils/message-helper.util';
-import { broadcastTimeConverter } from '../utils/broadcast-time-converter.util';
+import { LoggerEx } from '@/utils/logger.util';
+import { MessageHelper } from '@/utils/message-helper.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -54,7 +54,7 @@ export default class Radiko {
       this.logger.info('RADI0001I0001');
       if (acct) {
         this.logger.info('RADI0001I0002');
-        const loginOK = await this.checkLogin() ? ? await this.login(acct).then(
+        const loginOK = await this.checkLogin() ?? await this.login(acct).then(
           jar => {
             this.cookieJar = jar;
             return this.checkLogin();
@@ -290,10 +290,8 @@ export default class Radiko {
     return this.stations?.get(stationId)?.AsciiName ?? '';
   }
 
-  //-----------------------------------------------------------------------
-
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
-      if (!this.stations ? .has(stationId)) {
+      if (!this.stations?.has(stationId)) {
         this.logger.warn('RADI0001W0001', stationId);
         return null;
       }
@@ -343,7 +341,7 @@ export default class Radiko {
         });
         //this.logger.info(`JP_Radio::Radiko.genTempChunkM3u8URL: ${res.body}`);
         return res.body.split('\n').find(line => line.startsWith('http') &&
-          line.endsWith('.m3u8')) ? ? null;
+          line.endsWith('.m3u8')) ?? null;
       } catch (error) {
         this.logger.error('RADI0001E0004');
         return null;

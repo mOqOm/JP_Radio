@@ -1,15 +1,15 @@
 import { XMLParser } from 'fast-xml-parser';
 
 // 定数のインポート
-import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
+import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
 
 // Modelのインポート
-import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
-import { RadikoProgramData } from '../models/radiko-program.model';
+import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '@/models/radiko-xml-station.model';
+import { RadikoProgramData } from '@/models/radiko-program.model';
 
 // Utilsのインポート
-import { broadcastTimeConverter } from './broadcast-time-converter.util';
-import { DBUtil } from './db.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
+import { DBUtil } from '@/utils/db.util';
 
 export class RadikoXmlUtil {
   private readonly dbUtil: DBUtil<RadikoProgramData>;

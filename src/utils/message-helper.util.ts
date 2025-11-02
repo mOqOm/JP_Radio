@@ -26,7 +26,7 @@ export class MessageHelper {
   /** 現在の言語 */
   private lang: string = 'ja';
   /** i18n ディレクトリのベースパス */
-  private readonly baseDir: string = path.resolve(__dirname, '../i18n');
+  private readonly baseDir: string = path.resolve(process.cwd(), 'src/i18n');
 
   constructor(lang: string = 'ja') {
     this.setLanguage(lang);
@@ -48,13 +48,14 @@ export class MessageHelper {
         const data = fs.readFileSync(iniPath, 'utf-8');
         this.messages = ini.parse(data);
       } else if (fs.existsSync(jsonPath)) {
-        this.messages = fs.readJsonSync(jsonPath); // fs-extra が必要
+        // fs-extra が必要
+        this.messages = fs.readJsonSync(jsonPath);
       } else {
-        console.warn(`[MessageHelper] No message file found for language: ${this.lang}`);
+        console.warn(`[MessageHelper] No message file found for language: ${this.lang} ${iniPath} ${jsonPath}`);
         this.messages = {};
       }
-    } catch (err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang}`, err);
+    } catch(err) {
+      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${iniPath} ${jsonPath}`, err);
       this.messages = {};
     }
   }
