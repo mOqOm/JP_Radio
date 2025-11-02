@@ -64,7 +64,7 @@ export default class JpRadio {
   }
 
   #setupRoutes(): void {
-    this.logger.debug('RADI0001D0001');
+    this.logger.info('RADI0001D0001');
 
     this.app.get('/radiko/play/:stationID', async(req: Request, res: Response):
       Promise<void> => {
@@ -102,7 +102,7 @@ export default class JpRadio {
         let ffmpegExited = false;
         ffmpeg.on('exit', () => {
           ffmpegExited = true;
-          this.logger.debug(`JP_Radio::JpRadio.startStream: ffmpeg process ${ffmpeg.pid} exited.`);
+          this.logger.info(`JP_Radio::JpRadio.startStream: ffmpeg process ${ffmpeg.pid} exited.`);
         });
         ffmpeg.stdout.pipe(res);
         this.logger.info(`JP_Radio::JpRadio.startStream: ffmpeg.pid=${ffmpeg.pid}`);

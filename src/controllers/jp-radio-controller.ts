@@ -58,7 +58,7 @@ class JpRadioController {
     this.logger.setLanguage(this.langCode);
 
     // journalctl / livelog に debug も表示させる
-    this.logger.enableForceDebug(true);
+    this.logger.enableForceDebug(false);
   }
 
 //-----------------------------------------------------------------------
