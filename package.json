@@ -59,10 +59,14 @@
     "ini": "^6.0.0",
     "kew": "^0.7.0",
     "lodash": "^4.17.21",
+    "module-alias": "^2.2.3",
     "nedb-promises": "^6.2.3",
     "node-cron": "^2.0.3",
     "p-limit": "^2.3.0",
     "tough-cookie": "^4.1.2",
     "v-conf": "^1.4.3"
+  },
+  "_moduleAliases": {
+    "@": "dist"
   }
 }

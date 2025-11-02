@@ -1,3 +1,4 @@
+import 'module-alias/register';
 import libQ from 'kew';
 import VConf from 'v-conf';
 import path from 'path';
