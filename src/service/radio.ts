@@ -3,8 +3,8 @@ import { parse as queryParse } from 'querystring';
 import cron from 'node-cron';
 import libQ from 'kew';
 
-import RdkProg from '@service/prog';
-import Radiko from '@service/radiko';
+import RdkProg from '@/service/prog';
+import Radiko from '@/service/radiko';
 
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
