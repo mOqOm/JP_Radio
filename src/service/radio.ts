@@ -65,18 +65,18 @@ export default class JpRadio {
   }
 
   #setupRoutes(): void {
-    this.logger.info('RADI0001D0001');
+    this.logger.info('JRADI01SI0001');
 
     this.app.get('/radiko/play/:stationID', async(req: Request, res: Response):
       Promise<void> => {
-        this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.url=${req.url}`);
+        this.logger.info('JRADI01SI0002', req.url);
         // url(Live)     = /radiko/play/TBS
         // url(TimeFree) = /radiko/play/TBS?ft=##&to=##&seek=##
         const stationId: string = req.params['stationID'];
         if (!this.rdk || !this.rdk.stations?.has(stationId)) {
           const msg = !this.rdk ?
-            'JP_Radio::Radiko instance not initialized' :
-            `JP_Radio::${stationId} not in available stations`;
+            '[JpRadio]Radiko instance not initialized' :
+            `[JpRadio]${stationId} not in available stations`;
           this.logger.error(msg);
           res.status(500).send(msg);
           return;
@@ -91,11 +91,11 @@ export default class JpRadio {
 
   private async startStream(res: Response, stationId: string, query: any):
     Promise<void> {
-      this.logger.info(`JP_Radio::JpRadio.startStream: stationId=${stationId}, query=[${Object.entries(query)}]`);
+      this.logger.info('JRADI01SI0003');
       try {
         const ffmpeg = await this.rdk!.play(stationId, query);
         if (!ffmpeg || !ffmpeg.stdout) {
-          this.logger.error('JP_Radio::JpRadio.startStream: ffmpeg start failed or stdout is null');
+          this.logger.error('JRADI01SE0002');
           res.status(500).send('Stream start error');
           return;
         }
@@ -103,10 +103,10 @@ export default class JpRadio {
         let ffmpegExited = false;
         ffmpeg.on('exit', () => {
           ffmpegExited = true;
-          this.logger.info(`JP_Radio::JpRadio.startStream: ffmpeg process ${ffmpeg.pid} exited.`);
+          this.logger.info('JRADI01SI0004', ffmpeg.pid);
         });
         ffmpeg.stdout.pipe(res);
-        this.logger.info(`JP_Radio::JpRadio.startStream: ffmpeg.pid=${ffmpeg.pid}`);
+        this.logger.info('JRADI01SI0005', ffmpeg.pid);
 
         this.playing.stationId = stationId;
         this.playing.timeFree = (query.ft && query.to) ? `${query.ft}-${query.to}` : '';
@@ -118,29 +118,28 @@ export default class JpRadio {
 
         res.on('close', () => {
           this.task2.stop();
-          this.logger.info('JP_Radio::JpRadio.startStream: res.on(close)');
+          this.logger.info('JRADI01SI0006');
           if (ffmpeg.pid && !ffmpegExited) {
             try {
               //process.kill(-ffmpeg.pid, 'SIGTERM');
               // seek時に'SIGTERM'ではkillされずに残るので'SIGKILL'に変えてみた
               process.kill(-ffmpeg.pid, 'SIGKILL');
-              this.logger.info(`JP_Radio::JpRadio.startStream: SIGTERM sent to ffmpeg group ${ffmpeg.pid}`);
+              this.logger.info('JRADI01SI0007', ffmpeg.pid);
             } catch (e: any) {
-              this.logger.warn(`JP_Radio::JpRadio.startStream: Kill ffmpeg failed: ${e.code === 'ESRCH' ? 'Already exited' : e.message}`);
+              this.logger.warn('JRADI01SW0001', (e.code === 'ESRCH' ? 'Already exited' : e.message));
             }
           }
         });
-        this.logger.info('JP_Radio::JpRadio.startStream: Streaming started');
+        this.logger.info('JRADI01SI0008');
 
       } catch (error) {
-        this.logger.error('JP_Radio::JpRadio.startStream: Stream error');
+        this.logger.error(JRADI01SE0003);
         res.status(500).send('Internal server error');
       }
     }
 
   public async pushSongState(forceUpdate: boolean = false): Promise<void> {
     const state = this.commandRouter.stateMachine.getState();
-    //this.logger.info(`JP_Radio::JpRadio.pushSongState: [${state.status}:${Math.round(state.seek/1000)}/${state.duration}] ${state.title}`);
     if (this.playing.timeFree) {
       // タイムフリー：１回のみ
       if (state.status == 'play') {
@@ -232,7 +231,7 @@ export default class JpRadio {
   }
 
   public async radioStations(mode: string): Promise<BrowseResult> {
-    this.logger.info(`JP_Radio::JpRadio.radioStations: ${mode}`);
+    this.logger.info('JRADI01SI0009', mode);
     const defer = libQ.defer();
     // mode = live or timefree or timefree_today
     if (this.rdk?.stations) {
@@ -249,7 +248,7 @@ export default class JpRadio {
               : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
           );
         } catch (err) {
-          this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${err}`);
+          this.logger.error('JRADI01SE0004', stationId , err);
         }
       });
 
@@ -260,7 +259,7 @@ export default class JpRadio {
           defer.resolve(this.makeBrowseResult(lists));
         })
         .fail((err: any) => {
-          this.logger.error('[JP_Radio] radioStations error: ' + err);
+          this.logger.error('JRADI01SE0005', err);
           defer.reject(err);
         });
 
@@ -271,7 +270,7 @@ export default class JpRadio {
   }
 
   public async radioFavouriteStations(mode: string): Promise<BrowseResult> {
-    this.logger.info(`JP_Radio::JpRadio.radioFavouriteStations: ${mode}`);
+    this.logger.info('JRADI01SI0010', mode);
     const defer = libQ.defer();
     const items: BrowseItem[][] = await this.commonRadioFavouriteStations(mode);
     if (mode.startsWith('live')) {
@@ -288,7 +287,7 @@ export default class JpRadio {
   }
 
   public async radioTimeTable(mode: string, stationId: string, begin: string | number, end: string | number): Promise<BrowseResult> {
-    this.logger.info(`JP_Radio::JpRadio.radioTimeTable: mode=${mode}, stationId=${stationId}, begin=${begin}, end=${end}`);
+    this.logger.info('JRADI01SI0011', mode, stationId, begin, end);
     const defer = libQ.defer();
     const stationInfo = this.rdk?.getStationInfo(stationId);
     if (stationInfo && this.prg) {
@@ -359,7 +358,7 @@ export default class JpRadio {
   }
 
   private async commonRadioFavouriteStations(mode: string, skipPrograms = false): Promise<BrowseItem[][]> {
-    this.logger.info(`JP_Radio::JpRadio.commonRadioFavouriteStations: ${mode}`);
+    this.logger.info('JRADI01SI0012', mode);
     const defer = libQ.defer();
     // mode = live or timefree
     const items: BrowseItem[][] = [[], []];
@@ -532,9 +531,9 @@ export default class JpRadio {
   }
 
   public async start(): Promise<void> {
-    this.logger.info(`JP_Radio::JpRadio.start`);
+    this.logger.info('JRADI01SI0013');
     if (this.server) {
-      this.logger.info('JP_Radio::JpRadio.start: Already started');
+      this.logger.info('JRADI01SI0014');
       this.commandRouter.pushToastMessage('warning', 'JP Radio', this.messageHelper.get('MESSAGE.ALREADY_STARTED'));
       return;
     }
@@ -545,7 +544,7 @@ export default class JpRadio {
     await this.#init();
     return new Promise((resolve, reject) => {
       this.server = this.app.listen(this.confParam.port, () => {
-          this.logger.info(`JP_Radio::start: Listening on port ${this.confParam.port}`);
+          this.logger.info('JRADI01SI0015',this.confParam.port);
           /*this.commandRouter.servicePushState({ // ここでPLAY再開は無理では？
               status : 'play',
             //service: this.serviceName,
@@ -562,7 +561,7 @@ export default class JpRadio {
           resolve();
         })
         .on('error', (err: any) => {
-          this.logger.error('JP_Radio::start: App error:', err);
+          this.logger.error('JRADI01SE0006', err);
           this.commandRouter.pushToastMessage('error', this.messageHelper
             .get('MESSAGE.ERR_BOOT_FAIL'), err.message || this.messageHelper
             .get('MESSAGE.ERR_UNKNOWN'));
@@ -572,7 +571,7 @@ export default class JpRadio {
   }
 
   public async stop(): Promise<void> {
-    this.logger.info(`JP_Radio::JpRadio.stop`);
+    this.logger.info('JRADI01SI0016');
     if (this.server) {
       this.task1.stop();
       this.task2.stop();
@@ -587,14 +586,14 @@ export default class JpRadio {
   }
 
   async #init(): Promise<void> {
-    this.logger.info('JP_Radio::JpRadio.#init start...');
+    this.logger.info('JRADI01SI0017');
     if (this.rdk)[this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.rdk.init(this.acct);
     await this.#pgupdate(true);
-    this.logger.info(`JP_Radio::JpRadio.#init: ## COMPLETED myInfo=${Object.entries(this.myInfo)} ##`);
+    this.logger.info('JRADI01SI0018', Object.entries(this.myInfo)});
   }
 
   async #pgupdate(whenBoot = false): Promise<void> {
-    this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
+    this.logger.info('JRADI01SI0019');
     if (this.prg) {
       const updateStartTime = Date.now();
       const areaIdArray = (this.myInfo.areafree) ? this.confParam.areaIds : [this.myInfo.areaId];
@@ -602,7 +601,7 @@ export default class JpRadio {
       await this.prg.clearOldProgram();
       const updateEndTime = Date.now();
       const processingTime = updateEndTime - updateStartTime;
-      this.logger.info(`JP_Radio::JpRadio.#pgupdate: ## COMPLETED ${processingTime}ms} ##`);
+      this.logger.info('JRADI01SI0020', processingTime);
     }
   }
 
