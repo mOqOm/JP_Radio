@@ -1,8 +1,7 @@
 import 'date-utils';
 import { format } from 'util';
-import got, { OptionsOfJSONResponseBody, Response } from 'got';
+import got from 'got';
 import { spawn, execFile, ChildProcess } from 'child_process';
-import * as tough from 'tough-cookie';
 import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
@@ -10,14 +9,16 @@ import fs from 'fs';
 
 // 定数のインポート
 import {
-  LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
-  STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
-  AUTH_KEY, MAX_RETRY_COUNT
+ STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
+ MAX_RETRY_COUNT
 } from '@/constants/radiko-urls.constants';
 
 // Modelのインポート
 import type { StationInfo, RegionData } from '@/models/station.model';
 import type { LoginAccount, LoginState } from '@/models/auth.model';
+
+// Logicのインポート
+import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
@@ -31,12 +32,12 @@ const xmlParser = new XMLParser({
   allowBooleanAttributes: true,
 });
 
-export default class Radiko {
+export default class RadikoService {
   private readonly logger: LoggerEx;
   private readonly messageHelper: MessageHelper;
+  private readonly authLogic: RadikoAuthLogic;
   private token: string = '';
   private myAreaId: string = '';
-  private cookieJar: CookieJar = new tough.CookieJar();
   private loginState: LoginState | null = null;
 
   public stations: Map<string, StationInfo> = new Map();
@@ -47,122 +48,39 @@ export default class Radiko {
     this.logger = logger;
     this.messageHelper = messageHelper;
     this.areaIDs = areaIDs;
+    this.authLogic = new RadikoAuthLogic(logger);
   }
 
+  /**
+   * 初期化処理
+   * @param acct ログインアカウント
+   * @param forceGetStations 強制的に局情報取得
+   */
   public async init(acct: LoginAccount | null = null, forceGetStations = false):
     Promise<string[]> {
-      this.logger.info('RADI0001I0001');
-      if (acct) {
-        this.logger.info('RADI0001I0002');
-        const loginOK = await this.checkLogin() ?? await this.login(acct).then(
-          jar => {
-            this.cookieJar = jar;
-            return this.checkLogin();
-          });
-        this.loginState = loginOK;
-      }
+    this.logger.info('RADI0001I0001');
 
-      if (forceGetStations || !this.myAreaId) {
-        [this.token, this.myAreaId] = await this.getToken();
-        await this.getStations();
+    if (acct) {
+      this.logger.info('RADI0001I0002');
+      let loginOK = await this.authLogic.checkLogin();
+      if (!loginOK) {
+        await this.authLogic.login(acct);
+        loginOK = await this.authLogic.checkLogin();
       }
-      return [this.myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? '']
+      this.loginState = loginOK;
     }
 
-  private async login(acct: LoginAccount): Promise<CookieJar> {
-    this.logger.info('RADI0001I0003');
-    const jar = new tough.CookieJar();
-    try {
-      await got.post(LOGIN_URL, { cookieJar: jar, form: acct });
-      return jar;
-
-    } catch (err: any) {
-      if (err.statusCode === 302) {
-        return jar;
-      }
-      this.logger.error('RADI0001E0001', err);
-      throw err;
-    }
-  }
-
-  private async checkLogin(): Promise<LoginState | null> {
-    this.logger.info('RADI0001I0004');
-    if (!this.cookieJar) {
-      this.logger.info('RADI0001I0005');
-      return null;
+    if (forceGetStations || !this.myAreaId) {
+      [this.token, this.myAreaId] = await this.authLogic.getToken();
+      await this.getStations();
     }
 
-    try {
-      const options: OptionsOfJSONResponseBody = {
-        cookieJar: this.cookieJar,
-        method: 'GET',
-        responseType: 'json'
-      };
-      // TODO: エリアフリー・タイムフリー30・ダブルプランはここで判別できるのか？？？
-      const response: Response<any> = await got(CHECK_URL, options);
-      const body = response.body as LoginState;
-      //this.logger.info(`JP_Radio::checkLogin: Login status=${Object.entries(body)}`);
-      //this.logger.info(`JP_Radio::checkLogin: member_type=${Object.entries(body.member_type)}`);
-      return body;
-
-    } catch (err: any) {
-      const statusCode = err?.response?.statusCode;
-      if (statusCode === 400) {
-        this.logger.info('RADI0001I0006');
-        return null;
-      }
-
-      this.logger.error('RADI0001E0002', err);
-      return null;
-    }
+    return [this.myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? ''];
   }
 
-  private async getToken(): Promise<[string, string]> {
-    this.logger.info('RADI0001I0007');
-    const auth1Headers = await this.auth1();
-    const [partialKey, token] = this.getPartialKey(auth1Headers);
-    const result = await this.auth2(token, partialKey);
-    const [areaId] = result.trim().split(',');
-    return [token, areaId];
-  }
-
-  private async auth1(): Promise<Record<string, string>> {
-    this.logger.info('RADI0001I0008');
-    const res = await got.get(AUTH1_URL, {
-      cookieJar: this.cookieJar,
-      headers: {
-        'X-Radiko-App': 'pc_html5',
-        'X-Radiko-App-Version': '0.0.1',
-        'X-Radiko-User': 'dummy_user',
-        'X-Radiko-Device': 'pc',
-      },
-    });
-    return res.headers as Record<string, string>;
-  }
-
-  private getPartialKey(headers: Record<string, string>): [string, string] {
-    this.logger.info('RADI0001I0009');
-    const token = headers['x-radiko-authtoken'];
-    const offset = parseInt(headers['x-radiko-keyoffset'], 10);
-    const length = parseInt(headers['x-radiko-keylength'], 10);
-    const partialKey = Buffer.from(AUTH_KEY.slice(offset, offset + length)).toString('base64');
-    return [partialKey, token];
-  }
-
-  private async auth2(token: string, partialKey: string): Promise<string> {
-    this.logger.info('RADI0001I0010');
-    const res = await got.get(AUTH2_URL, {
-      cookieJar: this.cookieJar,
-      headers: {
-        'X-Radiko-AuthToken': token,
-        'X-Radiko-Partialkey': partialKey,
-        'X-Radiko-User': 'dummy_user',
-        'X-Radiko-Device': 'pc',
-      },
-    });
-    return res.body;
-  }
-
+  /**
+   * 局情報取得・パース
+   */
   private async getStations(): Promise<void> {
     this.logger.info('RADI0001I0011');
     const startTime = Date.now();
@@ -192,7 +110,7 @@ export default class Radiko {
     const limit = pLimit(5);
     const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     await Promise.all(
-      areaIDs.map((areaId) =>
+      areaIDs.map(areaId =>
         limit(async() => {
           const res = await got(format(STATION_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
@@ -205,20 +123,21 @@ export default class Radiko {
       )
     );
 
+    // 3. エリアに応じた許可局の決定
     const areaData = this.areaData;
     const currentAreaID = this.myAreaId ?? '';
-    var allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
+    let allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
     if (this.loginState) {
       for (const id of this.areaIDs) {
         for (const station of areaData.get(id)?.stations.map(String) ?? []) {
           if (!allowedStations.includes(station)) {
-            allowedStations = allowedStations.concat(station);
+            allowedStations.push(station);
           }
         }
       }
     }
 
-    // 3. regionData をもとに stations を構成
+    // 4. regionData をもとに stations を構成
     for (const region of regionData) {
       for (const station of region.stations) {
         if (allowedStations.includes(station.id)) {
@@ -248,15 +167,13 @@ export default class Radiko {
               AreaFree: station.areafree,
               // '1'
               TimeFree: station.timefree
-            }
-          );
+          });
         }
       }
     }
 
     const endTime = Date.now();
-    const processingTime = endTime - startTime;
-    this.logger.info('RADI0001I0012', processingTime);
+    this.logger.info('RADI0001I0012', endTime - startTime);
   }
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
@@ -278,6 +195,7 @@ export default class Radiko {
     return `/albumart?sourceicon=${logoPath}`;
   }
 
+  // --- Station Info ---
   public getStationInfo(stationId: string): StationInfo | undefined {
     return this.stations?.get(stationId);
   }
@@ -290,61 +208,64 @@ export default class Radiko {
     return this.stations?.get(stationId)?.AsciiName ?? '';
   }
 
+  // --- Play ---
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
-      if (!this.stations?.has(stationId)) {
-        this.logger.warn('RADI0001W0001', stationId);
-        return null;
-      }
-      var url = format(PLAY_LIVE_URL, stationId);
-      var aac = '';
-      if (query.ft && query.to) {
-        const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
-        const to = broadcastTimeConverter.revConvertRadioTime(query.to);
-        url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
-        //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
-      }
-      this.logger.info('RADI0001I0014', url);
-
-      let m3u8: string | null = null;
-      for (let i = 0; i<MAX_RETRY_COUNT; i++) {
-        if (!this.token)[this.token, this.myAreaId] = await this.getToken();
-        m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-        if (m3u8) break;
-        this.logger.info('RADI0001I0015');
-        this.token = '';
-      }
-
-      if (m3u8) {
-        const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`,
-          '-i', m3u8, //'-ss', `${query.seek ?? 0}`,
-          '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'
-        ];
-        if (aac) args.push(aac);
-        //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
-        return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
-      } else {
-        this.logger.error('RADI0001E0003');
-        return null;
-      }
+    if (!this.stations?.has(stationId)) {
+      this.logger.warn('RADI0001W0001', stationId);
+      return null;
     }
+
+    let url = format(PLAY_LIVE_URL, stationId);
+    let aac = '';
+    if (query.ft && query.to) {
+      const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
+      const to = broadcastTimeConverter.revConvertRadioTime(query.to);
+      url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
+    }
+    this.logger.info('RADI0001I0014', url);
+
+    let m3u8: string | null = null;
+    for (let i = 0; i < MAX_RETRY_COUNT; i++) {
+      if (!this.token) [this.token, this.myAreaId] = await this.authLogic.getToken();
+      m3u8 = await this.genTempChunkM3u8URL(url, this.token);
+      if (m3u8) break;
+      this.logger.info('RADI0001I0015');
+      this.token = '';
+    }
+
+    if (!m3u8) {
+      this.logger.error('RADI0001E0003');
+      return null;
+    }
+
+    const args = [
+      '-y',
+      '-headers', `X-Radiko-Authtoken:${this.token}`,
+      '-i', m3u8,
+      '-acodec', 'copy',
+      '-f', 'adts',
+      '-loglevel', 'error',
+      'pipe:1'
+    ];
+    if (aac) args.push(aac);
+    return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
+  }
 
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
-      try {
-        const res = await got(url, {
-          headers: {
-            'X-Radiko-AuthToken': token,
-            'X-Radiko-App': 'pc_html5',
-            'X-Radiko-App-Version': '0.0.1',
-            'X-Radiko-User': 'dummy_user',
-            'X-Radiko-Device': 'pc',
-          },
-        });
-        //this.logger.info(`JP_Radio::Radiko.genTempChunkM3u8URL: ${res.body}`);
-        return res.body.split('\n').find(line => line.startsWith('http') &&
-          line.endsWith('.m3u8')) ?? null;
-      } catch (error) {
-        this.logger.error('RADI0001E0004');
-        return null;
-      }
+    try {
+      const res = await got(url, {
+        headers: {
+          'X-Radiko-AuthToken': token,
+          'X-Radiko-App': 'pc_html5',
+          'X-Radiko-App-Version': '0.0.1',
+          'X-Radiko-User': 'dummy_user',
+          'X-Radiko-Device': 'pc',
+        },
+      });
+      return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
+    } catch (error) {
+      this.logger.error('RADI0001E0004');
+      return null;
     }
+  }
 }
