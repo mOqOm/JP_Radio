@@ -4,7 +4,7 @@ const { compilerOptions } = require('./tsconfig');
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-   // testディレクトリ内の.test.tsを対象
+  // testディレクトリ内の.test.tsを対象
   testMatch: ['**/test/**/*.test.ts'],
 
   // TypeScript path alias を Jest にマッピング
