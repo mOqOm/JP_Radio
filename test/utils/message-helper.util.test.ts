@@ -75,8 +75,6 @@ describe('MessageHelper', () => {
     };
     const msg = helper.get('TEST004', obj);
 
-    process.stdout.write(`TEST004出力(オブジェクトJSON化): ${msg}\n`);
-
     // Assert
     // JSON文字列に変換されていることを確認
     expect(msg).toContain('"user":"Alice"');

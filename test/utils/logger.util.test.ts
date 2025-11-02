@@ -58,31 +58,27 @@ describe('LoggerEx', () => {
     // info
     logger.info('TEST001', 'InfoMessage');
     const infoLogged = (logger as any).logger.info.mock.calls[0][0] as string;
-    process.stdout.write(`INFOログ: ${infoLogged}\n`);
     // Assert
-    expect(infoLogged).toMatch(/InfoMessage/);
+    expect(infoLogged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [INFO] [TEST001] InfoMessage');
 
     // warn
     logger.warn('TEST002', 'WarnMessage');
     const warnLogged = (logger as any).logger.warn.mock.calls[0][0] as string;
-    process.stdout.write(`WARNログ: ${warnLogged}\n`);
     // Assert
-    expect(warnLogged).toMatch(/WarnMessage/);
+    expect(warnLogged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [WARN] [TEST002] WarnMessage');
 
     // error
     logger.error('TEST003', 'ErrorMessage');
     const errorLogged = (logger as any).logger.error.mock.calls[0][0] as string;
-    process.stdout.write(`ERRORログ: ${errorLogged}\n`);
     // Assert
-    expect(errorLogged).toMatch(/ErrorMessage/);
+    expect(errorLogged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [ERROR] [TEST003] ErrorMessage');
 
     // debug
     logger.debug('TEST004', 'DebugMessage');
     // forceDebug は有効化していないので debug が呼ばれる
     const debugLogged = (logger as any).logger.debug.mock.calls[0][0] as string;
-    process.stdout.write(`DEBUGログ: ${debugLogged}\n`);
     // Assert
-    expect(debugLogged).toMatch(/DebugMessage/);
+    expect(debugLogged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [DEBUG] [TEST004] DebugMessage');
   });
 
   /**
@@ -92,13 +88,13 @@ describe('LoggerEx', () => {
     // メッセージIDの設定
     (messageHelper as any).messages['TEST005'] = '{0} : {1}';
 
-    logger.enableForceDebug(true); // 強制 debug 出力を有効化
+    // 強制 debug 出力を有効化
+    logger.enableForceDebug(true);
     logger.debug('TEST005', 'Station1', 'NowPlaying');
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
-    process.stdout.write(`ログ: ${logged}\n`);
-    expect(logged).toMatch(/Station1/);
-    expect(logged).toMatch(/NowPlaying/);
+    // Assert
+    expect(logged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [DEBUG-FORCED] [TEST005] Station1 : NowPlaying');
   });
 
   /**
@@ -116,9 +112,8 @@ describe('LoggerEx', () => {
     });
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
-    process.stdout.write(`ログ: ${logged}\n`);
-    expect(logged).toMatch(/Alice/);
-    expect(logged).toMatch(/Play/);
+    // Assert
+    expect(logged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [DEBUG-FORCED] [TEST006] Alice:Play');
   });
 
   /**
@@ -133,8 +128,8 @@ describe('LoggerEx', () => {
     logger.debug('TEST007', 12345);
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
-    process.stdout.write(`ログ: ${logged}\n`);
-    expect(logged).toMatch(/12345/);
+    // Assert
+    expect(logged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [DEBUG-FORCED] [TEST007] 12345');
   });
 
   test('Success0005_オブジェクトをログに出力できること(Object.entries対応)', () => {
@@ -152,16 +147,7 @@ describe('LoggerEx', () => {
 
     const logged = (logger as any).logger.info.mock.calls[0][0] as string;
 
-    process.stdout.write(`OBJログ: ${logged}\n`);
-
-    // JSON形式で出力されるはず
-    expect(logged).toMatch(/Alice/);
-    expect(logged).toMatch(/Login/);
-    expect(logged).toMatch(/admin/);
-
-    // Object.entries が展開されているかに近い表現
-    expect(logged).toMatch(/user/);
-    expect(logged).toMatch(/action/);
-    expect(logged).toMatch(/role/);
+    // Assert
+    expect(logged).toBe('[2025-10-31T23:55:10.000Z] [jp_radio] [INFO] [TEST_OBJECT] {"user":"Alice","action":"Login","role":"admin"}');
   });
 });

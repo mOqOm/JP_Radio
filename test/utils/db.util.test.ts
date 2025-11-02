@@ -26,8 +26,8 @@ describe('DBUtil<T>', () => {
 
     // Assert
     expect(result).toBeDefined();
-    expect(result ? .name).toBe('Alice');
-    expect(result ? .age).toBe(25);
+    expect(result?.name).toBe('Alice');
+    expect(result?.age).toBe(25);
   });
 
   /**
