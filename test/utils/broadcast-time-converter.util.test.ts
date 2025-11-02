@@ -1,4 +1,4 @@
-import { broadcastTimeConverter } from '../../src/utils/broadcast-time-converter.util';
+import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
 describe('BroadcastTimeConverter', () => {
   beforeEach(() => {

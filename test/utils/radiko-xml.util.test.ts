@@ -1,6 +1,6 @@
-import { RadikoXmlUtil } from '../../src/utils/radiko-xml.util';
-import { DBUtil } from '../../src/utils/db.util';
-import { RadikoProgramData } from '../../src/models/radiko-program.model';
+import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
+import { DBUtil } from '@/utils/db.util';
+import { RadikoProgramData } from '@/models/radiko-program.model';
 
 describe('RadikoXmlUtil', () => {
   let db: DBUtil<RadikoProgramData>;

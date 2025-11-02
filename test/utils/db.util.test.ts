@@ -1,4 +1,4 @@
-import { DBUtil } from '../../src/utils/db.util';
+import { DBUtil } from '@/utils/db.util';
 
 // テスト用データ型
 interface TestDoc {

@@ -1,4 +1,4 @@
-import { MessageHelper } from '../../src/utils/message-helper.util';
+import { MessageHelper } from '@/utils/message-helper.util';
 
 describe('MessageHelper', () => {
   let helper: MessageHelper;

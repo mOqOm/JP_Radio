@@ -1,8 +1,8 @@
 // LoggerEx クラスをテスト対象としてインポート
-import { LoggerEx } from '../../src/utils/logger.util';
+import { LoggerEx } from '@/utils/logger.util';
 // Volumio 標準 Logger 型をインポート（モック用）
 import { Logger } from 'volumio-logger';
-import { messageHelper } from '../../src/utils/message-helper.util';
+import { messageHelper } from '@/utils/message-helper.util';
 
 /**
  * LoggerEx のユニットテスト
