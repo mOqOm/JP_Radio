@@ -1,5 +1,6 @@
 import libQ from 'kew';
 import VConf from 'v-conf';
+import path from 'path';
 import { exec } from 'child_process';
 import { format } from 'util';
 import { parse as queryParse } from 'querystring';
@@ -187,9 +188,9 @@ class JpRadioController {
     this.logger.debug('CTRLD0004', this.langCode);
 
     this.commandRouter.i18nJson(
-      `${__dirname}/../i18n/strings_${this.langCode}.json`,
-      `${__dirname}/../i18n/strings_en.json`,
-      `${__dirname}/../UIConfig.json`
+      path.join(process.cwd(), 'i18n', `strings_${this.langCode}.json`),
+      path.join(process.cwd(), 'i18n', 'strings_en.json'),
+      path.join(process.cwd(), 'src', 'UIConfig.json')
     )
     .then((uiconf: any) => {
       // ネットワーク設定

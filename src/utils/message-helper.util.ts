@@ -26,7 +26,7 @@ export class MessageHelper {
   /** 現在の言語 */
   private lang: string = 'ja';
   /** i18n ディレクトリのベースパス */
-  private readonly baseDir: string = path.resolve(process.cwd(), 'src/i18n');
+  private readonly baseDir: string = path.resolve(process.cwd(), 'i18n');
 
   constructor(lang: string = 'ja') {
     this.setLanguage(lang);
