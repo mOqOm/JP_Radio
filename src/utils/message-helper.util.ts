@@ -40,7 +40,7 @@ export class MessageHelper {
 
   /** ini または JSON ファイルからメッセージをロード */
   private loadMessages() {
-    const iniPath = path.join(this.baseDir, `logger_message.${this.lang}.ini`);
+    const iniPath = path.join(this.baseDir, `logmessages.${this.lang}.ini`);
     const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
     try {
