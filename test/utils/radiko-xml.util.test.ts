@@ -74,16 +74,6 @@ describe('RadikoXmlUtil', () => {
 
     const saved = await db.find({ stationId: 'STATION2' });
 
-    // ---- 追加: 全件出力 ----
-    process.stdout.write('--- STATION2 records ---\n');
-    saved.forEach((rec, i) => {
-      process.stdout.write(
-        `${i}: ${JSON.stringify(rec)}\n`
-      );
-    });
-    process.stdout.write('-------------------------\n');
-    // -----------------------
-
     // A(5:00→5:10) → 隙間(5:10→5:20) → B → 29時補完 → 計4件
     expect(saved.length).toBe(4);
 

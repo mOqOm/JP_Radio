@@ -33,10 +33,11 @@ export class RadikoXmlUtil {
       const xmlData: RadikoXMLData = this.xmlParser.parse(xmlString);
 
       if (!xmlData?.radiko) {
+        // RadikoのXMLの形式でなければエラーとする
         throw new Error('Invalid XML format: radiko root not found');
       }
 
-      const stationRaw = xmlData?.radiko?.stations?.station ?? [];
+      const stationRaw = xmlData.radiko.stations?.station ?? [];
       const stations: RadikoXMLStation[] = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
 
       for (const s of stations) {
@@ -46,11 +47,13 @@ export class RadikoXmlUtil {
         const progSetsRaw = s.progs ?? [];
         const progSets: any[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
 
+        // station 内の全プログラムを順番通り格納
+        const allProgs: RadikoProgramData[] = [];
+        let prevTo = '';
+
         for (const ps of progSets) {
           const progsRaw: RadikoXMLProg[] = ps.prog ?? [];
           const progs: RadikoXMLProg[] = Array.isArray(progsRaw) ? progsRaw : [progsRaw];
-
-          let prevTo = '';
 
           for (const p of progs) {
             const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
@@ -59,7 +62,7 @@ export class RadikoXmlUtil {
 
             // 番組の隙間補完
             if (prevTo && prevTo < ft) {
-              await this.dbUtil.insert({
+              allProgs.push({
                 stationId,
                 progId: `${stationId}_${prevTo}`,
                 ft: prevTo,
@@ -71,7 +74,7 @@ export class RadikoXmlUtil {
               });
             }
 
-            const program: RadikoProgramData = {
+            allProgs.push({
               stationId,
               progId,
               ft,
@@ -80,15 +83,14 @@ export class RadikoXmlUtil {
               info: p.info ?? '',
               pfm: p.pfm ?? '',
               img: p.img ?? ''
-            };
+            });
 
-            await this.dbUtil.insert(program);
             prevTo = to;
           }
 
           // 29時まで補完
           if (prevTo.slice(8) < '290000') {
-            await this.dbUtil.insert({
+            allProgs.push({
               stationId,
               progId: `${stationId}_${prevTo}`,
               ft: prevTo,
@@ -99,6 +101,11 @@ export class RadikoXmlUtil {
               img: ''
             });
           }
+        }
+
+        // DBに順番通り挿入
+        for (const prog of allProgs) {
+          await this.dbUtil.insert(prog);
         }
 
         doneStations.add(stationId);
