@@ -49,11 +49,12 @@ describe('RadikoXmlUtil', () => {
 
     expect(stations.size).toBe(0);
 
-    const saved = await db.find({}); // 全件
+    // 全件
+    const saved = await db.find({});
     expect(saved.length).toBe(0);
   });
 
-  test('番組終了後の隙間が補完されること', async () => {
+  test('番組終了後の隙間が補完されること（順序も確認）', async () => {
     const xmlWithGap = `
     <radiko>
       <stations>
@@ -73,14 +74,27 @@ describe('RadikoXmlUtil', () => {
     await xmlUtil.parseAndSavePrograms(xmlWithGap);
 
     const saved = await db.find({ stationId: 'STATION2' });
+    // ソートをする
+    saved.sort((a, b) => a.ft.localeCompare(b.ft));
 
-    // A(5:00→5:10) → 隙間(5:10→5:20) → B → 29時補完 → 計4件
+    // A → 隙間 → B → 29時補完 → 計4件
     expect(saved.length).toBe(4);
 
-    const gap = saved.find(p => p.title === '');
-    expect(gap).toBeDefined();
-    expect(gap?.ft).toBe('20250101051000');
-    expect(gap?.to).toBe('20250101052000');
+    // 順序確認
+    expect(saved[0].title).toBe('A');
+    expect(saved[1].title).toBe(''); // 隙間
+    expect(saved[2].title).toBe('B');
+    expect(saved[3].title).toBe(''); // 29時補完
+
+    // 隙間の時刻確認
+    const gap = saved[1];
+    expect(gap.ft).toBe('20250101051000');
+    expect(gap.to).toBe('20250101052000');
+
+    // 29時補完の時刻確認
+    const lastGap = saved[3];
+    expect(lastGap.ft).toBe('20250101053000');
+    expect(lastGap.to).toBe('20250101290000');
   });
 
   test('XMLパースエラー時に例外が投げられること', async () => {

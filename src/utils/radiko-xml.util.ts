@@ -47,63 +47,67 @@ export class RadikoXmlUtil {
         const progSetsRaw = s.progs ?? [];
         const progSets: any[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
 
-        // station 内の全プログラムを順番通り格納
+        // 全プログラムを ft順に格納
         const allProgs: RadikoProgramData[] = [];
-        let prevTo = '';
 
+        // まず元番組を flat にして sorted に
+        let rawProgs: RadikoXMLProg[] = [];
         for (const ps of progSets) {
           const progsRaw: RadikoXMLProg[] = ps.prog ?? [];
-          const progs: RadikoXMLProg[] = Array.isArray(progsRaw) ? progsRaw : [progsRaw];
+          rawProgs = rawProgs.concat(Array.isArray(progsRaw) ? progsRaw : [progsRaw]);
+        }
 
-          for (const p of progs) {
-            const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
-            const to = broadcastTimeConverter.convertRadioTime(p['@to'], '29');
-            const progId = `${stationId}${p['@id']}${ft.slice(8, 12)}`;
+        rawProgs.sort((a, b) => (a['@ft'] > b['@ft'] ? 1 : -1));
 
-            // 番組の隙間補完
-            if (prevTo && prevTo < ft) {
-              allProgs.push({
-                stationId,
-                progId: `${stationId}_${prevTo}`,
-                ft: prevTo,
-                to: ft,
-                title: '',
-                info: '',
-                pfm: '',
-                img: ''
-              });
-            }
+        let prevTo = '';
+        for (const p of rawProgs) {
+          const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
+          const to = broadcastTimeConverter.convertRadioTime(p['@to'], '29');
+          const progId = `${stationId}${p['@id']}${ft.slice(8, 12)}`;
 
-            allProgs.push({
-              stationId,
-              progId,
-              ft,
-              to,
-              title: p.title,
-              info: p.info ?? '',
-              pfm: p.pfm ?? '',
-              img: p.img ?? ''
-            });
-
-            prevTo = to;
-          }
-
-          // 29時まで補完
-          if (prevTo.slice(8) < '290000') {
+          // ギャップ補完
+          if (prevTo && prevTo < ft) {
             allProgs.push({
               stationId,
               progId: `${stationId}_${prevTo}`,
               ft: prevTo,
-              to: `${prevTo.slice(0, 8)}290000`,
+              to: ft,
               title: '',
               info: '',
               pfm: '',
               img: ''
             });
           }
+
+          allProgs.push({
+            stationId,
+            progId,
+            ft,
+            to,
+            title: p.title,
+            info: p.info ?? '',
+            pfm: p.pfm ?? '',
+            img: p.img ?? ''
+          });
+
+          prevTo = to;
         }
 
-        // DBに順番通り挿入
+        // 最終29時まで補完
+        if (prevTo.slice(8) < '290000') {
+          allProgs.push({
+            stationId,
+            progId: `${stationId}_${prevTo}`,
+            ft: prevTo,
+            to: `${prevTo.slice(0, 8)}290000`,
+            title: '',
+            info: '',
+            pfm: '',
+            img: ''
+          });
+        }
+
+        // DBに順番通り insert
         for (const prog of allProgs) {
           await this.dbUtil.insert(prog);
         }
