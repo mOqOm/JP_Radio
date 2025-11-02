@@ -31,6 +31,11 @@ export class RadikoXmlUtil {
 
     try {
       const xmlData: RadikoXMLData = this.xmlParser.parse(xmlString);
+
+      if (!xmlData?.radiko) {
+        throw new Error('Invalid XML format: radiko root not found');
+      }
+
       const stationRaw = xmlData?.radiko?.stations?.station ?? [];
       const stations: RadikoXMLStation[] = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
 
