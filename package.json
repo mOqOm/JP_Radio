@@ -5,8 +5,8 @@
   "main": "./dist/controllers/jp-radio-controller.js",
   "scripts": {
     "build": "rm -rf dist && tsc && bash finalize.sh",
-    "start": "node -r tsconfig-paths/register dist/main.js",
-    "dev": "ts-node -r tsconfig-paths/register src/main.ts",
+    "start": "node dist/controllers/jp-radio-controller.js",
+    "dev": "ts-node -r tsconfig-paths/register src/controllers/jp-radio-controller.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
