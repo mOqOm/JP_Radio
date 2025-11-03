@@ -188,7 +188,6 @@ class JpRadioController {
 
   public getUIConfig(): Promise<any> {
     const defer = libQ.defer();
-    //const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
     this.logger.info('JRADI01CI0004', this.langCode);
 
