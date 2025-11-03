@@ -61,16 +61,27 @@ export class MessageHelper {
   }
 
   /**
-  * メッセージ取得
-  * @param id メッセージID
-  * @param params 可変長引数またはオブジェクト
-  *  - 数字インデックス → {0},{1},... に置換
-  *  - オブジェクト → {key} に置換。テンプレートにプレースホルダがなければ JSON 化
-  * @returns 置換済み文字列
-  */
-  public get(id: string, ...params: (string | number | MessageParams)[]): string {
+   * メッセージ取得
+   * @param id メッセージID
+   * @param params 可変長引数またはオブジェクト
+   *  - 数字インデックス → {0},{1},... に置換
+   *  - オブジェクト → {key} に置換。テンプレートにプレースホルダがなければ JSON 化
+   * @returns 置換済み文字列
+   */
+  public get(id: string, ...params: (string | number | MessageParams | Error)[]): string {
     const template = this.messages[id];
     if (!template) return `[Unknown message ID: ${id}]`;
+
+    // Error が直接渡された場合 → {errorMessage}, {errorStack} を追加
+    if (params.length === 1 && params[0] instanceof Error) {
+      const err = params[0] as Error;
+      params = [
+        {
+          errorMessage: err.message ?? 'Unknown error',
+          errorStack: err.stack ?? '',
+        }
+      ];
+    }
 
     // 名前付き置換 {key}
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {
