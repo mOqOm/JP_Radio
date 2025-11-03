@@ -12,11 +12,13 @@ import {
   STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
   MAX_RETRY_COUNT
 } from '@/constants/radiko-urls.constants';
+import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
 
 // Modelのインポート
-import type { StationInfo, RegionData } from '@/models/station.model';
+import type { StationInfo } from '@/models/station.model';
 import type { LoginAccount, LoginState } from '@/models/auth.model';
-import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
+import type { RegionDataParsed, StationParsed, LogoInfo } from '@/models/radiko-xml-full-station.model';
+
 
 // Logicのインポート
 import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
@@ -86,7 +88,7 @@ export default class RadikoService {
 
     // 1. フル局データを取得・パース
     const fullRes = await got(STATION_FULL_URL);
-    const regionData = parseFullStationXML(fullRes.body);
+    const regionDataArray: RegionDataParsed[] = parseFullStationXML(fullRes.body);
 
     // 2. 並列数制限付きで47エリア分の取得を並列化
     const limit = pLimit(5);
@@ -120,17 +122,21 @@ export default class RadikoService {
     }
 
     // 4. regionData をもとに stations を構成
-    for(const region of regionData) {
-      for(const station of region.stations) {
+    for(const regionData of regionDataArray as RegionDataParsed[]) {
+      // 各地域の局ごとに処理
+      for(const station of regionData.stations as StationParsed[]) {
+        // 許可されている局だけ追加
         if(allowedStations.includes(station.id)) {
+          // エリア名を取得し、末尾の " JAPAN" は削除
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
           const areaKanji = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
-          const logoFile = this.saveStationLogoCache(station.logo, `${station.id}_logo.png`);
+
+          const logoFile = this.saveStationLogoCache(station.logos[2].url, `${station.id}_logo.png`);
           this.stations.set(
             // 'TBS'
             station.id, {
               // '関東'
-              RegionName: region.region_name,
+              RegionName: regionData.region_name,
               // 'http://radiko.jp/res/banner/radiko_banner.png'
               BannerURL: station.banner,
               // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
@@ -160,7 +166,7 @@ export default class RadikoService {
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
     const logoPath = `music_service/jp_radio/dist/assets/images/${logoFile}`;
-    const fullPath = '/data/plugins/' + logoPath;
+    const fullPath = `/data/plugins/${logoPath}`;
     try {
       // ファイルの存在確認
       fs.statSync(fullPath);
