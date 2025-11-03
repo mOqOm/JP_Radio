@@ -40,8 +40,8 @@ export default class RdkProg {
   private readonly dbUtil: DBUtil<RadikoProgramData>;
   private readonly xmlUtil: RadikoXmlUtil;
 
-  private lastStationId = '';
-  private lastTime = '';
+  private lastStationId: string = '';
+  private lastTime: string = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
   constructor(logger: LoggerEx) {
@@ -183,10 +183,10 @@ export default class RdkProg {
       const response = await got(url);
 
       // await を忘れずに
-      const stationsSet = await this.xmlUtil.parseAndSavePrograms(response.body, skipStations);
+      const stationsSet: Set<string> = await this.xmlUtil.parseAndSavePrograms(response.body, skipStations);
 
       // Set<string> は値のみなので for...of でループ
-      for (const stationId of stationsSet) {
+      for (const stationId of stationsSet as Set<string>) {
         doneStations.add(stationId);
       }
 
@@ -215,8 +215,10 @@ export default class RdkProg {
 
   /** 件数ログ出力 */
   public async dbCount(): Promise<number> {
-    const count = await this.dbUtil.count({});
+    const count: number = await this.dbUtil.count({});
+
     this.logger.info('JRADI02SI0005', count);
+
     return count;
   }
 

@@ -61,10 +61,12 @@ export default class RadikoService {
     if (acct) {
       this.logger.info('JRADI03SI0002');
       let loginOK = await this.authLogic.checkLogin();
+
       if (!loginOK) {
         await this.authLogic.login(acct);
         loginOK = await this.authLogic.checkLogin();
       }
+
       this.loginState = loginOK;
     }
 
@@ -92,12 +94,14 @@ export default class RadikoService {
     // 2. 並列数制限付きで47エリア分の取得を並列化
     const limit = pLimit(5);
     const areaIDs: string[] = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+
     await Promise.all(
       areaIDs.map(areaId =>
         limit(async () => {
           const res = await got(format(STATION_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
           const stations = parsed.stations.station.map((s: any) => s.id);
+
           this.areaData.set(areaId, {
             areaName: parsed.stations['@area_name'],
             stations,
@@ -111,7 +115,7 @@ export default class RadikoService {
     const currentAreaID = this.myAreaId ?? '';
     let allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
     if (this.loginState) {
-      for (const id of this.areaIDs) {
+      for (const id of this.areaIDs as string[]) {
         for (const station of areaData.get(id)?.stations.map(String) ?? []) {
           if (!allowedStations.includes(station)) {
             allowedStations.push(station);
@@ -166,6 +170,7 @@ export default class RadikoService {
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
     const logoPath: string = `music_service/jp_radio/dist/assets/images/${logoFile}`;
     const fullPath: string = `/data/plugins/${logoPath}`;
+
     try {
       // ファイルの存在確認
       fs.statSync(fullPath);
@@ -179,8 +184,10 @@ export default class RadikoService {
           return logoUrl;
         }
       });
+
       this.logger.info('JRADI03SI0013', logoUrl, logoFile);
     }
+
     return `/albumart?sourceicon=${logoPath}`;
   }
 
@@ -206,12 +213,12 @@ export default class RadikoService {
       return null;
     }
 
-    let url = format(PLAY_LIVE_URL, stationId);
-    let aac = '';
+    let url: string = format(PLAY_LIVE_URL, stationId);
+    let aac: string = '';
 
     if (query.ft && query.to) {
-      const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
-      const to = broadcastTimeConverter.revConvertRadioTime(query.to);
+      const ft: string = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
+      const to: string = broadcastTimeConverter.revConvertRadioTime(query.to);
       url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
     }
     this.logger.info('JRADI03SI0014', url);
@@ -235,7 +242,7 @@ export default class RadikoService {
       return null;
     }
 
-    const args = [
+    const args: string[] = [
       '-y',
       '-headers', `X-Radiko-Authtoken:${this.token}`,
       '-i', m3u8,
@@ -244,9 +251,11 @@ export default class RadikoService {
       '-loglevel', 'error',
       'pipe:1'
     ];
+
     if (aac) {
       args.push(aac);
     }
+
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
 
@@ -261,6 +270,7 @@ export default class RadikoService {
           'X-Radiko-Device': 'pc',
         },
       });
+
       return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
     } catch (error) {
       this.logger.error('JRADI03SE0002');
