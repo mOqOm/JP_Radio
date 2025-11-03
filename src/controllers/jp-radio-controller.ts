@@ -192,9 +192,6 @@ class JpRadioController {
 
     this.logger.info('JRADI01CI0004', this.langCode);
 
-    this.logger.info(this.baseDir);
-    this.logger.info(path.join(this.baseDir, 'UIConfig.json'));
-
     this.commandRouter.i18nJson(
       path.join(this.baseDir, 'i18n', `strings_${this.langCode}.json`),
       path.join(this.baseDir, 'i18n', 'strings_en.json'),
