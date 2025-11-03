@@ -25,6 +25,7 @@ import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
 import { LoggerEx } from '@/utils/logger.util';
 import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
+import { parseFullStationXML } from '@/utils/radiko-xml-parser.util';
 
 const xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
 
@@ -85,22 +86,7 @@ export default class RadikoService {
 
     // 1. フル局データを取得・パース
     const fullRes = await got(STATION_FULL_URL);
-    const fullParsed = xmlParser.parse(fullRes.body);
-    const regionData: RegionData[] = fullParsed.region.stations.map((region: any) => ({
-      region_name: region['@region_name'],
-      region_id: region['@region_id'],
-      ascii_name: region['@ascii_name'],
-      stations: region.station.map((s: any) => ({
-        id: String(s.id), // FM802対策
-        name: s.name,
-        ascii_name: s.ascii_name,
-        areafree: s.areafree,
-        timefree: s.timefree,
-        logo: s.logo[2]['#text'],
-        banner: s.banner,
-        area_id: s.area_id,
-      })),
-    }));
+    const regionData = parseFullStationXML(fullRes.body);
 
     // 2. 並列数制限付きで47エリア分の取得を並列化
     const limit = pLimit(5);
