@@ -4,6 +4,7 @@ export interface LoginAccount {
 }
 
 export interface LoginState {
+  areafree: string;
   member_type: {
     type: string;
   };

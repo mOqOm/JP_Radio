@@ -1,9 +1,10 @@
 export interface RadikoProgramData {
-  station: string;
-  id: string;
+  stationId: string;
+  progId: string;
   ft: string;
-  tt: string;
+  to: string;
   title: string;
-  pfm: string;
-  img: string;
+  info?: string;
+  pfm?: string;
+  img?: string;
 }
