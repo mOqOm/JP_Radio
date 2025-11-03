@@ -19,7 +19,6 @@ import type { StationInfo } from '@/models/station.model';
 import type { LoginAccount, LoginState } from '@/models/auth.model';
 import type { RegionDataParsed, StationParsed, LogoInfo } from '@/models/radiko-xml-full-station.model';
 
-
 // Logicのインポート
 import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
 
@@ -47,6 +46,7 @@ export default class RadikoService {
     this.logger = logger;
     this.messageHelper = messageHelper;
     this.areaIDs = areaIDs;
+    // 認証系
     this.authLogic = new RadikoAuthLogic(logger);
   }
 
@@ -59,17 +59,17 @@ export default class RadikoService {
     Promise<string[]> {
     this.logger.info('JRADI03SI0001');
 
-    if(acct) {
+    if (acct) {
       this.logger.info('JRADI03SI0002');
       let loginOK = await this.authLogic.checkLogin();
-      if(!loginOK) {
+      if (!loginOK) {
         await this.authLogic.login(acct);
         loginOK = await this.authLogic.checkLogin();
       }
       this.loginState = loginOK;
     }
 
-    if(forceGetStations || !this.myAreaId) {
+    if (forceGetStations || !this.myAreaId) {
       [this.token, this.myAreaId] = await this.authLogic.getToken();
       await this.getStations();
     }
@@ -95,7 +95,7 @@ export default class RadikoService {
     const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     await Promise.all(
       areaIDs.map(areaId =>
-        limit(async() => {
+        limit(async () => {
           const res = await got(format(STATION_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
           const stations = parsed.stations.station.map((s: any) => s.id);
@@ -111,10 +111,10 @@ export default class RadikoService {
     const areaData = this.areaData;
     const currentAreaID = this.myAreaId ?? '';
     let allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
-    if(this.loginState) {
-      for(const id of this.areaIDs) {
-        for(const station of areaData.get(id)?.stations.map(String) ?? []) {
-          if(!allowedStations.includes(station)) {
+    if (this.loginState) {
+      for (const id of this.areaIDs) {
+        for (const station of areaData.get(id)?.stations.map(String) ?? []) {
+          if (!allowedStations.includes(station)) {
             allowedStations.push(station);
           }
         }
@@ -122,11 +122,11 @@ export default class RadikoService {
     }
 
     // 4. regionData をもとに stations を構成
-    for(const regionData of regionDataArray as RegionDataParsed[]) {
+    for (const regionData of regionDataArray as RegionDataParsed[]) {
       // 各地域の局ごとに処理
-      for(const station of regionData.stations as StationParsed[]) {
+      for (const station of regionData.stations as StationParsed[]) {
         // 許可されている局だけ追加
-        if(allowedStations.includes(station.id)) {
+        if (allowedStations.includes(station.id)) {
           // エリア名を取得し、末尾の " JAPAN" は削除
           const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
           const areaKanji = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
@@ -135,26 +135,26 @@ export default class RadikoService {
           this.stations.set(
             // 'TBS'
             station.id, {
-              // '関東'
-              RegionName: regionData.region_name,
-              // 'http://radiko.jp/res/banner/radiko_banner.png'
-              BannerURL: station.banner,
-              // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
-              LogoURL: logoFile,
-              // 'JP13'
-              AreaId: station.area_id,
-              // 'TOKYO'
-              AreaName: areaName,
-              // '東京'
-              AreaKanji: areaKanji,
-              // 'TBSラジオ'
-              Name: station.name,
-              // 'TBS RADIO'
-              AsciiName: station.ascii_name,
-              // '1'
-              AreaFree: station.areafree,
-              // '1'
-              TimeFree: station.timefree
+            // '関東'
+            RegionName: regionData.region_name,
+            // 'http://radiko.jp/res/banner/radiko_banner.png'
+            BannerURL: station.banner,
+            // 'https://radiko.jp/v2/static/station/logo/TBS/448x200.png
+            LogoURL: logoFile,
+            // 'JP13'
+            AreaId: station.area_id,
+            // 'TOKYO'
+            AreaName: areaName,
+            // '東京'
+            AreaKanji: areaKanji,
+            // 'TBSラジオ'
+            Name: station.name,
+            // 'TBS RADIO'
+            AsciiName: station.ascii_name,
+            // '1'
+            AreaFree: station.areafree,
+            // '1'
+            TimeFree: station.timefree
           });
         }
       }
@@ -176,7 +176,9 @@ export default class RadikoService {
         '-filter_complex',
         'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1'
       ], (err: any) => {
-        if(err) return logoUrl;
+        if (err) {
+          return logoUrl;
+        }
       });
       this.logger.info('JRADI03SI0013', logoUrl, logoFile);
     }
@@ -198,14 +200,16 @@ export default class RadikoService {
 
   // --- Play ---
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
-    if(!this.stations?.has(stationId)) {
+    // this.stationsに再生時のStationIdが含まれているか確認
+    if (!this.stations?.has(stationId)) {
+      // StationIdが含まれていなければLogにWarnとして書き込む
       this.logger.warn('JRADI03SW0001', stationId);
       return null;
     }
 
     let url = format(PLAY_LIVE_URL, stationId);
     let aac = '';
-    if(query.ft && query.to) {
+    if (query.ft && query.to) {
       const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
       const to = broadcastTimeConverter.revConvertRadioTime(query.to);
       url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
@@ -213,15 +217,15 @@ export default class RadikoService {
     this.logger.info('JRADI03SI0014', url);
 
     let m3u8: string | null = null;
-    for(let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if(!this.token) [this.token, this.myAreaId] = await this.authLogic.getToken();
+    for (let i = 0; i < MAX_RETRY_COUNT; i++) {
+      if (!this.token) [this.token, this.myAreaId] = await this.authLogic.getToken();
       m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-      if(m3u8) break;
+      if (m3u8) break;
       this.logger.info('JRADI03SI0015');
       this.token = '';
     }
 
-    if(!m3u8) {
+    if (!m3u8) {
       this.logger.error('JRADI03SE0001');
       return null;
     }
@@ -235,7 +239,7 @@ export default class RadikoService {
       '-loglevel', 'error',
       'pipe:1'
     ];
-    if(aac) args.push(aac);
+    if (aac) args.push(aac);
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
 

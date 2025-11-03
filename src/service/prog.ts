@@ -17,7 +17,6 @@ import type { RadikoProgramData } from '@/models/radiko-program.model';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
-import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { DBUtil } from '@/utils/db.util';
 import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
@@ -35,7 +34,6 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 
 export default class RdkProg {
   private readonly logger: LoggerEx;
-  private readonly messageHelper: MessageHelper;
 
   private readonly db = Datastore.create({ inMemoryOnly: true });
   private readonly dbUtil: DBUtil<RadikoProgramData>;
@@ -45,9 +43,8 @@ export default class RdkProg {
   private lastTime = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
-  constructor(logger: LoggerEx, messageHelper: MessageHelper) {
+  constructor(logger: LoggerEx) {
     this.logger = logger;
-    this.messageHelper = messageHelper;
 
     this.dbUtil = new DBUtil<RadikoProgramData>();
     this.xmlUtil = new RadikoXmlUtil(this.dbUtil);
@@ -63,10 +60,12 @@ export default class RdkProg {
   /** 指定局・時間の番組取得 */
   public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData | undefined> {
     let progData = await this.findProgramData(stationId, time);
-    if(!progData && retry) {
+
+    if (!progData && retry) {
       const stations = await this.getDailyStationPrograms(stationId, time);
       progData = stations.has(stationId) ? await this.findProgramData(stationId, time) : undefined;
     }
+
     return progData;
   }
 
@@ -74,14 +73,15 @@ export default class RdkProg {
   private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
     const time = timeFull.slice(0, 12);
 
-    if(stationId !== this.lastStationId || time !== this.lastTime) {
+    if (stationId !== this.lastStationId || time !== this.lastTime) {
       try {
         const result = await this.dbUtil.findOne({
           stationId,
           ft: { $lt: `${time}01` },
           to: { $gt: `${time}01` },
         });
-        if(result) {
+
+        if (result) {
           this.cachedProgram = result;
           this.lastStationId = stationId;
           this.lastTime = time;
@@ -89,6 +89,7 @@ export default class RdkProg {
           this.logger.error('JRADI02SE0001', stationId, time);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
+
       } catch {
         this.logger.error('JRADI02SE0002', stationId);
         this.cachedProgram = { ...EMPTY_PROGRAM };
@@ -103,7 +104,7 @@ export default class RdkProg {
     try {
       await this.dbUtil.insert(prog);
     } catch (error: any) {
-      if(error?.errorType !== 'uniqueViolated') {
+      if (error?.errorType !== 'uniqueViolated') {
         this.logger.error('JRADI02SE0003', error);
       }
     }
@@ -122,24 +123,27 @@ export default class RdkProg {
 
   /** 全エリア更新（boot / cron） */
   public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
-      this.logger.info('JRADI02SI0002', (whenBoot ? 'boot' : 'cron'));
-      const limit = pLimit(5);
-      const doneStations = new Set<string> ();
+    this.logger.info('JRADI02SI0002', (whenBoot ? 'boot' : 'cron'));
 
-      await Promise.all(
-        areaIdArray.map(areaId =>
-          limit(async() => {
-            const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) :
-              utilFormat(PROG_DATE_AREA_URL, broadcastTimeConverter.getCurrentDate(), areaId);
+    const limit = pLimit(5);
+    const doneStations = new Set<string>();
 
-            const stations = await this.getPrograms(url, doneStations);
-            stations.forEach(s => doneStations.add(s));
-          })
-        )
-      );
+    await Promise.all(
+      areaIdArray.map(areaId =>
+        limit(async () => {
+          const url = whenBoot ? utilFormat(PROG_TODAY_AREA_URL, areaId) :
+            utilFormat(PROG_DATE_AREA_URL, broadcastTimeConverter.getCurrentDate(), areaId);
 
-      return doneStations.size;
-    }
+          const stations = await this.getPrograms(url, doneStations);
+          stations.forEach(s =>
+            doneStations.add(s)
+          );
+        })
+      )
+    );
+
+    return doneStations.size;
+  }
 
   /** 日付×エリア取得 */
   public async getDateAreaPrograms(areaId: string, time: string): Promise<Set<string>> {
@@ -180,12 +184,12 @@ export default class RdkProg {
       const stationsSet = await this.xmlUtil.parseAndSavePrograms(response.body, skipStations);
 
       // Set<string> は値のみなので for...of でループ
-      for(const stationId of stationsSet) {
+      for (const stationId of stationsSet) {
         doneStations.add(stationId);
       }
 
     } catch (error) {
-      if(error instanceof Error) {
+      if (error instanceof Error) {
         this.logger.error('JRADI02SE0005', url, error);
       } else {
         this.logger.error('JRADI02SE0005', url, String(error));

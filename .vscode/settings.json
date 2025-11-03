@@ -1,3 +1,43 @@
 {
-  "typescript.preferences.importModuleSpecifier": "non-relative"
+  // import パスを絶対パス（非相対）に
+  "typescript.preferences.importModuleSpecifier": "non-relative",
+
+  // 行末の余分なスペース削除（空行は削除しない）
+  "files.trimTrailingWhitespace": true,
+
+  // 空白行のインデントを自動削除しない（改行圧縮防止）
+  "editor.trimAutoWhitespace": false,
+
+  // 保存時自動フォーマット
+  "editor.formatOnSave": true,
+
+  // ESLint auto-fix
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+
+  // JSON の空行を保持
+  "json.format.keepLines": true,
+
+  // JSDoc 自動補完
+  "javascript.suggest.completeJSDocs": true,
+
+  // コード整形のスペーススタイル
+  "javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": true,
+  "javascript.format.insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": true,
+  "javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": true,
+
+  // inlay hints を非表示（好み）
+  "javascript.inlayHints.functionLikeReturnTypes.enabled": false,
+  "javascript.inlayHints.parameterTypes.enabled": false,
+  "javascript.inlayHints.propertyDeclarationTypes.enabled": false,
+
+  // JS を型チェック対象に（`//@ts-check` 相当）
+  "js/ts.implicitProjectConfig.checkJs": true,
+
+  // デコレーター有効（NestJS / Angular など用）
+  "js/ts.implicitProjectConfig.experimentalDecorators": true,
+
+  // 不要な型取得を無効化（速度改善 / ネット節約）
+  "typescript.disableAutomaticTypeAcquisition": true
 }

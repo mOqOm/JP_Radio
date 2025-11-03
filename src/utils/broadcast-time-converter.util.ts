@@ -183,7 +183,11 @@ class BroadcastTimeConverter  {
    * @returns 0 = 放送中 / プラス = 放送前 / マイナス = 終了後
    */
   public checkProgramTime(ft: string, to: string, currentTime: string): number {
-    if (ft <= currentTime && currentTime < to) return 0;
+    
+    if (ft <= currentTime && currentTime < to) {
+      return 0;
+    }
+
     return this.getTimeSpan(currentTime, ft);
   }
 
