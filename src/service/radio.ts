@@ -243,6 +243,7 @@ export default class JpRadio {
   public async radioStations(mode: string): Promise<BrowseResult> {
     this.logger.info('JRADI01SI0009', mode);
     const defer = libQ.defer();
+
     // mode = live or timefree or timefree_today
     if (this.rdk?.stations) {
       // 地域名ごとにグループ化
@@ -277,6 +278,7 @@ export default class JpRadio {
     } else {
       defer.resolve(this.makeBrowseResult([]));
     }
+
     return defer.promise;
   }
 
@@ -284,6 +286,7 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0010', mode);
     const defer = libQ.defer();
     const items: BrowseItem[][] = await this.commonRadioFavouriteStations(mode);
+
     if (mode.startsWith('live')) {
       defer.resolve(this.makeBrowseResult([
         this.makeBrowseList(this.messageHelper.get('BROWSER.FAVOURITES_LIVE'), ['grid', 'list'], items[0])
@@ -294,6 +297,7 @@ export default class JpRadio {
         this.makeBrowseList(this.messageHelper.get('BROWSER.FAVOURITES_TIMEFREE'), ['list'], items[1])
       ]));
     }
+
     return defer.promise;
   }
 
@@ -492,6 +496,7 @@ export default class JpRadio {
     const stationName = stationInfo ? stationInfo.Name : stationId;
     const areaStation = `${areaName} / ${stationName}`;
     const progTitle = progData ? progData.title : '?';
+
     if (progData?.ft && progData?.to) {
       const check = broadcastTimeConverter.checkProgramTime(progData.ft,
         progData.to, broadcastTimeConverter.getCurrentRadioTime());
@@ -530,6 +535,7 @@ export default class JpRadio {
     item.artist = areaStation;
     // 番組時間
     item.duration = duration;
+
     return item;
   }
 
