@@ -214,19 +214,37 @@ class ControllerJpRadio {
   }
 
   clearAddPlayTrack(track: any): Promise<any> {
-    this.logger.info(`JP_Radio::clearAddPlayTrack: uri=${track.uri}`);
-    const safeUri = track.uri.replace(/"/g, '\\"');
-    return this.mpdPlugin.sendMpdCommand('stop', [])
+    const defer = libQ.defer();
+    // track.uri = /radiko/play/FMT
+    if(track.uri.startsWith('/radiko/play')) {
+      const servicePort = this.config.get('servicePort');
+      const safeUri = `http://localhost:${servicePort}${track.uri}`;
+      this.logger.info(`JP_Radio::clearAddPlayTrack: uri=${safeUri}`);
+
+      return this.mpdPlugin.sendMpdCommand('stop', [])
       .then(() => {
         return this.mpdPlugin.sendMpdCommand('clear', []);
       })
       .then(() => {
+        const currentPosition = this.commandRouter.stateMachine.currentPosition;
+        if(currentPosition > 0) {
+          // 再生キューの並べ替え：対象局を先頭に
+          var arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+          const arrayCurrentQueue = arrayQueue.splice(currentPosition);
+          arrayQueue = arrayCurrentQueue.concat(arrayQueue);
+          this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
+          this.commandRouter.stateMachine.playQueue.saveQueue();
+          this.commandRouter.stateMachine.currentPosition = 0;
+          this.commandRouter.volumioPushQueue(arrayQueue);
+        }
         return this.mpdPlugin.sendMpdCommand(`add "${safeUri}"`, []);
       })
       .then(() => {
         this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
         return this.mpdPlugin.sendMpdCommand('play', []);
       });
+    }
+    return defer.promise;
   }
 
   seek(timepos: number): Promise<any> {
@@ -260,30 +278,31 @@ class ControllerJpRadio {
   }
 
   explodeUri(uri: string): Promise<any> {
-    this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
+    //this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     var defer = libQ.defer();
 
-    // uri=http://localhost:9000/radiko/play/FMT/tt/sn/aa
-    //      0   1        2         3     4    5  6  7  8
+    // uri = /radiko/prog/FMT/tt/sn/aa
+    //      0   1     2    3  4  5  6
     const uris = uri.split('/');
     const param = {
-      hp: uris[2],  // 'localhost:9000'
-      id: uris[3],  // 'radiko'
-      st: uris[5],  // stationID
-      tt: decodeURIComponent(uris[6]), // title & performer
-      sn: decodeURIComponent(uris[7]), // stationName & time
-      aa: decodeURIComponent(uris[8]), // albumart
+      id: uris[1],  // 'radiko'
+      md: uris[2],  // 'prog'
+      st: uris[3],  // stationID
+      tt: decodeURIComponent(uris[4]), // title
+      sn: decodeURIComponent(uris[5]), // stationName & time
+      aa: decodeURIComponent(uris[6]), // albumart
     };
 
-    if (param.id == 'radiko') {
+    if (param.id == 'radiko' && param.md == 'prog') {
+      // 再生画面に表示する情報
       const response = {
         service: this.serviceName,  // clearAddPlayTrackを呼び出す先のサービス名
         type: 'song',
-        title: param.tt,
+        title: '',
         name: param.tt,
         artist: param.sn,
         albumart: param.aa,
-        uri: `http://${param.hp}/${param.id}/play/${param.st}`,
+        uri: `/${param.id}/play/${param.st}`,
       };
       defer.resolve(response);
 
