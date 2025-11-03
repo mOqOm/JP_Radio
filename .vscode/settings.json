@@ -13,7 +13,7 @@
 
   // ESLint auto-fix
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
+    "source.fixAll.eslint": "explicit"
   },
 
   // JSON の空行を保持

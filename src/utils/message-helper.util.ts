@@ -90,12 +90,14 @@ export class MessageHelper {
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {
       const objParams = params[0] as MessageParams;
       if (/\{[^\d]+\}/.test(template)) {
-        return template.replace(/\{(\w+)\}/g, (_, key) => objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`);
+        return template.replace(/\{(\w+)\}/g, (_match: string, key: string) =>
+          objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`
+        );
       }
     }
 
     // 数字インデックス置換 {0}, {1}, ...
-    return template.replace(/\{(\d+)\}/g, (_, index) => {
+    return template.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
       const idx = parseInt(index, 10);
       const val = params[idx];
       if (val === undefined) return `{${index}}`;
