@@ -63,7 +63,7 @@ export default class RdkProg {
   /** 指定局・時間の番組取得 */
   public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData | undefined> {
     let progData = await this.findProgramData(stationId, time);
-    if (!progData && retry) {
+    if(!progData && retry) {
       const stations = await this.getDailyStationPrograms(stationId, time);
       progData = stations.has(stationId) ? await this.findProgramData(stationId, time) : undefined;
     }
@@ -74,14 +74,14 @@ export default class RdkProg {
   private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
     const time = timeFull.slice(0, 12);
 
-    if (stationId !== this.lastStationId || time !== this.lastTime) {
+    if(stationId !== this.lastStationId || time !== this.lastTime) {
       try {
         const result = await this.dbUtil.findOne({
           stationId,
           ft: { $lt: `${time}01` },
           to: { $gt: `${time}01` },
         });
-        if (result) {
+        if(result) {
           this.cachedProgram = result;
           this.lastStationId = stationId;
           this.lastTime = time;
@@ -103,7 +103,7 @@ export default class RdkProg {
     try {
       await this.dbUtil.insert(prog);
     } catch (error: any) {
-      if (error?.errorType !== 'uniqueViolated') {
+      if(error?.errorType !== 'uniqueViolated') {
         this.logger.error('JRADI02SE0003', error);
       }
     }
@@ -180,12 +180,12 @@ export default class RdkProg {
       const stationsSet = await this.xmlUtil.parseAndSavePrograms(response.body, skipStations);
 
       // Set<string> は値のみなので for...of でループ
-      for (const stationId of stationsSet) {
+      for(const stationId of stationsSet) {
         doneStations.add(stationId);
       }
 
     } catch (error) {
-      if (error instanceof Error) {
+      if(error instanceof Error) {
         this.logger.error('JRADI02SE0005', url, error);
       } else {
         this.logger.error('JRADI02SE0005', url, String(error));
