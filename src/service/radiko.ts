@@ -55,8 +55,7 @@ export default class RadikoService {
    * @param acct ログインアカウント
    * @param forceGetStations 強制的に局情報取得
    */
-  public async init(acct: LoginAccount | null = null, forceGetStations = false):
-    Promise<string[]> {
+  public async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<string[]> {
     this.logger.info('JRADI03SI0001');
 
     if (acct) {
