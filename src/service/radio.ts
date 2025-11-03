@@ -295,7 +295,7 @@ export default class JpRadio {
       const lists: BrowseList[] = [];
       const week = broadcastTimeConverter.getRadioWeek(begin, end, 'M月d日(E)');
       if (week.length > 1)
-        this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('MESSAGE.PROGRAM_DATA_GETTING2', stationInfo.Name));
+        this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('PROGRAM_DATA_GETTING2', stationInfo.Name));
 
       const weekPromises = week.map(async(wDate: any) => {
         // 日付毎に並列化
@@ -535,11 +535,11 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0013');
     if (this.server) {
       this.logger.info('JRADI01SI0014');
-      this.commandRouter.pushToastMessage('warning', 'JP Radio', this.messageHelper.get('MESSAGE.ALREADY_STARTED'));
+      this.commandRouter.pushToastMessage('warning', 'JP Radio', this.messageHelper.get('ALREADY_STARTED'));
       return;
     }
     // 起動を通知
-    this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('MESSAGE.BOOT_STARTING'));
+    this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('BOOT_STARTING'));
 
     this.prg = new RdkProg(this.logger, this.messageHelper);
     this.rdk = new Radiko(this.logger, this.messageHelper, this.confParam.areaIds);
@@ -556,17 +556,17 @@ export default class JpRadio {
             }, this.serviceName);*/
           this.task1.start();
           const areaName = this.messageHelper.get(`RADIKO_AREA.${this.myInfo.areaId}`)
-          const areaFree = this.myInfo.areafree ? ` / ${this.messageHelper.get('MESSAGE.AREA_FREE')}` : '';
-          const msg1 = this.messageHelper.get('MESSAGE.BOOT_COMPLETED');
-          const msg2 = this.messageHelper.get('MESSAGE.AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
+          const areaFree = this.myInfo.areafree ? ` / ${this.messageHelper.get('AREA_FREE')}` : '';
+          const msg1 = this.messageHelper.get('BOOT_COMPLETED');
+          const msg2 = this.messageHelper.get('AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
           this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + msg2);
           resolve();
         })
         .on('error', (err: any) => {
           this.logger.error('JRADI01SE0006', err);
           this.commandRouter.pushToastMessage('error', this.messageHelper
-            .get('MESSAGE.ERR_BOOT_FAIL'), err.message || this.messageHelper
-            .get('MESSAGE.ERR_UNKNOWN'));
+            .get('ERR_BOOT_FAIL'), err.message || this.messageHelper
+            .get('ERR_UNKNOWN'));
           reject(err);
         });
     });
@@ -583,7 +583,7 @@ export default class JpRadio {
       await this.prg?.dbClose();
       this.prg = null;
       this.rdk = null;
-      //this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('MESSAGE.STOPED'));
+      //this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('STOPED'));
     }
   }
 
