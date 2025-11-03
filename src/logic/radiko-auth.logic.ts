@@ -42,7 +42,7 @@ export class RadikoAuthLogic {
 
   /** 認証してCookieJarを取得 */
   public async login(acct: LoginAccount): Promise<CookieJar> {
-    const jar = new tough.CookieJar();
+    const jar: CookieJar = new tough.CookieJar();
 
     try {
       await got.post(LOGIN_URL, { cookieJar: jar, form: acct });

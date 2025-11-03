@@ -246,7 +246,7 @@ class JpRadioController {
       if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = programPeriodTo;
       if (uiconf.sections?.[sectionIdx]?.content?.[2]) {
 
-        const today = broadcastTimeConverter.getCurrentDate();
+        const today: string = broadcastTimeConverter.getCurrentDate();
         const content = uiconf.sections[sectionIdx].content[2];
         content.value.value = timeFormat;
 
@@ -312,9 +312,9 @@ class JpRadioController {
     this.logger.info('JRADI01CI0008');
     if (this.config) {
       // 起動ポート
-      const newPort = Number(data.servicePort || 9000);
+      const newPort: number = Number(data.servicePort || 9000);
       // 遅延(ディレイ)
-      const newDelay = Number(data.networkDelay || 20);
+      const newDelay: number = Number(data.networkDelay || 20);
 
       if (!isNaN(newPort) && this.config.get('servicePort') !== newPort
         || !isNaN(newDelay) && this.config.get('networkDelay') !== newDelay) {
