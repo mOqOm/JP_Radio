@@ -331,7 +331,7 @@ class JpRadioController {
     }
   }
 
-  public clearStationLogoCache(data: any): void {
+  public clearStationLogoCache(): void {
     this.logger.info('JRADI01CI0011');
     exec(`/bin/rm -f ${__dirname}/assets/images/*_logo.png`, (err: any) => {
       if (err) {
@@ -423,6 +423,7 @@ class JpRadioController {
 
   public handleBrowseUri(curUri: string): Promise<any> {
     this.logger.info('JRADI01CI0015', curUri);
+
     const defer = libQ.defer();
     if (!this.appRadio) {
       this.logger.error('JRADI01CE0005');
