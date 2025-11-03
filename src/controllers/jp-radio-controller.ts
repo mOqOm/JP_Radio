@@ -36,6 +36,7 @@ class JpRadioController {
   private mpdPlugin: any;
   // 言語のコード('ja','en'等)
   private readonly langCode: string;
+  private baseDir: string;
 
   constructor(context: any) {
     this.context = context;
@@ -59,6 +60,9 @@ class JpRadioController {
 
     // journalctl / livelog に debug も表示させる
     this.logger.enableForceDebug(false);
+
+    // dist/ の 1 つ上 → plugin root
+    this.baseDir = path.resolve(__dirname, '../../');
   }
 
 //-----------------------------------------------------------------------
@@ -188,10 +192,13 @@ class JpRadioController {
 
     this.logger.info('JRADI01CI0004', this.langCode);
 
+    this.logger.info(this.baseDir);
+    this.logger.info(path.join(this.baseDir, 'UIConfig.json'));
+
     this.commandRouter.i18nJson(
-      path.join(process.cwd(), 'i18n', `strings_${this.langCode}.json`),
-      path.join(process.cwd(), 'i18n', 'strings_en.json'),
-      path.join(process.cwd(), 'src', 'UIConfig.json')
+      path.join(this.baseDir, 'i18n', `strings_${this.langCode}.json`),
+      path.join(this.baseDir, 'i18n', 'strings_en.json'),
+      path.join(this.baseDir, 'UIConfig.json')
     )
     .then((uiconf: any) => {
       // ネットワーク設定
