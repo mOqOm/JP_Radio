@@ -260,7 +260,7 @@ export default class RadikoService {
       });
       return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
     } catch (error) {
-      this.logger.error('JRADI03SE0002', error);
+      this.logger.error('JRADI03SE0002');
       return null;
     }
   }
