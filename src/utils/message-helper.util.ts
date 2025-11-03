@@ -40,22 +40,26 @@ export class MessageHelper {
 
   /** ini または JSON ファイルからメッセージをロード */
   private loadMessages() {
-    const iniPath = path.join(this.baseDir, `log_messages.${this.lang}.ini`);
+    const logMsgPath = path.join(this.baseDir, `log_messages.${this.lang}.ini`);
+    const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
     const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
     try {
-      if (fs.existsSync(iniPath)) {
-        const data = fs.readFileSync(iniPath, 'utf-8');
+      if (fs.existsSync(logMsgPath)) {
+        const data = fs.readFileSync(logMsgPath, 'utf-8');
+        this.messages = ini.parse(data);
+      } else if (fs.existsSync(pushMsgPath)) {
+        const data = fs.readFileSync(pushMsgPath, 'utf-8');
         this.messages = ini.parse(data);
       } else if (fs.existsSync(jsonPath)) {
         // fs-extra が必要
         this.messages = fs.readJsonSync(jsonPath);
       } else {
-        console.warn(`[MessageHelper] No message file found for language: ${this.lang} ${iniPath} ${jsonPath}`);
+        console.warn(`[MessageHelper] No message file found for language: ${this.lang} ${logMsgPath} ${jsonPath}`);
         this.messages = {};
       }
     } catch(err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${iniPath} ${jsonPath}`, err);
+      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${logMsgPath} ${jsonPath}`, err);
       this.messages = {};
     }
   }

@@ -147,18 +147,18 @@ class JpRadioController {
         this.logger.error('JRADI01CE0001', { error: error });
 
         if (error.code === 'EADDRINUSE') {
-          const message = messageHelper.get('MESSAGE.ERROR_PORT_IN_USE', this.confParam.port);
+          const message = messageHelper.get('ERROR_PORT_IN_USE', this.confParam.port);
           this.logger.error('JRADI01CE0002', { message });
           this.commandRouter.pushToastMessage(
             'error',
-            messageHelper.get('MESSAGE.ERROR_BOOT_FAILED'),
+            messageHelper.get('ERROR_BOOT_FAILED'),
             message
           );
         } else {
           this.commandRouter.pushToastMessage(
             'error',
-            messageHelper.get('MESSAGE.ERROR_BOOT_FAILED'),
-            error.message || messageHelper.get('MESSAGE.ERROR_UNKNOWN')
+            messageHelper.get('ERROR_BOOT_FAILED'),
+            error.message || messageHelper.get('ERROR_UNKNOWN')
           );
         }
         defer.reject(error);
@@ -334,7 +334,7 @@ class JpRadioController {
       if (err) {
         this.logger.error('JRADI01CE0004', err);
       } else {
-        this.commandRouter.pushToastMessage('success', 'JP Radio', messageHelper.get('MESSAGE.STATION_LOGO_CLEAR'));
+        this.commandRouter.pushToastMessage('success', 'JP Radio', messageHelper.get('STATION_LOGO_CLEAR'));
       }
     });
   }
@@ -375,14 +375,14 @@ class JpRadioController {
       await this.onStop();
       await this.onStart();
     } catch {
-      this.commandRouter.pushToastMessage('error', messageHelper.get('MESSAGE.RESTART_FAILED_TITLE'), messageHelper.get('MESSAGE.RESTART_FAILED_MESSAGE'));
+      this.commandRouter.pushToastMessage('error', messageHelper.get('RESTART_FAILED_TITLE'), messageHelper.get('RESTART_FAILED_MESSAGE'));
     }
   }
 
   private showRestartModal(): void {
     const message = {
-      title: messageHelper.get('MESSAGE.RESTART_MODAL_TITLE'),
-      message: messageHelper.get('MESSAGE.RESTART_MODAL_MESSAGE'),
+      title: messageHelper.get('RESTART_MODAL_TITLE'),
+      message: messageHelper.get('RESTART_MODAL_MESSAGE'),
       size: 'lg',
       buttons: [
         {
@@ -575,11 +575,11 @@ class JpRadioController {
             if (check > 0) {
               // 配信前の番組は再生できないのでライブ放送に切り替え
               uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.WARNING_SWITCH_LIVE1'));
+              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE1'));
             } else if (check == 0) {
               // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
               uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('MESSAGE.WARNING_SWITCH_LIVE2'));
+              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2'));
             }
           } else {
             // ライブ
