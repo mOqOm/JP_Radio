@@ -54,10 +54,10 @@ export default class RadikoService {
    */
   public async init(acct: LoginAccount | null = null, forceGetStations = false):
     Promise<string[]> {
-    this.logger.info('RADI0001I0001');
+    this.logger.info('JRADI03SI0001');
 
     if (acct) {
-      this.logger.info('RADI0001I0002');
+      this.logger.info('JRADI03SI0002');
       let loginOK = await this.authLogic.checkLogin();
       if (!loginOK) {
         await this.authLogic.login(acct);
@@ -78,7 +78,7 @@ export default class RadikoService {
    * 局情報取得・パース
    */
   private async getStations(): Promise<void> {
-    this.logger.info('RADI0001I0011');
+    this.logger.info('JRADI03SI0011');
     const startTime = Date.now();
     this.stations = new Map();
     this.areaData = new Map();
@@ -169,7 +169,7 @@ export default class RadikoService {
     }
 
     const endTime = Date.now();
-    this.logger.info('RADI0001I0012', endTime - startTime);
+    this.logger.info('JRADI03SI0012', endTime - startTime);
   }
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
@@ -186,7 +186,7 @@ export default class RadikoService {
       ], (err: any) => {
         if (err) return logoUrl;
       });
-      this.logger.info('RADI0001I0013', logoUrl, logoFile);
+      this.logger.info('JRADI03SI0013', logoUrl, logoFile);
     }
     return `/albumart?sourceicon=${logoPath}`;
   }
@@ -207,7 +207,7 @@ export default class RadikoService {
   // --- Play ---
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
     if (!this.stations?.has(stationId)) {
-      this.logger.warn('RADI0001W0001', stationId);
+      this.logger.warn('JRADI03SW0001', stationId);
       return null;
     }
 
@@ -218,19 +218,19 @@ export default class RadikoService {
       const to = broadcastTimeConverter.revConvertRadioTime(query.to);
       url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
     }
-    this.logger.info('RADI0001I0014', url);
+    this.logger.info('JRADI03SI0014', url);
 
     let m3u8: string | null = null;
     for (let i = 0; i < MAX_RETRY_COUNT; i++) {
       if (!this.token) [this.token, this.myAreaId] = await this.authLogic.getToken();
       m3u8 = await this.genTempChunkM3u8URL(url, this.token);
       if (m3u8) break;
-      this.logger.info('RADI0001I0015');
+      this.logger.info('JRADI03SI0015');
       this.token = '';
     }
 
     if (!m3u8) {
-      this.logger.error('RADI0001E0003');
+      this.logger.error('JRADI03SE0001');
       return null;
     }
 
@@ -260,7 +260,7 @@ export default class RadikoService {
       });
       return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
     } catch (error) {
-      this.logger.error('RADI0001E0004');
+      this.logger.error('JRADI03SE0002', error);
       return null;
     }
   }
