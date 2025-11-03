@@ -85,7 +85,7 @@ export default class JpRadio {
       });
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {
-      res.send("Hello, world. You're at the radiko_app index.");
+      res.send(`Hello, world. You're at the radiko_app index.`);
     });
   }
 
