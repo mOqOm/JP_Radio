@@ -27,7 +27,7 @@ describe('RadikoXmlUtil', () => {
     </stations>
   </radiko>`;
 
-  test('XMLをパースし、DBに番組が登録されること', async () => {
+  test('Success0001_XMLをパースし、DBに番組が登録されること', async () => {
     const stations = await xmlUtil.parseAndSavePrograms(sampleXML);
 
     expect(stations.has('STATION1')).toBe(true);
@@ -42,7 +42,7 @@ describe('RadikoXmlUtil', () => {
     expect(main?.pfm).toBe('DJ Alice');
   });
 
-  test('skipStations に含まれる局はスキップされること', async () => {
+  test('Success0002_skipStations に含まれる局はスキップされること', async () => {
     const skip = new Set<string>(['STATION1']);
 
     const stations = await xmlUtil.parseAndSavePrograms(sampleXML, skip);
@@ -54,7 +54,7 @@ describe('RadikoXmlUtil', () => {
     expect(saved.length).toBe(0);
   });
 
-  test('番組終了後の隙間が補完されること（順序も確認）', async () => {
+  test('Success0003_番組終了後の隙間が補完されること（順序も確認）', async () => {
     const xmlWithGap = `
     <radiko>
       <stations>
@@ -97,7 +97,7 @@ describe('RadikoXmlUtil', () => {
     expect(lastGap.to).toBe('20250101290000');
   });
 
-  test('XMLパースエラー時に例外が投げられること', async () => {
+  test('Failure0001_XMLパースエラー時に例外が投げられること', async () => {
     const invalidXML = `<bad></tag>`;
 
     await expect(xmlUtil.parseAndSavePrograms(invalidXML))
