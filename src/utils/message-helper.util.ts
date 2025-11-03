@@ -44,22 +44,34 @@ export class MessageHelper {
     const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
     const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
+    // ログ用
     try {
       if (fs.existsSync(logMsgPath)) {
         const data = fs.readFileSync(logMsgPath, 'utf-8');
         this.messages = ini.parse(data);
-      } else if (fs.existsSync(pushMsgPath)) {
-        const data = fs.readFileSync(pushMsgPath, 'utf-8');
-        this.messages = ini.parse(data);
-      } else if (fs.existsSync(jsonPath)) {
-        // fs-extra が必要
-        this.messages = fs.readJsonSync(jsonPath);
-      } else {
-        console.warn(`[MessageHelper] No message file found for language: ${this.lang} ${logMsgPath} ${jsonPath}`);
-        this.messages = {};
       }
     } catch(err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${logMsgPath} ${jsonPath}`, err);
+      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${logMsgPath}`, err);
+      this.messages = {};
+    }
+    // プッシュ用
+    try {
+      if (fs.existsSync(pushMsgPath)) {
+        const data = fs.readFileSync(pushMsgPath, 'utf-8');
+        this.messages = ini.parse(data);
+      }
+    } catch(err) {
+      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${pushMsgPath}`, err);
+      this.messages = {};
+    }
+
+    try {
+      if (fs.existsSync(jsonPath)) {
+        // fs-extra が必要
+        this.messages = fs.readJsonSync(jsonPath);
+      }
+    } catch(err) {
+      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${jsonPath}`, err);
       this.messages = {};
     }
   }
