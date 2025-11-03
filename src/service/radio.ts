@@ -538,6 +538,7 @@ export default class JpRadio {
       this.commandRouter.pushToastMessage('warning', 'JP Radio', this.messageHelper.get('MESSAGE.ALREADY_STARTED'));
       return;
     }
+    // 起動を通知
     this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('MESSAGE.BOOT_STARTING'));
 
     this.prg = new RdkProg(this.logger, this.messageHelper);
