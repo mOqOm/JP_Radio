@@ -17,7 +17,7 @@ import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
 // Modelのインポート
 import type { StationInfo } from '@/models/station.model';
 import type { LoginAccount, LoginState } from '@/models/auth.model';
-import type { RegionDataParsed, StationParsed, LogoInfo } from '@/models/radiko-xml-full-station.model';
+import type { RegionDataParsed, StationParsed } from '@/models/radiko-xml-full-station.model';
 
 // Logicのインポート
 import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
@@ -91,7 +91,7 @@ export default class RadikoService {
 
     // 2. 並列数制限付きで47エリア分の取得を並列化
     const limit = pLimit(5);
-    const areaIDs = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+    const areaIDs: string[] = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
     await Promise.all(
       areaIDs.map(areaId =>
         limit(async () => {
@@ -127,10 +127,10 @@ export default class RadikoService {
         // 許可されている局だけ追加
         if (allowedStations.includes(station.id)) {
           // エリア名を取得し、末尾の " JAPAN" は削除
-          const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-          const areaKanji = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
+          const areaName: string = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
+          const areaKanji: string = this.messageHelper.get(`RADIKO_AREA.${station.area_id}`);
 
-          const logoFile = this.saveStationLogoCache(station.logos[2].url, `${station.id}_logo.png`);
+          const logoFile: string = this.saveStationLogoCache(station.logos[2].url, `${station.id}_logo.png`);
           this.stations.set(
             // 'TBS'
             station.id, {
@@ -164,8 +164,8 @@ export default class RadikoService {
   }
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
-    const logoPath = `music_service/jp_radio/dist/assets/images/${logoFile}`;
-    const fullPath = `/data/plugins/${logoPath}`;
+    const logoPath: string = `music_service/jp_radio/dist/assets/images/${logoFile}`;
+    const fullPath: string = `/data/plugins/${logoPath}`;
     try {
       // ファイルの存在確認
       fs.statSync(fullPath);
@@ -208,6 +208,7 @@ export default class RadikoService {
 
     let url = format(PLAY_LIVE_URL, stationId);
     let aac = '';
+
     if (query.ft && query.to) {
       const ft = broadcastTimeConverter.addTime(broadcastTimeConverter.revConvertRadioTime(query.ft), query.seek);
       const to = broadcastTimeConverter.revConvertRadioTime(query.to);
@@ -216,10 +217,15 @@ export default class RadikoService {
     this.logger.info('JRADI03SI0014', url);
 
     let m3u8: string | null = null;
+
     for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.myAreaId] = await this.authLogic.getToken();
+      if (!this.token) {
+        [this.token, this.myAreaId] = await this.authLogic.getToken();
+      }
       m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-      if (m3u8) break;
+      if (m3u8) {
+        break;
+      }
       this.logger.info('JRADI03SI0015');
       this.token = '';
     }
@@ -238,7 +244,9 @@ export default class RadikoService {
       '-loglevel', 'error',
       'pipe:1'
     ];
-    if (aac) args.push(aac);
+    if (aac) {
+      args.push(aac);
+    }
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
 

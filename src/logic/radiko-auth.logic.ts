@@ -15,7 +15,9 @@ export class RadikoAuthLogic {
 
   /** ログイン状態チェック */
   public async checkLogin(): Promise<LoginState | null> {
-    if (!this.cookieJar) return null;
+    if (!this.cookieJar) {
+      return null;
+    }
 
     try {
       const response = await got(CHECK_URL, {
@@ -26,7 +28,10 @@ export class RadikoAuthLogic {
       return response.body as LoginState;
     } catch (err: any) {
       const statusCode = err?.response?.statusCode;
-      if (statusCode === 400) return null;
+      if (statusCode === 400) {
+        return null;
+      }
+      // HTTPステータスが400以外の場合
       this.logger.error('RADI0001E0002', err);
       return null;
     }
@@ -39,7 +44,10 @@ export class RadikoAuthLogic {
       await got.post(LOGIN_URL, { cookieJar: jar, form: acct });
       return jar;
     } catch (err: any) {
-      if (err.statusCode === 302) return jar;
+      if (err.statusCode === 302) {
+        return jar;
+      }
+      // HTTPステータスが302以外の場合
       this.logger.error('RADI0001E0001', err);
       throw err;
     }

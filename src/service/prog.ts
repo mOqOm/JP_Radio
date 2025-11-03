@@ -21,6 +21,7 @@ import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { DBUtil } from '@/utils/db.util';
 import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
 
+// TODO: 定数から呼出し可能であればそれを用いる
 const EMPTY_PROGRAM: RadikoProgramData = {
   stationId: '',
   progId: '',
@@ -62,7 +63,7 @@ export default class RdkProg {
     let progData = await this.findProgramData(stationId, time);
 
     if (!progData && retry) {
-      const stations = await this.getDailyStationPrograms(stationId, time);
+      const stations: Set<string> = await this.getDailyStationPrograms(stationId, time);
       progData = stations.has(stationId) ? await this.findProgramData(stationId, time) : undefined;
     }
 
@@ -71,7 +72,7 @@ export default class RdkProg {
 
   /** DB検索＋キャッシュ */
   private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
-    const time = timeFull.slice(0, 12);
+    const time: string = timeFull.slice(0, 12);
 
     if (stationId !== this.lastStationId || time !== this.lastTime) {
       try {
@@ -125,6 +126,7 @@ export default class RdkProg {
   public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
     this.logger.info('JRADI02SI0002', (whenBoot ? 'boot' : 'cron'));
 
+    // 並列処理数
     const limit = pLimit(5);
     const doneStations = new Set<string>();
 
@@ -147,7 +149,7 @@ export default class RdkProg {
 
   /** 日付×エリア取得 */
   public async getDateAreaPrograms(areaId: string, time: string): Promise<Set<string>> {
-    const date = time.slice(0, 8);
+    const date: string = time.slice(0, 8);
     return await this.getPrograms(utilFormat(PROG_DATE_AREA_URL, date, areaId));
   }
 
@@ -163,7 +165,7 @@ export default class RdkProg {
 
   /** 局ごと1日分 */
   public async getDailyStationPrograms(stationId: string, time: string): Promise<Set<string>> {
-    const date = time.slice(0, 8);
+    const date: string = time.slice(0, 8);
     return await this.getPrograms(utilFormat(PROG_DAILY_STATION_URL, date, stationId));
   }
 
