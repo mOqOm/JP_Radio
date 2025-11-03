@@ -133,7 +133,7 @@ export default class JpRadio {
         this.logger.info('JRADI01SI0008');
 
       } catch (error) {
-        this.logger.error(JRADI01SE0003);
+        this.logger.error('JRADI01SE0003');
         res.status(500).send('Internal server error');
       }
     }
@@ -248,7 +248,8 @@ export default class JpRadio {
               : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
           );
         } catch (err) {
-          this.logger.error('JRADI01SE0004', stationId , err);
+          //this.logger.error('JRADI01SE0004', stationId, err);
+          this.logger.error('JRADI01SE0004', stationId);
         }
       });
 
@@ -589,7 +590,7 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0017');
     if (this.rdk)[this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.rdk.init(this.acct);
     await this.#pgupdate(true);
-    this.logger.info('JRADI01SI0018', Object.entries(this.myInfo)});
+    this.logger.info('JRADI01SI0018', this.myInfo);
   }
 
   async #pgupdate(whenBoot = false): Promise<void> {

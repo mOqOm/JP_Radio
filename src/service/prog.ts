@@ -86,11 +86,11 @@ export default class RdkProg {
           this.lastStationId = stationId;
           this.lastTime = time;
         } else {
-          this.logger.error('RKPG0001E0001', stationId, time);
+          this.logger.error('JRADI02SE0001', stationId, time);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
       } catch {
-        this.logger.error('RKPG0001E0002', stationId);
+        this.logger.error('JRADI02SE0002', stationId);
         this.cachedProgram = { ...EMPTY_PROGRAM };
       }
     }
@@ -104,7 +104,7 @@ export default class RdkProg {
       await this.dbUtil.insert(prog);
     } catch (error: any) {
       if (error?.errorType !== 'uniqueViolated') {
-        this.logger.error('RKPG0001E0003', error);
+        this.logger.error('JRADI02SE0003', error);
       }
     }
   }
@@ -113,16 +113,16 @@ export default class RdkProg {
   public async clearOldProgram(): Promise<void> {
     try {
       this.dbUtil.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
-        .then(n => this.logger.debug('RKPG0001D0001', n));
+        .then(n => this.logger.info('JRADI02SI0001', n));
     } catch {
-      this.logger.error('RKPG0001E0004');
+      this.logger.error('JRADI02SE0004');
     }
     await this.dbCount();
   }
 
   /** 全エリア更新（boot / cron） */
   public async updatePrograms(areaIdArray: string[], whenBoot: boolean): Promise<number> {
-      this.logger.debug('RKPG0001D0002', (whenBoot ? 'boot' : 'cron'));
+      this.logger.info('JRADI02SI0002', (whenBoot ? 'boot' : 'cron'));
       const limit = pLimit(5);
       const doneStations = new Set<string> ();
 
@@ -170,7 +170,7 @@ export default class RdkProg {
 
   /** URLからXML取得 → XML解析 → DB登録 */
   private async getPrograms(url: string, skipStations: Set<string> = new Set()): Promise<Set<string>> {
-    this.logger.debug('RKPG0001D0003', url);
+    this.logger.info('JRADI02SI0003', url);
     const doneStations = new Set<string>();
 
     try {
@@ -186,9 +186,9 @@ export default class RdkProg {
 
     } catch (error) {
       if (error instanceof Error) {
-        this.logger.error('RKPG0001E0005', url, error);
+        this.logger.error('JRADI02SE0005', url, error);
       } else {
-        this.logger.error('RKPG0001E0005', url, String(error));
+        this.logger.error('JRADI02SE0005', url, String(error));
       }
     }
 
@@ -199,7 +199,7 @@ export default class RdkProg {
   /** DBクリア */
   public async dbClose(): Promise<void> {
     await this.db.remove({}, { multi: true })
-      .then(n => this.logger.debug('RKPG0001D0004', n));
+      .then(n => this.logger.info('JRADI02SI0004', n));
   }
 
   /** 全件取得（デバッグ用） */
@@ -210,7 +210,7 @@ export default class RdkProg {
   /** 件数ログ出力 */
   public async dbCount(): Promise<number> {
     const count = await this.dbUtil.count({});
-    this.logger.info('RKPG0001D0005', count);
+    this.logger.info('JRADI02SI0005', count);
     return count;
   }
 
