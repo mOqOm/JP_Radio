@@ -2,30 +2,20 @@ import fs from 'fs-extra';
 import ini from 'ini';
 import path from 'path';
 
-/**
- * プレースホルダ置換用パラメータ
- * - オブジェクトまたは順序付き配列で利用可能
- */
-export type MessageParams = Record<string, string | number>;
+/** プレースホルダ置換用パラメータ */
+export type MessageParams = Record<string, string | number | unknown>;
 
 /**
  * MessageHelper
  * -------------------
- * ini / JSON ファイルからメッセージをロードし、多言語対応文字列を取得するユーティリティ。
- * 
- * 特徴:
- * - メッセージIDによる取得
- * - 可変長引数やオブジェクトによるプレースホルダ置換
- *   - 単値/複数値 → {0},{1},...
- *   - オブジェクト → {key} 形式で名前付き置換
- *   - オブジェクトにプレースホルダがない場合は自動で JSON 化して返却
+ * ini / JSON ファイルからメッセージをロードし、多言語対応文字列を取得
  */
 export class MessageHelper {
   /** メッセージ格納 */
-  private messages: Record<string, string> = {};
+  private messages: Record<string, any> = {};
   /** 現在の言語 */
   private lang: string = 'ja';
-  /** i18n ディレクトリのベースパス */
+  /** i18n ディレクトリ */
   private readonly baseDir: string = path.resolve(process.cwd(), 'i18n');
 
   constructor(lang: string = 'ja') {
@@ -44,88 +34,72 @@ export class MessageHelper {
     const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
     const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
-    // ログ用
-    try {
-      if (fs.existsSync(logMsgPath)) {
-        const data = fs.readFileSync(logMsgPath, 'utf-8');
-        this.messages = ini.parse(data);
+    // ini ファイル (ログ用)
+    if (fs.existsSync(logMsgPath)) {
+      try {
+        this.messages = ini.parse(fs.readFileSync(logMsgPath, 'utf-8'));
+      } catch (err) {
+        console.error(`[MessageHelper] Failed to load ${logMsgPath}`, err);
       }
-    } catch(err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${logMsgPath}`, err);
-      this.messages = {};
-    }
-    // プッシュ用
-    try {
-      if (fs.existsSync(pushMsgPath)) {
-        const data = fs.readFileSync(pushMsgPath, 'utf-8');
-        this.messages = ini.parse(data);
-      }
-    } catch(err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${pushMsgPath}`, err);
-      this.messages = {};
     }
 
-    try {
-      if (fs.existsSync(jsonPath)) {
-        // fs-extra が必要
-        this.messages = fs.readJsonSync(jsonPath);
+    // ini ファイル (プッシュ用)
+    if (fs.existsSync(pushMsgPath)) {
+      try {
+        const pushMessages = ini.parse(fs.readFileSync(pushMsgPath, 'utf-8'));
+        this.messages = { ...this.messages, ...pushMessages };
+      } catch (err) {
+        console.error(`[MessageHelper] Failed to load ${pushMsgPath}`, err);
       }
-    } catch(err) {
-      console.error(`[MessageHelper] Failed to load messages for lang ${this.lang} ${jsonPath}`, err);
-      this.messages = {};
+    }
+
+    // JSON ファイル
+    if (fs.existsSync(jsonPath)) {
+      try {
+        const jsonMessages = fs.readJsonSync(jsonPath);
+        this.messages = { ...this.messages, ...jsonMessages };
+      } catch (err) {
+        console.error(`[MessageHelper] Failed to load ${jsonPath}`, err);
+      }
     }
   }
 
   /**
+   * ネストしたオブジェクトからドット区切りキーで取得
+   */
+  private getNested(obj: Record<string, any>, key: string): any {
+    return key.split('.').reduce((acc, k) => acc?.[k], obj);
+  }
+
+  /**
    * メッセージ取得
-   * @param id メッセージID
-   * @param params 可変長引数またはオブジェクト
-   *  - 数字インデックス → {0},{1},... に置換
-   *  - オブジェクト → {key} に置換。テンプレートにプレースホルダがなければ JSON 化
-   * @returns 置換済み文字列
+   * @param id メッセージID（ネストはドット区切り）
+   * @param params 可変長引数またはオブジェクト、Errorも対応
    */
   public get(id: string, ...params: (string | number | MessageParams | Error)[]): string {
-    const template = this.messages[id];
+    let template = this.getNested(this.messages, id);
     if (!template) return `[Unknown message ID: ${id}]`;
 
-    // Error が直接渡された場合 → {errorMessage}, {errorStack} を追加
+    // Error オブジェクト対応
     if (params.length === 1 && params[0] instanceof Error) {
       const err = params[0] as Error;
-      params = [
-        {
-          errorMessage: err.message ?? 'Unknown error',
-          errorStack: err.stack ?? '',
-        }
-      ];
+      params = [{ errorMessage: err.message ?? 'Unknown error', errorStack: err.stack ?? '' }];
     }
 
     // 名前付き置換 {key}
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {
-        const objParams = params[0] as MessageParams;
-
-        // テンプレートに数字ではないプレースホルダがある場合
-        if (/\{[^\d]+\}/.test(template)) {
-            return template.replace(/\{(\w+)\}/g, (_, key) =>
-                objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`
-            );
-        }
-
-        // プレースホルダが数字だけ ({0}) の場合は params[0] を数字置換ブロックに任せる
+      const objParams = params[0] as MessageParams;
+      if (/\{[^\d]+\}/.test(template)) {
+        return template.replace(/\{(\w+)\}/g, (_, key) => objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`);
+      }
     }
 
     // 数字インデックス置換 {0}, {1}, ...
     return template.replace(/\{(\d+)\}/g, (_, index) => {
       const idx = parseInt(index, 10);
       const val = params[idx];
-
       if (val === undefined) return `{${index}}`;
-
-      // オブジェクトかつ文字列化が必要な場合のみ JSON 化
-      if (typeof val === 'object' && val !== null) {
-          return Array.isArray(val) ? JSON.stringify(val) : JSON.stringify(val);
-      }
-
-      // 文字列・数値はそのまま
+      if (typeof val === 'object' && val !== null) return Array.isArray(val) ? JSON.stringify(val) : JSON.stringify(val);
       return String(val);
     });
   }
