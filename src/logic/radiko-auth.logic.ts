@@ -47,14 +47,14 @@ export class RadikoAuthLogic {
     try {
       await got.post(LOGIN_URL, { cookieJar: jar, form: acct });
       return jar;
-    } catch (err: any) {
-      if (err.statusCode === 302) {
+    } catch (error: any) {
+      if (error.statusCode === 302) {
         return jar;
       }
 
       // HTTPステータスが302以外の場合
-      this.logger.error('RADI0001E0001', err);
-      throw err;
+      this.logger.error('RADI0001E0001', error);
+      throw error;
     }
   }
 
