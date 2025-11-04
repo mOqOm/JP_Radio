@@ -266,7 +266,6 @@ export default class JpRadio {
               : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
           );
         } catch (error: any) {
-          // TODO:Error情報もLog側に渡したい
           this.logger.error('JRADI01SE0004', stationId, error);
         }
       });
