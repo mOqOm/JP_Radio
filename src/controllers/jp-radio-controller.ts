@@ -8,7 +8,7 @@ import { parse as queryParse } from 'querystring';
 import { ParsedQs } from 'qs';
 
 // 定数のインポート
-import { AreaNames } from '@/constants/area-name.constants';
+import { RADIKO_AREA } from '@/constants/radiko-area.const'
 
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
@@ -266,37 +266,38 @@ class JpRadioController {
         const section = uiconf.sections[sectionIdx];
         section.hidden = false;
 
-        AreaNames.forEach((item) => {
+
+        Object.entries(RADIKO_AREA).forEach(([regionKey, regionObj]) => {
           const contents = new Array();
-          //const onAreas = new Array();
-          const regionId = item.region.split('.').pop();  // 'RADIKO_AREA.REGION2'
+
+          // region label from constant (not messageHelper)
           contents.push({
-            id: regionId,  // 'REGION2'
-            label: messageHelper.get(item.region), // '関東'
-          }); // contents[0]
-          item.areas.forEach((radikoArea) => {
-            const areaId = radikoArea.split('.').pop(); // 'RADIKO_AREA.JP13'
-            const areaName = messageHelper.get(radikoArea); // '≪ 関東 ≫'
-            const areaStations = this.appRadio?.getAreaStations(areaId!); // TBS,QRR,LFR,INT,FMT,...,JOAK
-            const value = this.config.get(`radikoAreas.${areaId}`);
-            contents.push({
-              id: areaId,  // 'JP13'
-              element: 'switch',
-              label: `- ${areaName}${(myInfo.areaId == areaId) ? messageHelper.get('UI_SETTINGS.RADIKO_MY_AREA') : ''}`,
-              value: value,
-              description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),
-            }); // contents[1-]
-            section.saveButton.data.push(areaId);
-          }); // item.areas.forEach
-
-          contents.push({ label: '' });  // separator
-
-          contents.forEach((item: any) => {
-            section.content.push(item)
+            id: regionKey,
+            label: regionObj.name, // ex: '≪ 関東 ≫'
           });
 
-        }); // AreaNames.forEach
+          Object.entries(regionObj.prefectures).forEach(([jpKey, jpName]) => {
+            const areaId = jpKey;
+            const areaName = jpName; // from constant
+            const areaStations = this.appRadio?.getAreaStations(areaId);
+            const value = this.config.get(`radikoAreas.${areaId}`);
 
+            contents.push({
+              id: areaId,
+              element: 'switch',
+              label: `- ${areaName}${myInfo.areaId === areaId ? messageHelper.get('UI_SETTINGS.RADIKO_MY_AREA') : ''
+                }`,
+              value,
+              description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),
+            });
+
+            section.saveButton.data.push(areaId);
+          });
+
+          contents.push({ label: '' }); // separator
+
+          contents.forEach((c: any) => section.content.push(c));
+        });
       }
       defer.resolve(uiconf);
 
