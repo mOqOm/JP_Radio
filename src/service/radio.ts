@@ -650,7 +650,7 @@ export default class JpRadio {
       [this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.rdk.init(this.acct);
     }
     await this.#pgupdate(true);
-    this.logger.info('JRADI01SI0018', this.myInfo);
+    this.logger.info('JRADI01SI0018', JSON.stringify(this.myInfo));
   }
 
   // 番組表の更新
