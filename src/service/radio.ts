@@ -12,11 +12,13 @@ import type { LoginAccount } from '@/models/auth.model';
 import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-result.model';
 import type { StationInfo } from '@/models/station.model';
 import type { RadikoProgramData } from '@/models/radiko-program.model';
+import type { RadikoMyInfo } from '@/models/radiko-myinfo.model';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
 import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
+import { getRegionByPref } from '@/utils/radiko-area.util';
 
 export default class JpRadio {
   private readonly app: Application;
@@ -29,7 +31,7 @@ export default class JpRadio {
   private readonly commandRouter: any;
   private prg: RdkProg | null = null;
   private rdk: Radiko | null = null;
-  private myInfo = {
+  private myInfo: RadikoMyInfo = {
     areaId: '',
     areafree: '',
     member_type: '',
@@ -604,12 +606,17 @@ export default class JpRadio {
         this.logger.info('JRADI01SI0015', this.confParam.port);
 
         this.task1.start();
-        const areaName: string = this.messageHelper.get(`RADIKO_AREA.${this.myInfo.areaId}`)
+        // JPxxからエリア名(北海道・東北、関東など)を取得
+        const areaName: string = getRegionByPref(this.myInfo.areaId);
+
         const areaFree: string = this.myInfo.areafree ? ` / ${this.messageHelper.get('AREA_FREE')}` : '';
+
         const msg1: string = this.messageHelper.get('BOOT_COMPLETED');
         const msg2: string = this.messageHelper.get('AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
+
         this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + msg2);
         resolve();
+
       }).on('error', (error: any) => {
         this.logger.error('JRADI01SE0006', error);
         this.commandRouter.pushToastMessage('error', this.messageHelper

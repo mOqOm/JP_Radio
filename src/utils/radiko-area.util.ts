@@ -18,12 +18,13 @@ export const getPrefName = (jp: PrefKey): PrefName | undefined => {
 };
 
 // JPコード → 地域名
-export const getRegionByPref = (jp: PrefKey): string | undefined => {
+export const getRegionByPref = (jp: PrefKey): string => {
   for (const region of Object.values(RADIKO_AREA)) {
     if (jp in region.prefectures) {
       return region.name;
     }
   }
+  return '';
 };
 
 // REGION → JPリスト
