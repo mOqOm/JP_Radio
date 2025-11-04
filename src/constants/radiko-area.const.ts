@@ -1,4 +1,9 @@
-export const RADIKO_AREA = {
+export interface RadikoAreaGroup {
+  name: string;
+  prefectures: Record<string, string>;
+}
+
+export const RADIKO_AREA: Record<string, RadikoAreaGroup> = {
   REGION1: {
     name: "≪ 北海道・東北 ≫",
     prefectures: {
