@@ -6,7 +6,6 @@ import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
-import { ParsedQs } from 'qs';
 
 // 定数のインポート
 import {
@@ -208,7 +207,7 @@ export default class RadikoService {
   }
 
   // --- Play ---
-  public async play(stationId: string, query: ParsedQs): Promise<ChildProcess | null> {
+  public async play(stationId: string, query: any): Promise<ChildProcess | null> {
     // this.stationsに再生時のStationIdが含まれているか確認
     if (!this.stations?.has(stationId)) {
       // StationIdが含まれていなければLogにWarnとして書き込む

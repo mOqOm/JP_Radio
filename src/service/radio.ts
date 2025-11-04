@@ -2,7 +2,6 @@ import express, { Application, Request, Response } from 'express';
 import { parse as queryParse } from 'querystring';
 import cron from 'node-cron';
 import libQ from 'kew';
-import { ParsedQs } from 'qs';
 
 // Serviceのインポート
 import RdkProg from '@/service/prog';
@@ -92,7 +91,7 @@ export default class JpRadio {
     });
   }
 
-  private async startStream(res: Response, stationId: string, query: ParsedQs): Promise<void> {
+  private async startStream(res: Response, stationId: string, query: any): Promise<void> {
     this.logger.info('JRADI01SI0003');
     try {
       const ffmpeg = await this.rdk!.play(stationId, query);
