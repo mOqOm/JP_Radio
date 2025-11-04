@@ -386,7 +386,7 @@ export default class JpRadio {
     return defer.promise;
   }
 
-  private async commonRadioFavouriteStations(mode: string, skipPrograms = false): Promise<BrowseItem[][]> {
+  private async commonRadioFavouriteStations(mode: string, skipPrograms: boolean = false): Promise<BrowseItem[][]> {
     this.logger.info('JRADI01SI0012', mode);
 
     const defer = libQ.defer();
@@ -611,12 +611,12 @@ export default class JpRadio {
         const msg2: string = this.messageHelper.get('AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
         this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + msg2);
         resolve();
-      }).on('error', (err: any) => {
-        this.logger.error('JRADI01SE0006', err);
+      }).on('error', (error: any) => {
+        this.logger.error('JRADI01SE0006', error);
         this.commandRouter.pushToastMessage('error', this.messageHelper
-          .get('ERR_BOOT_FAIL'), err.message || this.messageHelper
+          .get('ERR_BOOT_FAIL'), error.message || this.messageHelper
             .get('ERR_UNKNOWN'));
-        reject(err);
+        reject(error);
       });
     });
   }
@@ -679,7 +679,11 @@ export default class JpRadio {
 
       item?.stations.forEach((stationId) => {
         const info = this.rdk?.stations.get(stationId);
-        if (info?.RegionName != '全国') stations.push(stationId);
+
+        if (info?.RegionName != '全国') {
+          stations.push(stationId);
+        }
+
       });
       return stations;
     }

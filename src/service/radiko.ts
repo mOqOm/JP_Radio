@@ -2,7 +2,6 @@ import 'date-utils';
 import { format } from 'util';
 import got from 'got';
 import { spawn, execFile, ChildProcess } from 'child_process';
-import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
@@ -232,9 +231,11 @@ export default class RadikoService {
         [this.token, this.myAreaId] = await this.authLogic.getToken();
       }
       m3u8 = await this.genTempChunkM3u8URL(url, this.token);
+
       if (m3u8) {
         break;
       }
+
       this.logger.info('JRADI03SI0015');
       this.token = '';
     }
