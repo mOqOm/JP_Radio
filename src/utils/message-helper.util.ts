@@ -38,8 +38,8 @@ export class MessageHelper {
     if (fs.existsSync(logMsgPath)) {
       try {
         this.messages = ini.parse(fs.readFileSync(logMsgPath, 'utf-8'));
-      } catch (err) {
-        console.error(`[MessageHelper] Failed to load ${logMsgPath}`, err);
+      } catch (error: any) {
+        console.error(`[MessageHelper] Failed to load ${logMsgPath}`, error);
       }
     }
 
@@ -48,8 +48,8 @@ export class MessageHelper {
       try {
         const pushMessages = ini.parse(fs.readFileSync(pushMsgPath, 'utf-8'));
         this.messages = { ...this.messages, ...pushMessages };
-      } catch (err) {
-        console.error(`[MessageHelper] Failed to load ${pushMsgPath}`, err);
+      } catch (error: any) {
+        console.error(`[MessageHelper] Failed to load ${pushMsgPath}`, error);
       }
     }
 
@@ -58,8 +58,8 @@ export class MessageHelper {
       try {
         const jsonMessages = fs.readJsonSync(jsonPath);
         this.messages = { ...this.messages, ...jsonMessages };
-      } catch (err) {
-        console.error(`[MessageHelper] Failed to load ${jsonPath}`, err);
+      } catch (error: any) {
+        console.error(`[MessageHelper] Failed to load ${jsonPath}`, error);
       }
     }
   }

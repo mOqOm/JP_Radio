@@ -5,6 +5,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import { format } from 'util';
 import { parse as queryParse } from 'querystring';
+import { ParsedQs } from 'qs';
 
 // 定数のインポート
 import { AreaNames } from '@/constants/area-name.constants';
@@ -67,8 +68,6 @@ class JpRadioController {
     this.baseDir = path.resolve(__dirname, '../../');
   }
 
-  //-----------------------------------------------------------------------
-
   public onVolumioStart(): Promise<void> {
     this.logger.info('JRADI01CI0001');
 
@@ -79,7 +78,7 @@ class JpRadioController {
       this.config = new VConf();
       this.config.loadFile(configFile);
       defer.resolve();
-    } catch (error) {
+    } catch (error: any) {
       defer.reject(error);
     }
 
@@ -154,7 +153,7 @@ class JpRadioController {
         this.logger.info('JRADI01CI0006', processingTime);
         defer.resolve();
       })
-      .catch((error) => {
+      .catch((error: any) => {
         // ログ出力（stack も自動的に表示される）
         this.logger.error('JRADI01CE0001', { error: error });
 
@@ -289,8 +288,13 @@ class JpRadioController {
             }); // contents[1-]
             section.saveButton.data.push(areaId);
           }); // item.areas.forEach
+
           contents.push({ label: '' });  // separator
-          contents.forEach((item: any) => { section.content.push(item) });
+
+          contents.forEach((item: any) => {
+            section.content.push(item)
+          });
+
         }); // AreaNames.forEach
 
       }
@@ -330,8 +334,8 @@ class JpRadioController {
 
     if (this.config) {
 
-      const updated = ['radikoUser', 'radikoPass'].some(
-        (key) => this.config!.get(key) !== (data as any)[key]
+      const updated = ['radikoUser', 'radikoPass'].some((key) =>
+        this.config!.get(key) !== (data as any)[key]
       );
 
       if (updated) {
@@ -353,12 +357,13 @@ class JpRadioController {
     }
   }
 
+  // ロゴのキャッシュクリア
   public clearStationLogoCache(): void {
     this.logger.info('JRADI01CI0011');
 
-    exec(`/bin/rm -f ${__dirname}/assets/images/*_logo.png`, (err: any) => {
-      if (err) {
-        this.logger.error('JRADI01CE0004', err);
+    exec(`/bin/rm -f ${__dirname}/assets/images/*_logo.png`, (error: any) => {
+      if (error) {
+        this.logger.error('JRADI01CE0004', error);
       } else {
         this.commandRouter.pushToastMessage('success', 'JP Radio', messageHelper.get('STATION_LOGO_CLEAR'));
       }
@@ -366,6 +371,7 @@ class JpRadioController {
 
   }
 
+  // タイムフリー
   public saveTimeFreeSetting(data: { programPeriodFrom: string; programPeriodTo: string; timeFormat: { value: string; label: string } }): void {
     this.logger.info('JRADI01CI0012');
 
@@ -386,6 +392,7 @@ class JpRadioController {
     }
   }
 
+  // ラジコのエリア保存
   public saveRadikoAreasSetting(data: any): void {
     this.logger.info('JRADI01CI0013');
 
@@ -407,11 +414,15 @@ class JpRadioController {
     }
   }
 
+  // 再起動
   public async restartPlugin(): Promise<void> {
     try {
+      // 停止
       await this.onStop();
+      // 開始
       await this.onStart();
-    } catch {
+    } catch (error: any) {
+      this.logger.error('', error);
       this.commandRouter.pushToastMessage('error', messageHelper.get('RESTART_FAILED_TITLE'), messageHelper.get('RESTART_FAILED_MESSAGE'));
     }
   }
@@ -709,7 +720,9 @@ class JpRadioController {
 
   public seek(timepos: number): Promise<any> {
     this.logger.info('JRADI01CI0020', timepos);
+
     const defer = libQ.defer();
+
     this.mpdPlugin.sendMpdCommand('currentsong', []).then((data: any) => {
       // uri(TimeFree) = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
       let uri: string = data.file;
@@ -758,7 +771,7 @@ class JpRadioController {
     return this.commandRouter.servicePushState(state, this.serviceName);
   }
 
-  public search(query: any): Promise<any> {
+  public search(query: ParsedQs): Promise<any> {
     this.logger.info('JRADI01CI0026', query);
     return libQ.resolve();
   }

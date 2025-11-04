@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import { parse as queryParse } from 'querystring';
 import cron from 'node-cron';
 import libQ from 'kew';
+import { ParsedQs } from 'qs';
 
 // Serviceのインポート
 import RdkProg from '@/service/prog';
@@ -82,6 +83,7 @@ export default class JpRadio {
         res.status(500).send(msg);
         return;
       }
+
       this.startStream(res, stationId, req.query);
     });
 
@@ -90,7 +92,7 @@ export default class JpRadio {
     });
   }
 
-  private async startStream(res: Response, stationId: string, query: any): Promise<void> {
+  private async startStream(res: Response, stationId: string, query: ParsedQs): Promise<void> {
     this.logger.info('JRADI01SI0003');
     try {
       const ffmpeg = await this.rdk!.play(stationId, query);
@@ -127,14 +129,14 @@ export default class JpRadio {
             // seek時に'SIGTERM'ではkillされずに残るので'SIGKILL'に変えてみた
             process.kill(-ffmpeg.pid, 'SIGKILL');
             this.logger.info('JRADI01SI0007', ffmpeg.pid);
-          } catch (e: any) {
-            this.logger.warn('JRADI01SW0001', (e.code === 'ESRCH' ? 'Already exited' : e.message));
+          } catch (error: any) {
+            this.logger.warn('JRADI01SW0001', (error.code === 'ESRCH' ? 'Already exited' : error.message));
           }
         }
       });
       this.logger.info('JRADI01SI0008');
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('JRADI01SE0003');
       res.status(500).send('Internal server error');
     }
@@ -264,9 +266,9 @@ export default class JpRadio {
               ? this.makeBrowseItem_TimeFree(mode.replace('free', 'table'), stationId, stationInfo)
               : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
           );
-        } catch (error) {
+        } catch (error: any) {
           // TODO:Error情報もLog側に渡したい
-          this.logger.error('JRADI01SE0004', stationId);
+          this.logger.error('JRADI01SE0004', stationId, error);
         }
       });
 

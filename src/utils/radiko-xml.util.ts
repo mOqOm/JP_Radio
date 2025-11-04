@@ -42,7 +42,10 @@ export class RadikoXmlUtil {
 
       for (const s of stations) {
         const stationId = s['@id'];
-        if (!stationId || skipStations.has(stationId)) continue;
+
+        if (!stationId || skipStations.has(stationId)) {
+          continue;
+        }
 
         const progSetsRaw = s.progs ?? [];
         const progSets: any[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
@@ -60,6 +63,7 @@ export class RadikoXmlUtil {
         rawProgs.sort((a, b) => (a['@ft'] > b['@ft'] ? 1 : -1));
 
         let prevTo = '';
+
         for (const p of rawProgs) {
           const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
           const to = broadcastTimeConverter.convertRadioTime(p['@to'], '29');
@@ -114,7 +118,7 @@ export class RadikoXmlUtil {
 
         doneStations.add(stationId);
       }
-    } catch (error) {
+    } catch (error: any) {
       // エラーを呼び出し元にスロー
       throw error;
     }

@@ -27,15 +27,15 @@ export class RadikoAuthLogic {
       });
 
       return response.body as LoginState;
-    } catch (err: any) {
-      const statusCode = err?.response?.statusCode;
+    } catch (error: any) {
+      const statusCode = error?.response?.statusCode;
 
       if (statusCode === 400) {
         return null;
       }
 
       // HTTPステータスが400以外の場合
-      this.logger.error('RADI0001E0002', err);
+      this.logger.error('RADI0001E0002', error);
       return null;
     }
   }

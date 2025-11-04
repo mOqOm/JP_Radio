@@ -91,7 +91,7 @@ export default class RdkProg {
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 
-      } catch {
+      } catch (error: any) {
         this.logger.error('JRADI02SE0002', stationId);
         this.cachedProgram = { ...EMPTY_PROGRAM };
       }
@@ -116,8 +116,8 @@ export default class RdkProg {
     try {
       this.dbUtil.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
         .then(n => this.logger.info('JRADI02SI0001', n));
-    } catch {
-      this.logger.error('JRADI02SE0004');
+    } catch (error: any) {
+      this.logger.error('JRADI02SE0004', error);
     }
     await this.dbCount();
   }
@@ -190,12 +190,8 @@ export default class RdkProg {
         doneStations.add(stationId);
       }
 
-    } catch (error) {
-      if (error instanceof Error) {
-        this.logger.error('JRADI02SE0005', url, error);
-      } else {
-        this.logger.error('JRADI02SE0005', url, String(error));
-      }
+    } catch (error: any) {
+      this.logger.error('JRADI02SE0005', url, error);
     }
 
     await this.dbCount();

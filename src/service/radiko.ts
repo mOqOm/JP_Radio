@@ -6,6 +6,7 @@ import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
+import { ParsedQs } from 'qs';
 
 // 定数のインポート
 import {
@@ -83,6 +84,7 @@ export default class RadikoService {
    */
   private async getStations(): Promise<void> {
     this.logger.info('JRADI03SI0011');
+
     const startTime = Date.now();
     this.stations = new Map();
     this.areaData = new Map();
@@ -168,6 +170,7 @@ export default class RadikoService {
   }
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
+    // path.resolve(process.cwd(), 'hoge');←を使うように
     const logoPath: string = `music_service/jp_radio/dist/assets/images/${logoFile}`;
     const fullPath: string = `/data/plugins/${logoPath}`;
 
@@ -205,7 +208,7 @@ export default class RadikoService {
   }
 
   // --- Play ---
-  public async play(stationId: string, query: any): Promise<ChildProcess | null> {
+  public async play(stationId: string, query: ParsedQs): Promise<ChildProcess | null> {
     // this.stationsに再生時のStationIdが含まれているか確認
     if (!this.stations?.has(stationId)) {
       // StationIdが含まれていなければLogにWarnとして書き込む
@@ -272,8 +275,8 @@ export default class RadikoService {
       });
 
       return res.body.split('\n').find(line => line.startsWith('http') && line.endsWith('.m3u8')) ?? null;
-    } catch (error) {
-      this.logger.error('JRADI03SE0002');
+    } catch (error: any) {
+      this.logger.error('JRADI03SE0002', error);
       return null;
     }
   }
