@@ -33,7 +33,6 @@ export class MessageHelper {
     const logMsgPath = path.join(this.baseDir, `log_messages.${this.lang}.ini`);
     const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
     const browseTextPath = path.join(this.baseDir, `browse_texts.${this.lang}.ini`);
-    const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
     // ini ファイル (ログ用)
     if (fs.existsSync(logMsgPath)) {
@@ -66,21 +65,11 @@ export class MessageHelper {
   }
 
   /**
-   * ネストしたオブジェクトからドット区切りキーで取得
-   */
-  private getNested(obj: Record<string, any>, key: string): any {
-    return key.split('.').reduce((acc, k) => acc?.[k], obj);
-  }
-
-  /**
    * メッセージ取得
-   * @param id メッセージID（ネストはドット区切り）
+   * @param messageId メッセージID（ネストはドット区切り）
    * @param params 可変長引数またはオブジェクト、Errorも対応
    */
-  public get(id: string, ...params: (string | number | MessageParams | Error)[]): string {
-    let template = this.getNested(this.messages, id);
-    if (!template) return `[Unknown message ID: ${id}]`;
-
+  public get(messageId: string, ...params: (string | number | MessageParams | Error)[]): string {
     // Error オブジェクト対応
     if (params.length === 1 && params[0] instanceof Error) {
       const err = params[0] as Error;
@@ -90,15 +79,15 @@ export class MessageHelper {
     // 名前付き置換 {key}
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {
       const objParams = params[0] as MessageParams;
-      if (/\{[^\d]+\}/.test(template)) {
-        return template.replace(/\{(\w+)\}/g, (_match: string, key: string) =>
+      if (/\{[^\d]+\}/.test(messageId)) {
+        return messageId.replace(/\{(\w+)\}/g, (_match: string, key: string) =>
           objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`
         );
       }
     }
 
     // 数字インデックス置換 {0}, {1}, ...
-    return template.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
+    return messageId.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
       const idx = parseInt(index, 10);
       const val = params[idx];
       if (val === undefined) return `{${index}}`;
