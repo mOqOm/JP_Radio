@@ -8,7 +8,7 @@ export type MessageParams = Record<string, string | number | unknown>;
 /**
  * MessageHelper
  * -------------------
- * ini / JSON ファイルからメッセージをロードし、多言語対応文字列を取得
+ * ini ファイルからメッセージをロードし、多言語対応文字列を取得
  */
 export class MessageHelper {
   /** メッセージ格納 */
@@ -28,7 +28,7 @@ export class MessageHelper {
     this.loadMessages();
   }
 
-  /** ini または JSON ファイルからメッセージをロード */
+  /** ini ファイルからメッセージをロード */
   private loadMessages() {
     const logMsgPath = path.join(this.baseDir, `log_messages.${this.lang}.ini`);
     const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
@@ -66,10 +66,15 @@ export class MessageHelper {
 
   /**
    * メッセージ取得
-   * @param messageId メッセージID（ネストはドット区切り）
+   * @param messageId メッセージID
    * @param params 可変長引数またはオブジェクト、Errorも対応
    */
   public get(messageId: string, ...params: (string | number | MessageParams | Error)[]): string {
+    const template = this.messages[messageId];
+    if (!template) {
+      return `[Unknown message ID: ${messageId}]`;
+    }
+
     // Error オブジェクト対応
     if (params.length === 1 && params[0] instanceof Error) {
       const err = params[0] as Error;
