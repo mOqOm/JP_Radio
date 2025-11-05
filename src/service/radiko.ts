@@ -26,7 +26,7 @@ import { LoggerEx } from '@/utils/logger.util';
 import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { parseFullStationXML } from '@/utils/radiko-xml-parser.util';
-import { getPrefName } from '@/utils/radiko-area.util';
+import { getPrefKanji, getPrefRomaji } from '@/utils/radiko-area.util';
 
 const xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
 
@@ -131,13 +131,13 @@ export default class RadikoService {
       for (const station of regionData.stations as StationParsed[]) {
         // 許可されている局だけ追加
         if (allowedStations.includes(station.id)) {
-          // エリア名を取得し、末尾の " JAPAN" は削除
-          const areaName: string = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-
-          // 都道府県名
-          const areaKanji: string = getPrefName(station.area_id) ?? '';
-
+          // 都道府県名のローマ字
+          const areaName: string = getPrefRomaji(station.area_id) ?? '';
+          // 都道府県名の漢字
+          const areaKanji: string = getPrefKanji(station.area_id) ?? '';
+          // ロゴ
           const logoFile: string = this.saveStationLogoCache(station.logos[2].url, `${station.id}_logo.png`);
+
           this.stations.set(
             // 'TBS'
             station.id, {
