@@ -132,9 +132,9 @@ export default class RadikoService {
         // 許可されている局だけ追加
         if (allowedStations.includes(station.id)) {
           // 都道府県名のローマ字
-          const areaName: string = getPrefRomaji(station.area_id) ?? '';
+          const areaName: string = getPrefRomaji(station.area_id);
           // 都道府県名の漢字
-          const areaKanji: string = getPrefKanji(station.area_id) ?? '';
+          const areaKanji: string = getPrefKanji(station.area_id);
           // ロゴ
           const logoFile: string = this.saveStationLogoCache(station.logos[2].url, `${station.id}_logo.png`);
 

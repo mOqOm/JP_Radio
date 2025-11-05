@@ -11,20 +11,22 @@ import { RADIKO_AREA, RegionKey, PrefKey } from "@/constants/radiko-area.const";
 
 
 // --- JP → 表記（kanji or romaji） ---
-export const getPrefKanji = (jp: PrefKey): string | undefined => {
+export const getPrefKanji = (jp: PrefKey): string => {
   for (const region of Object.values(RADIKO_AREA)) {
     if (jp in region.prefectures) {
       return region.prefectures[jp].kanji;
     }
   }
+  return '';
 };
 
-export const getPrefRomaji = (jp: PrefKey): string | undefined => {
+export const getPrefRomaji = (jp: PrefKey): string => {
   for (const region of Object.values(RADIKO_AREA)) {
     if (jp in region.prefectures) {
       return region.prefectures[jp].romaji;
     }
   }
+  return '';
 };
 
 // --- JP → 地域名 ---
@@ -47,15 +49,18 @@ export const getJPByKanji = (kanji: string): PrefKey | undefined => {
   for (const region of Object.values(RADIKO_AREA)) {
     const entry = Object.entries(region.prefectures)
       .find(([, info]) => info.kanji === kanji);
-    if (entry) return entry[0] as PrefKey;
+    if (entry) {
+      return entry[0] as PrefKey;
+    }
   }
 };
 
 export const getJPByRomaji = (romaji: string): PrefKey | undefined => {
   const target = romaji.toUpperCase();
   for (const region of Object.values(RADIKO_AREA)) {
-    const entry = Object.entries(region.prefectures)
-      .find(([, info]) => info.romaji === target);
-    if (entry) return entry[0] as PrefKey;
+    const entry = Object.entries(region.prefectures).find(([, info]) => info.romaji === target);
+    if (entry) {
+      return entry[0] as PrefKey;
+    }
   }
 };
