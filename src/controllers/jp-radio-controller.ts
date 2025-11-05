@@ -564,35 +564,35 @@ class JpRadioController {
             {
               service: this.serviceName,
               type: 'radio-category',
-              title: messageHelper.get('BROWSER.LIVE'),
+              title: messageHelper.get('BROWSE_LABEL_LIVE'),
               icon: 'fa fa-microphone',
               uri: 'radiko/live'
             },
             {
               service: this.serviceName,
               type: 'radio-favourites',
-              title: messageHelper.get('BROWSER.LIVE_FAVOURITES'),
+              title: messageHelper.get('BROWSE_LABEL_LIVE_FAVOURITES'),
               icon: 'fa fa-heart',
               uri: 'radiko/live/favourites'
             },
             {
               service: this.serviceName,
               type: 'radio-category',
-              title: messageHelper.get('BROWSER.TIMEFREE'),
+              title: messageHelper.get('BROWSE_LABEL_TIMEFREE'),
               icon: 'fa fa-clock-o',
               uri: 'radiko/timefree'
             },
             {
               service: this.serviceName,
               type: 'radio-category',
-              title: messageHelper.get('BROWSER.TIMEFREE_TODAY'),
+              title: messageHelper.get('BROWSE_LABEL_TIMEFREE_TODAY'),
               icon: 'fa fa-map-marker',
               uri: 'radiko/timefree_today'
             },
             {
               service: this.serviceName,
               type: 'radio-favourites',
-              title: messageHelper.get('BROWSER.TIMEFREE_FAVOURITES'),
+              title: messageHelper.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
               icon: 'fa fa-heartbeat',
               uri: 'radiko/timefree/favourites'
             }
@@ -838,13 +838,13 @@ class JpRadioController {
       const pfm = progData.pfm ? messageHelper.get('PROGINFO.PERFORMER') + progData.pfm : '<br/>';
       data.uri = data.uri.replace(/\/proginfo\//, '/play/');
       const modalMessage = {
-        title: messageHelper.get('PROGINFO.PROG_INFO') + progData.title,
+        title: messageHelper.get('PROGINFO_PROG_INFO') + progData.title,
         //message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div style="text-align:right">${data.uri}</div>`,
         message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div align="right">${data.uri}</div>`,
         size: 'lg',
         buttons: [
           {
-            name: messageHelper.get('PROGINFO.PLAY'),
+            name: messageHelper.get('PROGINFO_PLAY'),
             class: 'btn btn-info',
             emit: 'callMethod',
             payload: {
@@ -854,7 +854,7 @@ class JpRadioController {
             }
           },
           {
-            name: messageHelper.get('PROGINFO.ADD_TO_QUEUE'),
+            name: messageHelper.get('PROGINFO_ADD_TO_QUEUE'),
             class: 'btn btn-info',
             emit: 'callMethod',
             payload: {
@@ -864,7 +864,7 @@ class JpRadioController {
             }
           },
           {
-            name: messageHelper.get('PROGINFO.ADD_TO_FAVOURITES'),
+            name: messageHelper.get('PROGINFO_ADD_TO_FAVOURITES'),
             class: 'btn btn-info',
             emit: 'callMethod',
             payload: {

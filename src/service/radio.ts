@@ -297,12 +297,12 @@ export default class JpRadio {
 
     if (mode.startsWith('live')) {
       defer.resolve(this.makeBrowseResult([
-        this.makeBrowseList(this.messageHelper.get('BROWSER.FAVOURITES_LIVE'), ['grid', 'list'], items[0])
+        this.makeBrowseList(this.messageHelper.get('FAVOURITES_LIVE'), ['grid', 'list'], items[0])
       ]));
     } else if (mode.startsWith('timefree')) {
       defer.resolve(this.makeBrowseResult([
-        this.makeBrowseList(this.messageHelper.get('BROWSER.FAVOURITES_STATION'), ['grid', 'list'], items[0]),
-        this.makeBrowseList(this.messageHelper.get('BROWSER.FAVOURITES_TIMEFREE'), ['list'], items[1])
+        this.makeBrowseList(this.messageHelper.get('BROWSE_TITLE_FAVOURITES_STATION'), ['grid', 'list'], items[0]),
+        this.makeBrowseList(this.messageHelper.get('BROWSE_TITLE_FAVOURITES_TIMEFREE'), ['list'], items[1])
       ]));
     }
 
@@ -347,7 +347,7 @@ export default class JpRadio {
           }
         } while (time < '2900');
 
-        const title: string = (mode.startsWith('prog') ? this.messageHelper.get('BROWSER.PROG_INFO') : '') + wDate.kanji + ((wDate.index == 0) ? this.messageHelper.get('BROWSER.TODAY') : '');
+        const title: string = (mode.startsWith('prog') ? this.messageHelper.get('PROGINFO_PROG_INFO') : '') + wDate.kanji + ((wDate.index == 0) ? this.messageHelper.get('BROWSE_BUTTON_TODAY') : '');
         lists.push(this.makeBrowseList(title, ['list'], items, wDate.date));
       });
 
@@ -362,13 +362,13 @@ export default class JpRadio {
         const uri: string = `radiko/${mode}/${stationId}`;
 
         lists.unshift(this.makeBrowseList('<<', ['list'], [
-          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSER.PREV_WEEK'), `${uri}/${Number(begin) - 7}~${Number(end) - 7}`),
-          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSER.PREV_DAY'), `${uri}/${Number(begin) - 1}~${Number(begin) - 1}`)
+          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSE_BUTTON_PREV_WEEK'), `${uri}/${Number(begin) - 7}~${Number(end) - 7}`),
+          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSE_BUTTON_PREV_DAY'), `${uri}/${Number(begin) - 1}~${Number(begin) - 1}`)
         ]));
 
         lists.push(this.makeBrowseList('>>', ['list'], [
-          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSER.NEXT_DAY'), `${uri}/${Number(end) + 1}~${Number(end) + 1}`),
-          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSER.NEXT_WEEK'), `${uri}/${Number(begin) + 7}~${Number(end) + 7}`)
+          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSE_BUTTON_NEXT_DAY'), `${uri}/${Number(end) + 1}~${Number(end) + 1}`),
+          this.makeBrowseItem_NoMenu(space + this.messageHelper.get('BROWSE_BUTTON_NEXT_WEEK'), `${uri}/${Number(begin) + 7}~${Number(end) + 7}`)
         ]));
 
         if (mode.startsWith('prog')) {
@@ -377,7 +377,7 @@ export default class JpRadio {
           items.forEach((item) =>
             item.uri = item.uri.replace('timetable', 'progtable') + `/${begin}~${end}`
           );
-          lists.push(this.makeBrowseList(this.messageHelper.get('BROWSER.PROG_FAVOURITES'), ['grid', 'list'], items));
+          lists.push(this.makeBrowseList(this.messageHelper.get('BROWSE_PROG_FAVOURITES'), ['grid', 'list'], items));
         }
         defer.resolve(this.makeBrowseResult(lists));
       });

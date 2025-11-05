@@ -1,28 +1,4 @@
 {
-  "BROWSER": {
-    "LIVE": "ライブ",
-    "LIVE_FAVOURITES": "ライブ（お気に入り）",
-    "TIMEFREE": "タイムフリー",
-    "TIMEFREE_TODAY": "タイムフリー（本日分）",
-    "TIMEFREE_FAVOURITES": "タイムフリー（お気に入り）",
-    "FAVOURITES_LIVE": "お気に入り局（ライブ）",
-    "FAVOURITES_TIMEFREE": "お気に入り番組（タイムフリー）",
-    "FAVOURITES_STATION": "お気に入り局（タイムフリー）",
-    "PROG_INFO": "番組情報：",
-    "PROG_FAVOURITES": "お気に入り局",
-    "PREV_WEEK": "▲　前週　▲",
-    "PREV_DAY": "△　前日　△",
-    "NEXT_DAY": "▽　翌日　▽",
-    "NEXT_WEEK": "▼　翌週　▼",
-    "TODAY": "（今日）"
-  },
-  "PROGINFO": {
-    "PERFORMER": "出演者：",
-    "PROG_INFO": "番組情報：",
-    "PLAY": "▷ 再生",
-    "ADD_TO_QUEUE": "☰ キューに追加",
-    "ADD_TO_FAVOURITES": "♡ お気に入りに追加"
-  },
   "UI_SETTINGS": {
     "PLUGIN_CONFIGURATION": "JP Radio Plugin設定",
     "SAVE_BUTTON_LABEL": "保存",

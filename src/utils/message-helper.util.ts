@@ -32,6 +32,7 @@ export class MessageHelper {
   private loadMessages() {
     const logMsgPath = path.join(this.baseDir, `log_messages.${this.lang}.ini`);
     const pushMsgPath = path.join(this.baseDir, `push_messages.${this.lang}.ini`);
+    const browseTextPath = path.join(this.baseDir, `browse_texts.${this.lang}.ini`);
     const jsonPath = path.join(this.baseDir, `string_${this.lang}.json`);
 
     // ini ファイル (ログ用)
@@ -53,13 +54,13 @@ export class MessageHelper {
       }
     }
 
-    // JSON ファイル
-    if (fs.existsSync(jsonPath)) {
+    // ini ファイル (Browse用)
+    if (fs.existsSync(browseTextPath)) {
       try {
-        const jsonMessages = fs.readJsonSync(jsonPath);
-        this.messages = { ...this.messages, ...jsonMessages };
+        const pushMessages = ini.parse(fs.readFileSync(browseTextPath, 'utf-8'));
+        this.messages = { ...this.messages, ...pushMessages };
       } catch (error: any) {
-        console.error(`[MessageHelper] Failed to load ${jsonPath}`, error);
+        console.error(`[MessageHelper] Failed to load ${browseTextPath}`, error);
       }
     }
   }
