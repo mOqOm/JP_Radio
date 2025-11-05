@@ -84,15 +84,15 @@ export class MessageHelper {
     // 名前付き置換 {key}
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {
       const objParams = params[0] as MessageParams;
-      if (/\{[^\d]+\}/.test(messageId)) {
-        return messageId.replace(/\{(\w+)\}/g, (_match: string, key: string) =>
+      if (/\{[^\d]+\}/.test(template)) {
+        return template.replace(/\{(\w+)\}/g, (_match: string, key: string) =>
           objParams[key] !== undefined ? String(objParams[key]) : `{${key}}`
         );
       }
     }
 
     // 数字インデックス置換 {0}, {1}, ...
-    return messageId.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
+    return template.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
       const idx = parseInt(index, 10);
       const val = params[idx];
       if (val === undefined) {
