@@ -90,8 +90,12 @@ export class MessageHelper {
     return messageId.replace(/\{(\d+)\}/g, (_match: string, index: string) => {
       const idx = parseInt(index, 10);
       const val = params[idx];
-      if (val === undefined) return `{${index}}`;
-      if (typeof val === 'object' && val !== null) return Array.isArray(val) ? JSON.stringify(val) : JSON.stringify(val);
+      if (val === undefined) {
+        return `{${index}}`;
+      }
+      if (typeof val === 'object' && val !== null) {
+        return Array.isArray(val) ? JSON.stringify(val) : JSON.stringify(val);
+      }
       return String(val);
     });
   }
