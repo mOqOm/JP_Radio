@@ -24,17 +24,55 @@ import JpRadio from '@/service/radio';
 
 export = JpRadioController;
 
+/**
+ * グローバルに公開する値の型宣言（any を排除）
+ * - Controller がセットする
+ * - Service 側は読み取り専用で参照する想定
+ */
+declare global {
+  // eslint-disable-next-line no-var
+  var JP_RADIO_LOGGER: LoggerEx;
+  // eslint-disable-next-line no-var
+  var JP_RADIO_SERVICE_NAME: string;
+}
+
+/** globalThis を拡張した型 */
+type GlobalJP = typeof globalThis & {
+  JP_RADIO_LOGGER: LoggerEx;
+  JP_RADIO_SERVICE_NAME: string;
+};
+
 class JpRadioController {
   private readonly context: any;
   private readonly commandRouter: any;
-  private readonly logger: LoggerEx;
+
+  private _logger!: LoggerEx;
+  // LoggerEx をグローバルに取得
+  private get logger(): LoggerEx {
+    return this._logger;
+  }
+  // LoggerEx をグローバルに設定
+  private set logger(value: LoggerEx) {
+    (globalThis as GlobalJP).JP_RADIO_LOGGER = value;
+    this._logger = value;
+  }
+
+  private _serviceName: string = 'jp_radio';
+  // サービス名はプロジェクト全体のグローバルから取得（未設定時は 'jp_radio'）
+  private get serviceName(): string {
+    return this._serviceName;
+  }
+
+  // サービス名はプロジェクト全体のグローバルに設定
+  private set serviceName(value: string) {
+    (globalThis as any).JP_RADIO_SERVICE_NAME = value;
+  }
+
   private config: InstanceType<typeof VConf> | null = null;
 
   // TODO: 以下Model化
   private confParam: { port: number, delay: number, aaType: string, ppFrom: number, ppTo: number, timeFmt: string, dateFmt: string, areaIds: string[] };
 
-  // サービス名(プラグイン呼び出しのuriに含まれる文字でもある)
-  private readonly serviceName = 'jp_radio';
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
   // 言語のコード('ja','en'等)
@@ -89,8 +127,8 @@ class JpRadioController {
     this.logger.info('JRADI01CI0002');
 
     const defer = libQ.defer();
-    this.onStop().then(
-      () => defer.resolve()
+    this.onStop().then(() =>
+      defer.resolve()
     );
     return defer.promise;
   }
@@ -99,8 +137,8 @@ class JpRadioController {
     this.logger.info('JRADI01CI0003');
 
     const defer = libQ.defer();
-    this.onStop().then(
-      () => defer.resolve()
+    this.onStop().then(() =>
+      defer.resolve()
     );
     return defer.promise;
   }
@@ -143,37 +181,35 @@ class JpRadioController {
       areaIds: areaIds
     };
 
-    this.appRadio = new JpRadio(account, this.confParam, this.logger, this.commandRouter, this.serviceName, messageHelper);
+    this.appRadio = new JpRadio(account, this.confParam, this.commandRouter, messageHelper);
 
-    this.appRadio.start()
-      .then(() => {
-        this.addToBrowseSources();
-        const endTime = Date.now();
-        const processingTime = endTime - startTime;
-        this.logger.info('JRADI01CI0006', processingTime);
-        defer.resolve();
-      })
-      .catch((error: any) => {
-        // ログ出力（stack も自動的に表示される）
-        this.logger.error('JRADI01CE0001', { error: error });
+    this.appRadio.start().then(() => {
+      this.addToBrowseSources();
+      const endTime = Date.now();
+      const processingTime = endTime - startTime;
+      this.logger.info('JRADI01CI0006', processingTime);
+      defer.resolve();
+    }).catch((error: any) => {
+      // ログ出力（stack も自動的に表示される）
+      this.logger.error('JRADI01CE0001', { error: error });
 
-        if (error.code === 'EADDRINUSE') {
-          const message = messageHelper.get('ERROR_PORT_IN_USE', this.confParam.port);
-          this.logger.error('JRADI01CE0002', { message });
-          this.commandRouter.pushToastMessage(
-            'error',
-            messageHelper.get('ERROR_BOOT_FAILED'),
-            message
-          );
-        } else {
-          this.commandRouter.pushToastMessage(
-            'error',
-            messageHelper.get('ERROR_BOOT_FAILED'),
-            error.message || messageHelper.get('ERROR_UNKNOWN')
-          );
-        }
-        defer.reject(error);
-      });
+      if (error.code === 'EADDRINUSE') {
+        const message = messageHelper.get('ERROR_PORT_IN_USE', this.confParam.port);
+        this.logger.error('JRADI01CE0002', { message });
+        this.commandRouter.pushToastMessage(
+          'error',
+          messageHelper.get('ERROR_BOOT_FAILED'),
+          message
+        );
+      } else {
+        this.commandRouter.pushToastMessage(
+          'error',
+          messageHelper.get('ERROR_BOOT_FAILED'),
+          error.message || messageHelper.get('ERROR_UNKNOWN')
+        );
+      }
+      defer.reject(error);
+    });
     return defer.promise;
   }
 
@@ -182,7 +218,7 @@ class JpRadioController {
     //  => プラグイン管理でOFFにしたときにコールされるようだ
     //  => onVolumioShutdown,onVolumioRebootからコールするようにしてみた
     this.logger.info('JRADI01CI0007');
-    if (this.appRadio) {
+    if (this.appRadio !== null) {
       try {
         await this.appRadio.stop();
         this.appRadio = null;
@@ -470,22 +506,21 @@ class JpRadioController {
     this.logger.info('JRADI01CI0015', curUri);
 
     const defer = libQ.defer();
-    if (!this.appRadio) {
+    if (this.appRadio === null) {
       this.logger.error('JRADI01CE0005');
       defer.resolve({});
       return defer.promise;
     }
 
     const [base, mode, stationId, option] = curUri.split('/');
-    if (base == 'radiko') {
-      if (!mode) {
+    if (base === 'radiko') {
+      if (mode === undefined || mode === null || mode === '') {
         // uri = radiko
         defer.resolve(this.rootMenu());
-
       } else if (mode.startsWith('live')) {
         // uri = radiko/live or radiko/live/favourites
         libQ.resolve().then(() =>
-          (stationId == 'favourites')
+          (stationId === 'favourites')
             ? this.appRadio!.radioFavouriteStations(mode)
             : this.appRadio!.radioStations(mode)
         ).then((result: any) =>
@@ -497,13 +532,13 @@ class JpRadioController {
 
       } else if (mode.startsWith('timefree')) {
         // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
-        defer.resolve((stationId == 'favourites')
+        defer.resolve((stationId === 'favourites')
           ? this.appRadio.radioFavouriteStations(mode)
           : this.appRadio.radioStations(mode));
 
       } else if (mode.startsWith('timetable')) {
         libQ.resolve().then(() => {
-          if (option == undefined) {
+          if (option === undefined) {
             // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
             const today = mode.endsWith('today');
             const from = today ? 0 : this.confParam.ppFrom;
@@ -536,15 +571,13 @@ class JpRadioController {
 
       } else if (mode.startsWith('proginfo')) {
         // uri = radiko/proginfo/TBS?tt&sn&aa&ft&to
-        libQ.resolve()
-          .then(() => {
-            this.explodeUri(curUri)
-              .then((data) => this.showProgInfoModal(data))
-          })
-          .fail((error: any) => {
-            this.logger.error('JRADI01CE0009', error);
-            defer.reject(error);
-          });
+        libQ.resolve().then(() => {
+          this.explodeUri(curUri)
+            .then((data) => this.showProgInfoModal(data))
+        }).fail((error: any) => {
+          this.logger.error('JRADI01CE0009', error);
+          defer.reject(error);
+        });
       }
 
     } else { // base != 'radiko'
@@ -609,53 +642,51 @@ class JpRadioController {
     let uri: string = track.uri;
     // uri(Live)     = http://localhost:9000/radiko/play/TBS
     // uri(TimeFree) = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
-    if (uri.includes('/radiko/play/')) {
-      return this.mpdPlugin.sendMpdCommand('stop', [])
-        .then(() => {
-          return this.mpdPlugin.sendMpdCommand('clear', []);
-        })
-        .then(() => {
-          const [liveUri, timefree]: string[] = uri.split('?');
+    if (uri.includes('/radiko/play/') === true) {
+      (async () => {
+        // 再生中の曲を停止してキューをクリア
+        await this.mpdPlugin.sendMpdCommand('stop', []);
+        await this.mpdPlugin.sendMpdCommand('clear', []);
 
-          if (timefree) {
-            // タイムフリー
-            const query = queryParse(timefree);
-            const ft = query.ft ? String(query.ft) : '';
-            const to = query.to ? String(query.to) : '';
-            const check = broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime());
+        const [liveUri, timefree]: string[] = uri.split('?');
 
-            if (check > 0) {
-              // 配信前の番組は再生できないのでライブ放送に切り替え
-              uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE1'));
-            } else if (check == 0) {
-              // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
-              uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2'));
-            }
+        if (timefree !== undefined && timefree !== null && timefree !== '') {
+          // タイムフリー
+          const query = queryParse(timefree);
+          const ft = query.ft ? String(query.ft) : '';
+          const to = query.to ? String(query.to) : '';
+          const check: number = broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime());
 
-          } else {
-            // ライブ
-            const currentPosition = this.commandRouter.stateMachine.currentPosition;
-            if (currentPosition > 0) {
-              // 再生キューを並べ替えて対象局を先頭に
-              let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
-              const arrayCurrentQueue = arrayQueue.splice(currentPosition);
-              arrayQueue = arrayCurrentQueue.concat(arrayQueue);
-              this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
-              //this.commandRouter.stateMachine.playQueue.saveQueue();
-              this.commandRouter.stateMachine.currentPosition = 0;
-              this.commandRouter.volumioPushQueue(arrayQueue);
-            }
+          if (check > 0) {
+            // 配信前の番組は再生できないのでライブ放送に切り替え
+            uri = liveUri;
+            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE1'));
+          } else if (check === 0) {
+            // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
+            uri = liveUri;
+            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2'));
           }
+        } else {
+          this.logger.info('TESTController0001', 'ライブ');
+          // ライブ
+          const currentPosition = this.commandRouter.stateMachine.currentPosition;
+          if (currentPosition > 0) {
+            // 再生キューを並べ替えて対象局を先頭に
+            let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+            const arrayCurrentQueue = arrayQueue.splice(currentPosition);
+            arrayQueue = arrayCurrentQueue.concat(arrayQueue);
+            this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
+            //this.commandRouter.stateMachine.playQueue.saveQueue();
+            // 再生位置を先頭に戻す
+            this.commandRouter.stateMachine.currentPosition = 0;
+            this.commandRouter.volumioPushQueue(arrayQueue);
+          }
+        }
 
-          return this.mpdPlugin.sendMpdCommand(`add '${uri}'`, []);
-        })
-        .then(() => {
-          this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
-
-          return this.mpdPlugin.sendMpdCommand('play', []);
-        });
+        await this.mpdPlugin.sendMpdCommand(`add '${uri}'`, []);
+        this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
+        await this.mpdPlugin.sendMpdCommand('play', []);
+      })();
     }
   }
 

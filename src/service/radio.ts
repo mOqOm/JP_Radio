@@ -5,7 +5,7 @@ import libQ from 'kew';
 
 // Serviceのインポート
 import RdkProg from '@/service/prog';
-import Radiko from '@/service/radiko';
+import RadikoService from '@/service/radiko';
 
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
@@ -25,12 +25,17 @@ export default class JpRadio {
   private server: ReturnType<Application['listen']> | null = null;
   private readonly task1: ReturnType<typeof cron.schedule>;
   private readonly task2: ReturnType<typeof cron.schedule>;
-  private readonly logger: LoggerEx;
+
+  // LoggerEx はプロジェクト全体のグローバルから取得
+  private readonly logger: LoggerEx = (globalThis as any).JP_RADIO_LOGGER;
+  // サービス名はプロジェクト全体のグローバルから取得
+  private readonly serviceName: string = (globalThis as any).JP_RADIO_SERVICE_NAME;
+
   private readonly acct: LoginAccount | null;
   private readonly confParam: any;
   private readonly commandRouter: any;
-  private prg: RdkProg | null = null;
-  private rdk: Radiko | null = null;
+  private rdkProg: RdkProg | null = null;
+  private radikoService: RadikoService | null = null;
   private myInfo: RadikoMyInfo = {
     areaId: '',
     areafree: '',
@@ -44,15 +49,11 @@ export default class JpRadio {
   };
   private readonly messageHelper: MessageHelper;
 
-  private readonly serviceName: any;
-
-  constructor(acct: LoginAccount | null, confParam: any, logger: LoggerEx, commandRouter: any, serviceName: any, messageHelper: MessageHelper) {
+  constructor(acct: LoginAccount | null, confParam: any, commandRouter: any, messageHelper: MessageHelper) {
     this.app = express();
     this.acct = acct;
     this.confParam = confParam;
-    this.logger = logger;
     this.commandRouter = commandRouter;
-    this.serviceName = serviceName;
     this.messageHelper = messageHelper;
 
     // 番組表データ更新（毎日04:59）
@@ -76,8 +77,8 @@ export default class JpRadio {
       // url(Live)     = /radiko/play/TBS
       // url(TimeFree) = /radiko/play/TBS?ft=##&to=##&seek=##
       const stationId: string = req.params['stationID'];
-      if (!this.rdk || !this.rdk.stations?.has(stationId)) {
-        const msg: string = !this.rdk ?
+      if (!this.radikoService || !this.radikoService.getStations()?.has(stationId)) {
+        const msg: string = !this.radikoService ?
           '[JpRadio]Radiko instance not initialized' :
           `[JpRadio]${stationId} not in available stations`;
         this.logger.error(msg);
@@ -86,6 +87,18 @@ export default class JpRadio {
       }
 
       this.startStream(res, stationId, req.query);
+
+      this.playing.stationId = stationId;
+      this.playing.timeFree = (req.query.ft && req.query.to) ? `${req.query.ft}-${req.query.to}` : '';
+      //this.playing.seek = req.query.seek ?? '';
+    });
+
+    this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
+      if (!this.radikoService) {
+        res.status(500).send('Radiko service not initialized');
+        return;
+      }
+      res.send(JSON.stringify(Array.from(this.radikoService.getStations()), null, 2));
     });
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {
@@ -94,9 +107,9 @@ export default class JpRadio {
   }
 
   private async startStream(res: Response, stationId: string, query: any): Promise<void> {
-    this.logger.info('JRADI01SI0003');
+    this.logger.info('JRADI01SI0003', stationId, query);
     try {
-      const ffmpeg = await this.rdk!.play(stationId, query);
+      const ffmpeg = await this.radikoService!.play(stationId, query);
       if (!ffmpeg || !ffmpeg.stdout) {
         this.logger.error('JRADI01SE0002');
         res.status(500).send('Stream start error');
@@ -110,21 +123,23 @@ export default class JpRadio {
         this.logger.info('JRADI01SI0004', ffmpeg.pid);
       });
 
+      res.set({
+        'Cache-Control': 'no-cache, no-store',
+        'Content-Type': 'audio/aac',
+        Connection: 'keep-alive'
+      });
+
       ffmpeg.stdout.pipe(res);
       this.logger.info('JRADI01SI0005', ffmpeg.pid);
 
-      this.playing.stationId = stationId;
-      this.playing.timeFree = (query.ft && query.to) ? `${query.ft}-${query.to}` : '';
-      this.playing.seek = query.seek ?? '';
-
       // max60sも待ちたくないのですぐ呼ぶ
-      setTimeout(this.pushSongState.bind(this), 3000);
-      this.task2.start();
+      //setTimeout(this.pushSongState.bind(this), 3000);
+      //this.task2.start();
 
       res.on('close', () => {
-        this.task2.stop();
+        //this.task2.stop();
         this.logger.info('JRADI01SI0006');
-        if (ffmpeg.pid && !ffmpegExited) {
+        if (ffmpeg.pid && ffmpegExited === false) {
           try {
             //process.kill(-ffmpeg.pid, 'SIGTERM');
             // seek時に'SIGTERM'ではkillされずに残るので'SIGKILL'に変えてみた
@@ -148,10 +163,10 @@ export default class JpRadio {
 
     if (this.playing.timeFree) {
       // タイムフリー：１回のみ
-      if (state.status == 'play') {
-        const stationName = this.rdk?.getStationName(this.playing.stationId);
+      if (state.status === 'play') {
+        const stationName = this.radikoService?.getStationName(this.playing.stationId);
         const [ft, to] = this.playing.timeFree.split('-');
-        const progData = await this.prg?.getProgramData(this.playing.stationId, ft, true);
+        const progData = await this.rdkProg?.getProgramData(this.playing.stationId, ft, true);
 
         if (progData) {
 
@@ -180,9 +195,9 @@ export default class JpRadio {
     } else {
       // ライブ：番組の切り替わりで更新
       if (state.seek >= state.duration * 1000 || forceUpdate) {
-        const progData = await this.prg?.getCurProgramData(this.playing.stationId, true);
+        const progData = await this.rdkProg?.getCurProgramData(this.playing.stationId, true);
         if (progData) {
-          const stationName = this.rdk?.getStationName(this.playing.stationId);
+          const stationName = this.radikoService?.getStationName(this.playing.stationId);
           const time = broadcastTimeConverter.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5'); // HH:mm-HH:mm
           const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
 
@@ -203,7 +218,7 @@ export default class JpRadio {
           this.commandRouter.servicePushState(state, 'mpd');
         }
 
-        await this.prg?.clearOldProgram();
+        await this.rdkProg?.clearOldProgram();
       }
 
       this.updateQueueInfo();
@@ -224,7 +239,7 @@ export default class JpRadio {
 
       // uri = http://localhost:9000/radiko/play/TBS
       const stationId = queueItem.uri.split('/').pop();
-      const progData = await this.prg?.getCurProgramData(stationId, true);
+      const progData = await this.rdkProg?.getCurProgramData(stationId, true);
       if (progData) {
         const stationAndTime = queueItem.artist;
         const progTime = broadcastTimeConverter.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5');
@@ -254,18 +269,26 @@ export default class JpRadio {
     const defer = libQ.defer();
 
     // mode = live or timefree or timefree_today
-    if (this.rdk?.stations) {
+    if (this.radikoService !== null) {
+      // RadikoServiceから局情報を取得
+      const stations: Map<string, StationInfo> = this.radikoService.getStations();
+
       // 地域名ごとにグループ化
       const grouped: Record<string, BrowseItem[]> = {};
-      const stationEntries = Array.from(this.rdk.stations.entries());
+
+      const stationEntries = Array.from(stations);
+
       const stationPromises = stationEntries.map(async ([stationId, stationInfo]) => {
         try {
-          const region = stationInfo.RegionName || 'others';
-          if (!grouped[region]) grouped[region] = [];
+          const region: string = stationInfo.RegionName || 'others';
+          if (!grouped[region]) {
+            grouped[region] = [];
+          }
+
           grouped[region].push(
             mode.startsWith('timefree')
               ? this.makeBrowseItem_TimeFree(mode.replace('free', 'table'), stationId, stationInfo)
-              : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.prg?.getCurProgramData(stationId, false))
+              : this.makeBrowseItem_Live('play', stationId, stationInfo, await this.rdkProg?.getCurProgramData(stationId, false))
           );
         } catch (error: any) {
           this.logger.error('JRADI01SE0004', stationId, error);
@@ -282,7 +305,6 @@ export default class JpRadio {
           this.logger.error('JRADI01SE0005', error);
           defer.reject(error);
         });
-
     } else {
       defer.resolve(this.makeBrowseResult([]));
     }
@@ -313,9 +335,9 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0011', mode, stationId, begin, end);
 
     const defer = libQ.defer();
-    const stationInfo = this.rdk?.getStationInfo(stationId);
+    const stationInfo = this.radikoService?.getStationInfo(stationId);
 
-    if (stationInfo && this.prg) {
+    if (stationInfo && this.rdkProg) {
       const lists: BrowseList[] = [];
       const week = broadcastTimeConverter.getRadioWeek(begin, end, 'M月d日(E)');
 
@@ -329,7 +351,7 @@ export default class JpRadio {
         let items: BrowseItem[] = [];
         do {
           // 一日分（05:00～29:00）の番組表
-          const progData = await this.prg!.getProgramData(stationId, `${wDate.date}${time}`, true);
+          const progData = await this.rdkProg!.getProgramData(stationId, `${wDate.date}${time}`, true);
 
           if (progData) {
             const item: BrowseItem = this.makeBrowseItem_TimeTable('play', stationId, stationInfo, progData);
@@ -401,12 +423,12 @@ export default class JpRadio {
 
       if (liveUri.includes('/radiko/play/')) {
         const stationId = liveUri.split('/').pop();
-        const stationInfo = this.rdk?.getStationInfo(stationId);
+        const stationInfo = this.radikoService?.getStationInfo(stationId);
 
         if (mode.startsWith('live')) {
           // ライブ
           if (!timefree) { // タイムフリー番組は無視
-            const progData = await this.prg?.getCurProgramData(stationId, false);
+            const progData = await this.rdkProg?.getCurProgramData(stationId, false);
             const item = this.makeBrowseItem_Live('play', stationId, stationInfo, progData);
             item.favourite = true;
             items[0].push(item);
@@ -428,7 +450,7 @@ export default class JpRadio {
 
             // 配信期間内だけリトライする
             const retry: boolean = (-7 * 86400 <= check1 && check2 < 0);
-            const progData = await this.prg?.getProgramData(stationId, ft, retry);
+            const progData = await this.rdkProg?.getProgramData(stationId, ft, retry);
             const item: BrowseItem = this.makeBrowseItem_TimeTable('play', stationId, stationInfo,
               progData ? progData : {
                 stationId, progId: '', ft, to, title: data.title, info:
@@ -596,8 +618,8 @@ export default class JpRadio {
     // 起動を通知
     this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('BOOT_STARTING'));
 
-    this.prg = new RdkProg(this.logger);
-    this.rdk = new Radiko(this.logger, this.messageHelper, this.confParam.areaIds);
+    this.rdkProg = new RdkProg(this.logger);
+    this.radikoService = new RadikoService(this.logger, this.confParam.areaIds);
 
     await this.#init();
 
@@ -637,17 +659,18 @@ export default class JpRadio {
       this.server.close();
       this.server = null;
 
-      await this.prg?.dbClose();
-      this.prg = null;
-      this.rdk = null;
+      await this.rdkProg?.dbClose();
+      this.rdkProg = null;
+      this.radikoService = null;
       //this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('STOPED'));
     }
   }
 
   async #init(): Promise<void> {
     this.logger.info('JRADI01SI0017');
-    if (this.rdk) {
-      [this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.rdk.init(this.acct);
+    if (this.radikoService !== null) {
+      this.logger.info('RadioTest0001');
+      [this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.radikoService.init(this.acct);
     }
     await this.#pgupdate(true);
     this.logger.info('JRADI01SI0018', JSON.stringify(this.myInfo));
@@ -656,17 +679,17 @@ export default class JpRadio {
   // 番組表の更新
   async #pgupdate(whenBoot = false): Promise<void> {
     this.logger.info('JRADI01SI0019');
-    if (this.prg) {
+    if (this.rdkProg) {
       // 処理開始を記録
       const updateStartTime = Date.now();
 
       const areaIdArray = (this.myInfo.areafree) ? this.confParam.areaIds : [this.myInfo.areaId];
 
       // 番組表の更新
-      this.myInfo.cntStations = await this.prg.updatePrograms(areaIdArray, whenBoot);
+      this.myInfo.cntStations = await this.rdkProg.updatePrograms(areaIdArray, whenBoot);
 
       // 古い番組表を削除
-      await this.prg.clearOldProgram();
+      await this.rdkProg.clearOldProgram();
 
       // 処理終了を記録
       const updateEndTime = Date.now();
@@ -678,13 +701,13 @@ export default class JpRadio {
   }
 
   public getAreaStations(areaId: string, woZenkoku: boolean = true): string[] {
-    const item = this.rdk?.areaData.get(areaId);
+    const item = this.radikoService?.areaData.get(areaId);
     //this.logger.info(`JP_Radio::JpRadio.getAreaStations: ${areaId}=${item?.areaName}/${item?.stations}`);
     if (woZenkoku) {
       let stations: string[] = [];
 
       item?.stations.forEach((stationId) => {
-        const info = this.rdk?.stations.get(stationId);
+        const info = this.radikoService?.getStations().get(stationId);
 
         if (info?.RegionName != '全国') {
           stations.push(stationId);
@@ -722,6 +745,6 @@ export default class JpRadio {
   }
 
   public getPrg(): RdkProg | null {
-    return this.prg;
+    return this.rdkProg;
   }
 }

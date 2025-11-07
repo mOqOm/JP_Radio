@@ -40,6 +40,9 @@ export class RadikoXmlUtil {
       const stationRaw = xmlData.radiko.stations?.station ?? [];
       const stations: RadikoXMLStation[] = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
 
+      // 全プログラムを ft順に格納
+      const allProgs: RadikoProgramData[] = [];
+
       for (const s of stations) {
         const stationId = s['@id'];
 
@@ -50,9 +53,6 @@ export class RadikoXmlUtil {
         const progSetsRaw = s.progs ?? [];
         const progSets: any[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
 
-        // 全プログラムを ft順に格納
-        const allProgs: RadikoProgramData[] = [];
-
         // まず元番組を flat にして sorted に
         let rawProgs: RadikoXMLProg[] = [];
         for (const ps of progSets) {
@@ -60,13 +60,14 @@ export class RadikoXmlUtil {
           rawProgs = rawProgs.concat(Array.isArray(progsRaw) ? progsRaw : [progsRaw]);
         }
 
-        rawProgs.sort((a, b) => (a['@ft'] > b['@ft'] ? 1 : -1));
+        rawProgs.sort((a, b) => a['@ft'].localeCompare(b['@ft']));
 
         let prevTo = '';
 
         for (const p of rawProgs) {
           const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
           const to = broadcastTimeConverter.convertRadioTime(p['@to'], '29');
+          // ft.slice(8, 12) で時刻部分（HHMM）を抽出し、progIdの一意性を確保
           const progId = `${stationId}${p['@id']}${ft.slice(8, 12)}`;
 
           // ギャップ補完
@@ -96,9 +97,8 @@ export class RadikoXmlUtil {
 
           prevTo = to;
         }
-
         // 最終29時まで補完
-        if (prevTo.slice(8) < '290000') {
+        if (Number(prevTo.slice(8)) < 290000) {
           allProgs.push({
             stationId,
             progId: `${stationId}_${prevTo}`,
@@ -110,19 +110,20 @@ export class RadikoXmlUtil {
             img: ''
           });
         }
-
-        // DBに順番通り insert
-        for (const prog of allProgs) {
-          await this.dbUtil.insert(prog);
-        }
-
-        doneStations.add(stationId);
       }
+
+      // DBに並列で insert（順序保証不要の場合のみ推奨）
+      await Promise.all(allProgs.map(prog => this.dbUtil.insert(prog)));
+
+      // DB保存が完了した局IDを収集
+      for (const prog of allProgs) {
+        doneStations.add(prog.stationId);
+      }
+
+      return doneStations;
     } catch (error: any) {
       // エラーを呼び出し元にスロー
       throw error;
     }
-
-    return doneStations;
   }
 }
