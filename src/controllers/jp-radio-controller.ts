@@ -376,7 +376,6 @@ class JpRadioController {
     }
   }
 
-
   // Radikoアカウント保存
   public saveRadikoAccountSetting(data: { radikoUser: string; radikoPass: string }): void {
     this.logger.info('JRADI01CI0009');
@@ -503,6 +502,7 @@ class JpRadioController {
     this.commandRouter.broadcastMessage('openModal', message);
   }
 
+  // BrowseにRadikoのメニューを追加
   public addToBrowseSources(): void {
     this.logger.info('JRADI01CI0014', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
@@ -514,43 +514,118 @@ class JpRadioController {
     });
   }
 
-  public handleBrowseUri(curUri: string): Promise<any> {
+  // Radikoを押下した際のメニューを追加
+  public async handleBrowseUri(curUri: string): Promise<any> {
     this.logger.info('JRADI01CI0015', curUri);
 
     const defer = libQ.defer();
-    if (this.appRadio === null) {
+    if (this.appRadio === undefined || this.appRadio === null) {
       this.logger.error('JRADI01CE0005');
-      defer.resolve({});
-      return defer.promise;
+      return {};
     }
 
     const [base, mode, stationId, option] = curUri.split('/');
     if (base === 'radiko') {
-      if (mode === undefined || mode === null || mode === '') {
+
+      const devBrowseResult: BrowseResult = await this.appRadio.radioStations(mode || 'live');
+
+      return devBrowseResult;
+
+      /*if (mode === undefined || mode === null || mode === '') {
         // uri = radiko
-        defer.resolve(this.rootMenu());
+
+        const browseResult: BrowseResult = {
+          navigation: {
+            lists: [{
+              title: '',
+              availableListViews: ['grid', 'list'],
+              items: [
+                {
+                  service: this.serviceName,
+                  type: 'radio-category',
+                  title: messageHelper.get('BROWSE_LABEL_LIVE'),
+                  icon: 'fa fa-microphone',
+                  uri: 'radiko/live'
+                },
+                {
+                  service: this.serviceName,
+                  type: 'radio-favourites',
+                  title: messageHelper.get('BROWSE_LABEL_LIVE_FAVOURITES'),
+                  icon: 'fa fa-heart',
+                  uri: 'radiko/live/favourites'
+                },
+                {
+                  service: this.serviceName,
+                  type: 'radio-category',
+                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE'),
+                  icon: 'fa fa-clock-o',
+                  uri: 'radiko/timefree'
+                },
+                {
+                  service: this.serviceName,
+                  type: 'radio-category',
+                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE_TODAY'),
+                  icon: 'fa fa-map-marker',
+                  uri: 'radiko/timefree_today'
+                },
+                {
+                  service: this.serviceName,
+                  type: 'radio-favourites',
+                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
+                  icon: 'fa fa-heartbeat',
+                  uri: 'radiko/timefree/favourites'
+                }
+              ]
+            }],
+            prev: { uri: 'radiko' }
+          }
+        };
+
+        const devBrowseResult: BrowseResult = {
+          navigation: {
+            lists: [{
+              title: '',
+              availableListViews: ['grid', 'list'],
+              items: [
+                {
+                  service: this.serviceName,
+                  type: 'radio-category',
+                  title: messageHelper.get('BROWSE_LABEL_LIVE'),
+                  icon: 'fa fa-microphone',
+                  uri: 'radiko/live'
+                }
+              ]
+            }],
+            prev: { uri: 'radiko' }
+          }
+        }
+
+        defer.resolve(browseResult);
       } else if (mode.startsWith('live')) {
+        this.logger.info('TESTController0001', 'Liveモード');
         // uri = radiko/live or radiko/live/favourites
-        libQ.resolve().then(() =>
-          (stationId === 'favourites')
-            ? this.appRadio!.radioFavouriteStations(mode)
-            : this.appRadio!.radioStations(mode)
-        ).then((result: any) =>
+        libQ.resolve().then(() => {
+          if (stationId === 'favourites') {
+            return this.appRadio!.radioFavouriteStations(mode);
+          } else {
+            return this.appRadio!.radioStations(mode);
+          }
+        }).then((result: any) =>
           defer.resolve(result)
         ).fail((error: any) => {
           this.logger.error('JRADI01CE0006', error);
           defer.reject(error);
         });
-
       } else if (mode.startsWith('timefree')) {
         // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
-        defer.resolve((stationId === 'favourites')
-          ? this.appRadio.radioFavouriteStations(mode)
-          : this.appRadio.radioStations(mode));
-
+        if (stationId === 'favourites') {
+          defer.resolve(this.appRadio.radioFavouriteStations(mode));
+        } else {
+          defer.resolve(this.appRadio.radioStations(mode));
+        }
       } else if (mode.startsWith('timetable')) {
         libQ.resolve().then(() => {
-          if (option === undefined) {
+          if (option === undefined && option === null) {
             // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
             const today = mode.endsWith('today');
             const from = today ? 0 : this.jpRadioConfig.ppFrom;
@@ -561,7 +636,6 @@ class JpRadioController {
             const [from, to] = option.split('~');
             return this.appRadio!.radioTimeTable(mode, stationId, from, to);
           }
-
         }).then((result: any) =>
           defer.resolve(result)
         ).fail((error: any) => {
@@ -590,62 +664,13 @@ class JpRadioController {
           this.logger.error('JRADI01CE0009', error);
           defer.reject(error);
         });
-      }
+      }*/
 
     } else { // base != 'radiko'
       this.logger.error('JRADI01CE0010');
       defer.resolve({});
     }
     return defer.promise;
-  }
-
-  private rootMenu(): BrowseResult {
-    return {
-      navigation: {
-        lists: [{
-          title: '',
-          availableListViews: ['grid', 'list'],
-          items: [
-            {
-              service: this.serviceName,
-              type: 'radio-category',
-              title: messageHelper.get('BROWSE_LABEL_LIVE'),
-              icon: 'fa fa-microphone',
-              uri: 'radiko/live'
-            },
-            {
-              service: this.serviceName,
-              type: 'radio-favourites',
-              title: messageHelper.get('BROWSE_LABEL_LIVE_FAVOURITES'),
-              icon: 'fa fa-heart',
-              uri: 'radiko/live/favourites'
-            },
-            {
-              service: this.serviceName,
-              type: 'radio-category',
-              title: messageHelper.get('BROWSE_LABEL_TIMEFREE'),
-              icon: 'fa fa-clock-o',
-              uri: 'radiko/timefree'
-            },
-            {
-              service: this.serviceName,
-              type: 'radio-category',
-              title: messageHelper.get('BROWSE_LABEL_TIMEFREE_TODAY'),
-              icon: 'fa fa-map-marker',
-              uri: 'radiko/timefree_today'
-            },
-            {
-              service: this.serviceName,
-              type: 'radio-favourites',
-              title: messageHelper.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
-              icon: 'fa fa-heartbeat',
-              uri: 'radiko/timefree/favourites'
-            }
-          ]
-        }],
-        prev: { uri: 'radiko' }
-      }
-    }
   }
 
   public clearAddPlayTrack(track: any): any {
@@ -679,10 +704,11 @@ class JpRadioController {
             this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2'));
           }
         } else {
-          this.logger.info('TESTController0001', 'ライブ');
+          this.logger.info('TESTController0001', 'ライブ-タイムフリー無し');
           // ライブ
           const currentPosition = this.commandRouter.stateMachine.currentPosition;
           if (currentPosition > 0) {
+            this.logger.info('TESTController0001', 'ライブ-キュー並べ替え');
             // 再生キューを並べ替えて対象局を先頭に
             let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
             const arrayCurrentQueue = arrayQueue.splice(currentPosition);
@@ -695,6 +721,8 @@ class JpRadioController {
           }
         }
 
+        this.logger.info('TESTController0001', 'ライブ-不明');
+
         await this.mpdPlugin.sendMpdCommand(`add '${uri}'`, []);
         this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
         await this.mpdPlugin.sendMpdCommand('play', []);
@@ -702,13 +730,15 @@ class JpRadioController {
     }
   }
 
-  public explodeUri(uri: string): Promise<any> {
+  public explodeUri(uri: any): Promise<any> {
     //this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     let defer = libQ.defer();
     // uri(Live)     = radiko/play/TBS?tt&pf&sn&aa
     // uri(TimeFree) = radiko/play/TBS?tt&pf&sn&aa&ft&to&sk
+
+    this.logger.info('TESTController0001', 'explodeUri');
     const [liveUri, tt, pf, sn, aa, ft, to, sk] = uri.split(/[?&]/);
-    if (liveUri.startsWith('radiko/play/') || liveUri.startsWith('radiko/proginfo/')) {
+    if (liveUri.startsWith('radiko/play/') === true || liveUri.startsWith('radiko/proginfo/') === true) {
       // 再生画面に表示する情報
       const response = {
         service: this.serviceName,  // clearAddPlayTrackを呼び出す先のサービス名
@@ -770,7 +800,7 @@ class JpRadioController {
     this.mpdPlugin.sendMpdCommand('currentsong', []).then((data: any) => {
       // uri(TimeFree) = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
       let uri: string = data.file;
-      if (uri.includes('/radiko/play/')) {
+      if (uri.includes('/radiko/play/') === true) {
         const [_, timefree] = uri.split('?');
         if (timefree) {
           // タイムフリー：シーク情報を付加したURIに切り替え
