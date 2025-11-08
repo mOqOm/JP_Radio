@@ -151,7 +151,7 @@ export default class JpRadio {
         region: info.RegionName || '-',
         area: info.AreaName || '-'
       }));
-      res.render('radiko-stations', { rows });
+      res.render('radiko_dev', { rows });
     });
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {
