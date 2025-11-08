@@ -618,8 +618,8 @@ export default class JpRadio {
     // 起動を通知
     this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('BOOT_STARTING'));
 
-    this.rdkProg = new RdkProg(this.logger);
-    this.radikoService = new RadikoService(this.logger, this.confParam.areaIds);
+    this.rdkProg = new RdkProg();
+    this.radikoService = new RadikoService(this.confParam.areaIds);
 
     await this.#init();
 

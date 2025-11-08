@@ -23,15 +23,14 @@ import { RadikoAuthLogic } from '@/logic/radiko-auth.logic';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
-import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { parseFullStationXML } from '@/utils/radiko-xml-parser.util';
 import { getPrefKanji, getPrefRomaji } from '@/utils/radiko-area.util';
 
-const xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
-
 export default class RadikoService {
-  private readonly logger: LoggerEx;
+  // LoggerEx はプロジェクト全体のグローバルから取得
+  private readonly logger: LoggerEx = (globalThis as any).JP_RADIO_LOGGER;
+
   private readonly authLogic: RadikoAuthLogic;
   private token: string = '';
   private myAreaId: string = '';
@@ -40,12 +39,12 @@ export default class RadikoService {
   private stations: Map<string, StationInfo> = new Map();
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
   private areaIDs: string[];
+  private readonly xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
 
-  constructor(logger: LoggerEx, areaIDs: string[]) {
-    this.logger = this.logger = logger;
+  constructor(areaIDs: string[]) {
     this.areaIDs = areaIDs;
     // 認証系
-    this.authLogic = new RadikoAuthLogic(logger);
+    this.authLogic = new RadikoAuthLogic(this.logger);
   }
 
   /**
@@ -101,7 +100,7 @@ export default class RadikoService {
       areaIDs.map(areaId =>
         limit(async () => {
           const res = await got(format(STATION_AREA_URL, areaId));
-          const parsed = xmlParser.parse(res.body);
+          const parsed = this.xmlParser.parse(res.body);
           const stations: string[] = parsed.stations.station.map((s: any) => s.id);
 
           this.areaData.set(areaId, {

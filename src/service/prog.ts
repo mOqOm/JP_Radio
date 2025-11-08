@@ -34,7 +34,8 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 };
 
 export default class RdkProg {
-  private readonly logger: LoggerEx;
+  // LoggerEx はプロジェクト全体のグローバルから取得
+  private readonly logger: LoggerEx = (globalThis as any).JP_RADIO_LOGGER;
 
   private readonly db = Datastore.create({ inMemoryOnly: true });
   private readonly dbUtil: DBUtil<RadikoProgramData>;
@@ -44,9 +45,7 @@ export default class RdkProg {
   private lastTime: string = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
-  constructor(logger: LoggerEx) {
-    this.logger = logger;
-
+  constructor() {
     this.dbUtil = new DBUtil<RadikoProgramData>();
     this.xmlUtil = new RadikoXmlUtil(this.dbUtil);
 
