@@ -18,4 +18,4 @@ cat >dist/package.json <<!EOF
 
 cp -r UIConfig.json /
 cp -r i18n /
-cp -r src/assets dist/
+cp -r assets /
