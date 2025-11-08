@@ -1,6 +1,8 @@
 import express, { Application, Request, Response } from 'express';
+
 import { parse } from 'querystring';
 import type { ParsedQs } from 'qs';
+import path from 'path';
 
 import cron from 'node-cron';
 import libQ from 'kew';
@@ -15,6 +17,7 @@ import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-resul
 import type { StationInfo } from '@/models/station.model';
 import type { RadikoProgramData } from '@/models/radiko-program.model';
 import type { RadikoMyInfo } from '@/models/radiko-myinfo.model';
+import type { JpRadioConfig } from '@/models/jp-radio-config.model';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
@@ -67,7 +70,7 @@ export default class JpRadio {
   private readonly serviceName: string = (globalThis as any).JP_RADIO_SERVICE_NAME;
 
   private readonly acct: LoginAccount | null;
-  private readonly confParam: any;
+  private readonly jpRadioConfig: any;
   private readonly commandRouter: any;
   private rdkProg: RdkProg | null = null;
   private radikoService: RadikoService | null = null;
@@ -84,12 +87,16 @@ export default class JpRadio {
   };
   private readonly messageHelper: MessageHelper;
 
-  constructor(acct: LoginAccount | null, confParam: any, commandRouter: any, messageHelper: MessageHelper) {
+  constructor(acct: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
     this.app = express();
     this.acct = acct;
-    this.confParam = confParam;
+    this.jpRadioConfig = jpRadioConfig;
     this.commandRouter = commandRouter;
     this.messageHelper = messageHelper;
+
+    // テンプレートエンジン設定 (EJS)
+    this.app.set('views', path.join(__dirname, '..', 'assets', 'templates'));
+    this.app.set('view engine', 'ejs');
 
     // 番組表データ更新（毎日04:59）
     this.task1 = cron.schedule('59 4 * * *', this.#pgupdate.bind(this), {
@@ -97,8 +104,8 @@ export default class JpRadio {
     });
 
     // 再生画面更新（60s間隔; conf.delayに対して1sずらし）
-    broadcastTimeConverter.setDelay(this.confParam.delay);
-    this.task2 = cron.schedule(`${(this.confParam.delay + 1) % 60} * * * * *`, this.pushSongState.bind(this), { scheduled: false });
+    broadcastTimeConverter.setDelay(this.jpRadioConfig.delay);
+    this.task2 = cron.schedule(`${(this.jpRadioConfig.delay + 1) % 60} * * * * *`, this.pushSongState.bind(this), { scheduled: false });
 
     this.#setupRoutes();
   }
@@ -136,14 +143,21 @@ export default class JpRadio {
         res.status(500).send('Radiko service not initialized');
         return;
       }
-      res.send(JSON.stringify(Array.from(this.radikoService.getStations()), null, 2));
+      const stations: Map<string, StationInfo> = this.radikoService.getStations();
+      // Map → 配列
+      const rows = Array.from(stations.entries()).map(([id, info]) => ({
+        stationId: id,
+        name: info.Name,
+        region: info.RegionName || '-',
+        area: info.AreaName || '-'
+      }));
+      res.render('radiko-stations', { rows });
     });
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {
       res.send(`Hello, world. You're at the radiko_app index.`);
     });
   }
-
 
   /**
    * ラジオストリーミングを開始し、レスポンスにパイプします。
@@ -253,7 +267,7 @@ export default class JpRadio {
 
     } catch (error: any) {
       // 内部サーバーエラーの処理
-      this.logger.error('JRADI01SE0003');
+      this.logger.error('JRADI01SE0003', error);
       res.status(500).send('Internal server error');
     }
   }
@@ -273,7 +287,7 @@ export default class JpRadio {
         }
 
         const time = broadcastTimeConverter.formatTimeString2([ft, to], '$1:$2-$4:$5'); // HH:mm-HH:mm
-        const date = broadcastTimeConverter.formatDateString(ft, this.confParam.dateFmt);
+        const date = broadcastTimeConverter.formatDateString(ft, this.jpRadioConfig.dateFmt);
         const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
         state.title = queueItem.name + (queueItem.album ? ` - ${queueItem.album}` : '');
         state.artist = `${stationName} / ${time} @${date} (TimeFree)`;
@@ -664,7 +678,7 @@ export default class JpRadio {
 
     const time: string = progData ? broadcastTimeConverter.formatFullString2([
       progData.ft, progData.to
-    ], this.confParam.timeFmt) : '';
+    ], this.jpRadioConfig.timeFmt) : '';
 
     const duration: number = progData ? broadcastTimeConverter.getTimeSpan(progData.ft, progData.to) : 0; // sec
 
@@ -719,13 +733,13 @@ export default class JpRadio {
     this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('BOOT_STARTING'));
 
     this.rdkProg = new RdkProg();
-    this.radikoService = new RadikoService(this.confParam.areaIds);
+    this.radikoService = new RadikoService(this.jpRadioConfig.areaIdArray);
 
     await this.#init();
 
     return new Promise((resolve, reject) => {
-      this.server = this.app.listen(this.confParam.port, () => {
-        this.logger.info('JRADI01SI0015', this.confParam.port);
+      this.server = this.app.listen(this.jpRadioConfig.port, () => {
+        this.logger.info('JRADI01SI0015', this.jpRadioConfig.port);
 
         this.task1.start();
         // JPxxからエリア名(北海道・東北、関東など)を取得
@@ -783,7 +797,7 @@ export default class JpRadio {
       // 処理開始を記録
       const updateStartTime = Date.now();
 
-      const areaIdArray = (this.myInfo.areafree) ? this.confParam.areaIds : [this.myInfo.areaId];
+      const areaIdArray = (this.myInfo.areafree) ? this.jpRadioConfig.areaIdArray : [this.myInfo.areaId];
 
       // 番組表の更新
       this.myInfo.cntStations = await this.rdkProg.updatePrograms(areaIdArray, whenBoot);
@@ -822,7 +836,7 @@ export default class JpRadio {
   // アルバムアート
   private selectAlbumart(banner: string | undefined, logo: string | undefined, prog: string | undefined): string {
     let result;
-    switch (this.confParam.aaType) {
+    switch (this.jpRadioConfig.aaType) {
       case 'type1':
         // バナー
         result = banner;

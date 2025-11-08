@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Radiko Stations</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #4CAF50;
+            color: #fff;
+        }
+
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        tr:hover {
+            background: #ddd;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Radiko Stations</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Station ID</th>
+                <th>Name</th>
+                <th>Region</th>
+                <th>Area</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% rows.forEach(r=> { %>
+                <tr>
+                    <td>
+                        <%= r.stationId %>
+                    </td>
+                    <td>
+                        <%= r.name %>
+                    </td>
+                    <td>
+                        <%= r.region %>
+                    </td>
+                    <td>
+                        <%= r.area %>
+                    </td>
+                </tr>
+                <% }) %>
+        </tbody>
+    </table>
+</body>
+
+</html>

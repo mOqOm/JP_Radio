@@ -13,6 +13,7 @@ import { RADIKO_AREA } from '@/constants/radiko-area.const'
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
 import type { BrowseResult } from '@/models/browse-result.model';
+import type { JpRadioConfig } from '@/models/jp-radio-config.model';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
@@ -70,8 +71,7 @@ class JpRadioController {
 
   private config: InstanceType<typeof VConf> | null = null;
 
-  // TODO: 以下Model化
-  private confParam: { port: number, delay: number, aaType: string, ppFrom: number, ppTo: number, timeFmt: string, dateFmt: string, areaIds: string[] };
+  private jpRadioConfig: JpRadioConfig;
 
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
@@ -148,7 +148,7 @@ class JpRadioController {
     const startTime = Date.now();
     const defer = libQ.defer();
 
-    if (!this.config) {
+    if (this.config === undefined || this.config === null) {
       this.logger.error('JRADI01CE0002');
       defer.reject(new Error('Config not initialized'));
       return defer.promise;
@@ -156,32 +156,44 @@ class JpRadioController {
 
     this.mpdPlugin = this.commandRouter.pluginManager.getPlugin('music_service', 'mpd');
 
+    // Radikoアカウント情報取得
     const radikoUser: string = this.config.get('radikoUser');
     const radikoPass: string = this.config.get('radikoPass');
-    const account: LoginAccount | null = (radikoUser && radikoPass) ? { mail: radikoUser, pass: radikoPass } : null;
 
-    let areaIds: string[] = [];
+    const loginAccount: LoginAccount | null = (radikoUser && radikoPass) ? { mail: radikoUser, pass: radikoPass } : null;
+
+    const areaIdArray = new Array<string>();
 
     for (const areaId of Array.from({ length: 47 }, (_, i) => `JP${i + 1}`)) {
-      if (this.config.get(`radikoAreas.${areaId}`) ?? false) {
-        areaIds.push(areaId);
+      if (this.config.get(`radikoAreas.${areaId}`) === true) {
+        areaIdArray.push(areaId);
       }
     }
 
     const timeFormat = this.config.get('timeFormat') ?? '$1/$2/$3 $4:$5-$10:$11';
 
-    this.confParam = {
+    const jpRadioConfig: JpRadioConfig = {
+      // 起動ポート
       port: this.config.get('servicePort') ?? 9000,
+      // ネットワーク遅延(ディレイ)
       delay: this.config.get('networkDelay') ?? 20,
+      // アルバムアート種別
       aaType: this.config.get('albumartType') ?? 'type3',
+      // タイムフリー期間（過去何日分）
       ppFrom: this.config.get('programPeriodFrom') ?? 7,
+      // タイムフリー期間（未来何日分）
       ppTo: this.config.get('programPeriodTo') ?? 0,
+      // 時刻フォーマット
       timeFmt: timeFormat,
+      // 日付フォーマット
       dateFmt: timeFormat.replace(/\s.+$/, ''),
-      areaIds: areaIds
+      // 有効エリアID配列
+      areaIdArray: areaIdArray
     };
 
-    this.appRadio = new JpRadio(account, this.confParam, this.commandRouter, messageHelper);
+    this.jpRadioConfig = jpRadioConfig;
+
+    this.appRadio = new JpRadio(loginAccount, this.jpRadioConfig, this.commandRouter, messageHelper);
 
     this.appRadio.start().then(() => {
       this.addToBrowseSources();
@@ -194,7 +206,7 @@ class JpRadioController {
       this.logger.error('JRADI01CE0001', error);
 
       if (error.code === 'EADDRINUSE') {
-        const message = messageHelper.get('ERROR_PORT_IN_USE', this.confParam.port);
+        const message = messageHelper.get('ERROR_PORT_IN_USE', this.jpRadioConfig.port);
         this.logger.error('JRADI01CE0002', message);
         this.commandRouter.pushToastMessage(
           'error',
@@ -541,8 +553,8 @@ class JpRadioController {
           if (option === undefined) {
             // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
             const today = mode.endsWith('today');
-            const from = today ? 0 : this.confParam.ppFrom;
-            const to = today ? 0 : this.confParam.ppTo;
+            const from = today ? 0 : this.jpRadioConfig.ppFrom;
+            const to = today ? 0 : this.jpRadioConfig.ppTo;
             return this.appRadio!.radioTimeTable(mode, stationId, -from, to);
           } else {
             // uri = radiko/timetable/TBS/#~#
@@ -705,12 +717,12 @@ class JpRadioController {
         album: decodeURIComponent(pf), // performer
         artist: decodeURIComponent(sn), // stationName / time
         albumart: decodeURIComponent(aa), // albumart
-        uri: `http://localhost:${this.confParam.port}/${liveUri}`
+        uri: `http://localhost:${this.jpRadioConfig.port}/${liveUri}`
       };
 
       if (ft && to) {
         // タイムフリー
-        response.artist += broadcastTimeConverter.formatDateString(ft, ` @${this.confParam.dateFmt}`);
+        response.artist += broadcastTimeConverter.formatDateString(ft, ` @${this.jpRadioConfig.dateFmt}`);
         response.uri += `?ft=${ft}&to=${to}` + (sk ? `&seek=${sk}` : '');
       }
 

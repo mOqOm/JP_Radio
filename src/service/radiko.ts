@@ -38,11 +38,11 @@ export default class RadikoService {
 
   private stations: Map<string, StationInfo> = new Map();
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
-  private areaIDs: string[];
+  private readonly areaIdArray: string[];
   private readonly xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
 
-  constructor(areaIDs: string[]) {
-    this.areaIDs = areaIDs;
+  constructor(areaIdArray: string[]) {
+    this.areaIdArray = areaIdArray;
     // 認証系
     this.authLogic = new RadikoAuthLogic(this.logger);
   }
@@ -94,10 +94,10 @@ export default class RadikoService {
 
     // 2. 並列数制限付きで47エリア分の取得を並列化
     const limit = pLimit(5);
-    const areaIDs: string[] = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
+    const areaIdArray: string[] = Array.from({ length: 47 }, (_, i) => `JP${i + 1}`);
 
     await Promise.all(
-      areaIDs.map(areaId =>
+      areaIdArray.map(areaId =>
         limit(async () => {
           const res = await got(format(STATION_AREA_URL, areaId));
           const parsed = this.xmlParser.parse(res.body);
@@ -118,7 +118,7 @@ export default class RadikoService {
 
     // ログイン済みの場合のみ
     if (this.loginState !== null) {
-      for (const areaId of this.areaIDs as string[]) {
+      for (const areaId of this.areaIdArray as string[]) {
         for (const station of areaData.get(areaId)?.stations.map(String) ?? []) {
           if (!allowedStations.includes(station)) {
             allowedStations.push(station);
