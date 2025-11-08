@@ -31,8 +31,7 @@
     "type": "string",
     "value": "$1/$2/$3 $4:$5-$7:$8"
   },
-  "radikoAreas":
-  {
+  "radikoAreas": {
     "JP1": {
       "type": "boolean",
       "value": false
