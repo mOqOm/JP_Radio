@@ -1,5 +1,7 @@
 import express, { Application, Request, Response } from 'express';
-import { parse, parseQuery } from 'querystring';
+import { parse } from 'querystring';
+import type { ParsedQs } from 'qs';
+
 import cron from 'node-cron';
 import libQ from 'kew';
 
@@ -121,9 +123,11 @@ export default class JpRadio {
       }
       // ストリーム開始
       this.startStream(res, stationId, req.query);
-
       this.playing.stationId = stationId;
-      this.playing.timeFree = (req.query.ft && req.query.to) ? `${req.query.ft}-${req.query.to}` : '';
+      const ft = req.query['ft'] as string | undefined;
+      const to = req.query['to'] as string | undefined;
+      this.playing.timeFree = (ft && to) ? `${ft}-${to}` : '';
+      //this.playing.seek = req.query.seek ?? '';
       //this.playing.seek = req.query.seek ?? '';
     });
 
@@ -159,11 +163,8 @@ export default class JpRadio {
    * @throws 内部サーバーエラーが発生した場合、500エラーを返します
    *
    * @remarks
-   * - レスポンスヘッダーには 'audio/aac' コンテンツタイプが設定されます
-   * - クライアント切断時、ffmpegプロセスは適切に終了されます（SIGTERM → SIGKILL）
-   * - すべての重要なイベント（開始、終了、エラー）はロガーに記録されます
    */
-  private async startStream(res: Response, stationId: string, query: parseQuery): Promise<void> {
+  private async startStream(res: Response, stationId: string, query: ParsedQs): Promise<void> {
     this.logger.info('JRADI01SI0003', stationId, query);
     // Radikoサービスが初期化されていない場合のエラーハンドリング
     if (this.radikoService === undefined || this.radikoService === null) {
@@ -752,7 +753,7 @@ export default class JpRadio {
   public async stop(): Promise<void> {
     this.logger.info('JRADI01SI0016');
     // サーバーが起動中であれば以下の処理実施
-    if (this.server) {
+    if (this.server !== null) {
       this.task1.stop();
       this.task2.stop();
       this.server.close();
@@ -802,13 +803,13 @@ export default class JpRadio {
   public getAreaStations(areaId: string, woZenkoku: boolean = true): string[] {
     const item = this.radikoService?.areaData.get(areaId);
     //this.logger.info(`JP_Radio::JpRadio.getAreaStations: ${areaId}=${item?.areaName}/${item?.stations}`);
-    if (woZenkoku) {
+    if (woZenkoku === true) {
       let stations: string[] = [];
 
       item?.stations.forEach((stationId) => {
         const info = this.radikoService?.getStations().get(stationId);
 
-        if (info?.RegionName != '全国') {
+        if (info?.RegionName !== '全国') {
           stations.push(stationId);
         }
 
