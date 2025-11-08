@@ -95,7 +95,7 @@ export default class JpRadio {
     this.messageHelper = messageHelper;
 
     // テンプレートエンジン設定 (EJS)
-    this.app.set('views', path.join(__dirname, '..', 'assets', 'templates'));
+    this.app.set('views', path.join(process.cwd(), 'assets', 'templates'));
     this.app.set('view engine', 'ejs');
 
     // 番組表データ更新（毎日04:59）

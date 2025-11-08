@@ -103,7 +103,7 @@ class JpRadioController {
     this.logger.enableForceDebug(false);
 
     // dist/ の 1 つ上 → plugin root
-    this.baseDir = path.resolve(__dirname, '../../');
+    this.baseDir = path.resolve(process.cwd(), '../../');
   }
 
   public onVolumioStart(): Promise<void> {
