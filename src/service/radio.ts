@@ -1,5 +1,5 @@
 import express, { Application, Request, Response } from 'express';
-import { parse as queryParse } from 'querystring';
+import { parse, parseQuery } from 'querystring';
 import cron from 'node-cron';
 import libQ from 'kew';
 
@@ -20,6 +20,39 @@ import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { getRegionByPref } from '@/utils/radiko-area.util';
 
+/**
+ * JpRadioクラスは、ラジオストリーミングサービスを提供するための主要な機能を実装します。
+ * このクラスは、ラジオ局のストリームを開始し、再生状態を管理し、番組表データを更新します。
+ *
+ * @class JpRadio
+ *
+ * @param {LoginAccount | null} acct - ログインアカウント情報。
+ * @param {any} confParam - 設定パラメータ。
+ * @param {any} commandRouter - コマンドルーターインスタンス。
+ * @param {MessageHelper} messageHelper - メッセージヘルパーインスタンス。
+ *
+ * @property {Application} app - Expressアプリケーションインスタンス。
+ * @property {ReturnType<Application['listen']> | null} server - サーバーインスタンス。
+ * @property {ReturnType<typeof cron.schedule>} task1 - 番組表データ更新タスク。
+ * @property {ReturnType<typeof cron.schedule>} task2 - 再生画面更新タスク。
+ * @property {LoggerEx} logger - グローバルロガーインスタンス。
+ * @property {string} serviceName - サービス名。
+ * @property {LoginAccount | null} acct - ログインアカウント。
+ * @property {any} confParam - 設定パラメータ。
+ * @property {any} commandRouter - コマンドルーター。
+ * @property {RdkProg | null} rdkProg - RdkProgインスタンス。
+ * @property {RadikoService | null} radikoService - Radikoサービスインスタンス。
+ * @property {RadikoMyInfo} myInfo - ユーザー情報。
+ * @property {object} playing - 現在再生中の情報。
+ * @property {MessageHelper} messageHelper - メッセージヘルパーインスタンス。
+ *
+ * @method #setupRoutes - ルートを設定します。
+ * @method startStream - 指定されたラジオ局の音声ストリームを開始します。
+ * @method pushSongState - 現在の曲の状態を更新します。
+ * @method radioStations - ラジオ局の情報を取得します。
+ * @method radioFavouriteStations - お気に入りのラジオ局を取得します。
+ * @method radioTimeTable - 指定されたラジオ局の番組表を取得します。
+ */
 export default class JpRadio {
   private readonly app: Application;
   private server: ReturnType<Application['listen']> | null = null;
@@ -77,7 +110,8 @@ export default class JpRadio {
       // url(Live)     = /radiko/play/TBS
       // url(TimeFree) = /radiko/play/TBS?ft=##&to=##&seek=##
       const stationId: string = req.params['stationID'];
-      if (!this.radikoService || !this.radikoService.getStations()?.has(stationId)) {
+      // radikoServiceの初期化 または 指定された局が存在しない場合はエラー
+      if (this.radikoService === undefined || this.radikoService === null || !this.radikoService.getStations()?.has(stationId)) {
         const msg: string = !this.radikoService ?
           '[JpRadio]Radiko instance not initialized' :
           `[JpRadio]${stationId} not in available stations`;
@@ -85,7 +119,7 @@ export default class JpRadio {
         res.status(500).send(msg);
         return;
       }
-
+      // ストリーム開始
       this.startStream(res, stationId, req.query);
 
       this.playing.stationId = stationId;
@@ -106,11 +140,45 @@ export default class JpRadio {
     });
   }
 
-  private async startStream(res: Response, stationId: string, query: any): Promise<void> {
+
+  /**
+   * ラジオストリーミングを開始し、レスポンスにパイプします。
+   *
+   * このメソッドは指定されたラジオ局のストリーミングを開始し、
+   * ffmpegを使用してオーディオデータをHTTPレスポンスにパイプします。
+   * ストリーム開始時のエラーハンドリング、プロセス管理、
+   * およびクライアント切断時のクリーンアップ処理を行います。
+   *
+   * @param res - HTTPレスポンスオブジェクト。オーディオストリームが書き込まれます
+   * @param stationId - 再生するラジオ局のID
+   * @param query - ストリーミングのパラメータを含むクエリオブジェクト
+   * @returns Promise<void> - 非同期処理の完了を示すPromise
+   *
+   * @throws Radikoサービスが初期化されていない場合、500エラーを返します
+   * @throws ffmpegプロセスの開始に失敗した場合、500エラーを返します
+   * @throws 内部サーバーエラーが発生した場合、500エラーを返します
+   *
+   * @remarks
+   * - レスポンスヘッダーには 'audio/aac' コンテンツタイプが設定されます
+   * - クライアント切断時、ffmpegプロセスは適切に終了されます（SIGTERM → SIGKILL）
+   * - すべての重要なイベント（開始、終了、エラー）はロガーに記録されます
+   */
+  private async startStream(res: Response, stationId: string, query: parseQuery): Promise<void> {
     this.logger.info('JRADI01SI0003', stationId, query);
+    // Radikoサービスが初期化されていない場合のエラーハンドリング
+    if (this.radikoService === undefined || this.radikoService === null) {
+      this.logger.error('JRADI01SE0002');
+      res.status(500).send('Radiko service not initialized');
+      return;
+    }
+
     try {
-      const ffmpeg = await this.radikoService!.play(stationId, query);
-      if (!ffmpeg || !ffmpeg.stdout) {
+      // ストリームを開始するためにRadikoサービスを呼び出す
+      const ffmpeg = await this.radikoService.play(stationId, query);
+      // ffmpegが正しく初期化されていない場合のエラーハンドリング
+      if (ffmpeg === undefined || ffmpeg === null
+        || ffmpeg.stdout === undefined || ffmpeg.stdout === null) {
+
         this.logger.error('JRADI01SE0002');
         res.status(500).send('Stream start error');
         return;
@@ -118,32 +186,62 @@ export default class JpRadio {
 
       let ffmpegExited: boolean = false;
 
+      // ffmpegプロセスが終了したときの処理
       ffmpeg.on('exit', () => {
         ffmpegExited = true;
         this.logger.info('JRADI01SI0004', ffmpeg.pid);
       });
 
+      // ffmpegプロセスでエラーが発生したときの処理
+      ffmpeg.on('error', (err: any) => {
+        this.logger.error('JRADI01SE0003', err);
+        if (res.writableEnded === false) {
+          res.status(500).end();
+        }
+      });
+
+      // レスポンスでエラーが発生したときの処理
+      res.on('error', (err: any) => {
+        this.logger.warn('JRADI01SW0001', err);
+      });
+
+      // ffmpegの標準出力でエラーが発生したときの処理
+      ffmpeg.stdout.on('error', (err: any) => {
+        this.logger.error('JRADI01SE0003', err);
+        if (res.writableEnded === false) {
+          res.status(500).end();
+        }
+      });
+
+      // レスポンスヘッダーの設定
       res.set({
         'Cache-Control': 'no-cache, no-store',
         'Content-Type': 'audio/aac',
         Connection: 'keep-alive'
       });
 
+      // ffmpegの標準出力をレスポンスにパイプする
       ffmpeg.stdout.pipe(res);
       this.logger.info('JRADI01SI0005', ffmpeg.pid);
 
-      // max60sも待ちたくないのですぐ呼ぶ
       //setTimeout(this.pushSongState.bind(this), 3000);
       //this.task2.start();
 
+      // レスポンスがクローズされたときの処理
       res.on('close', () => {
         //this.task2.stop();
         this.logger.info('JRADI01SI0006');
         if (ffmpeg.pid && ffmpegExited === false) {
           try {
-            //process.kill(-ffmpeg.pid, 'SIGTERM');
-            // seek時に'SIGTERM'ではkillされずに残るので'SIGKILL'に変えてみた
-            process.kill(-ffmpeg.pid, 'SIGKILL');
+            // ffmpegプロセスを終了させる
+            process.kill(-ffmpeg.pid, 'SIGTERM');
+            setTimeout(() => {
+              try {
+                // まだ生きていれば強制終了
+                process.kill(-ffmpeg.pid, 0); // 存在確認
+                process.kill(-ffmpeg.pid, 'SIGKILL');
+              } catch { /* 既に終了 */ }
+            }, 1000);
             this.logger.info('JRADI01SI0007', ffmpeg.pid);
           } catch (error: any) {
             this.logger.warn('JRADI01SW0001', (error.code === 'ESRCH' ? 'Already exited' : error.message));
@@ -153,6 +251,7 @@ export default class JpRadio {
       this.logger.info('JRADI01SI0008');
 
     } catch (error: any) {
+      // 内部サーバーエラーの処理
       this.logger.error('JRADI01SE0003');
       res.status(500).send('Internal server error');
     }
@@ -440,7 +539,7 @@ export default class JpRadio {
             items[0].push(this.makeBrowseItem_TimeFree('timetable', stationId, stationInfo));
           } else if (!skipPrograms) {
             // 番組
-            const query = queryParse(timefree);
+            const query = parse(timefree);
 
             const ft: string = query.ft ? String(query.ft) : '';
             const to: string = query.to ? String(query.to) : '';
