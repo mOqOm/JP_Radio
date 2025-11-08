@@ -868,7 +868,7 @@ export default class JpRadio {
         break;
     }
     return result ? result :
-      '/albumart?sourceicon=music_service/jp_radio/dist/assets/images/app_radiko.svg';
+      '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg';
   }
 
   public getMyInfo(): any {

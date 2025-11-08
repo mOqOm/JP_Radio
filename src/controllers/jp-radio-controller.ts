@@ -376,16 +376,18 @@ class JpRadioController {
     }
   }
 
+
+  // Radikoアカウント保存
   public saveRadikoAccountSetting(data: { radikoUser: string; radikoPass: string }): void {
     this.logger.info('JRADI01CI0009');
 
-    if (this.config) {
+    if (this.config !== undefined && this.config !== null) {
 
-      const updated = ['radikoUser', 'radikoPass'].some((key) =>
+      const updatedFlag: boolean = ['radikoUser', 'radikoPass'].some((key) =>
         this.config!.get(key) !== (data as any)[key]
       );
 
-      if (updated) {
+      if (updatedFlag === true) {
         this.config.set('radikoUser', data.radikoUser);
         this.config.set('radikoPass', data.radikoPass);
         this.showRestartModal();
@@ -396,7 +398,7 @@ class JpRadioController {
   public saveAlbumartSetting(data: { albumartType: { value: string; label: string } }): void {
     this.logger.info('JRADI01CI0010');
 
-    if (this.config) {
+    if (this.config !== undefined && this.config !== null) {
       if (this.config.get('albumartType') !== data.albumartType.value) {
         this.config.set('albumartType', data.albumartType.value);
         this.showRestartModal();
@@ -508,7 +510,7 @@ class JpRadioController {
       uri: 'radiko',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
-      albumart: '/albumart?sourceicon=music_service/jp_radio/dist/assets/images/app_radiko.svg'
+      albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
     });
   }
 

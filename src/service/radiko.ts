@@ -172,7 +172,7 @@ export default class RadikoService {
 
   private saveStationLogoCache(logoUrl: string, logoFile: string): string {
     // path.resolve(process.cwd(), 'hoge');←を使うように
-    const logoPath: string = `music_service/jp_radio/dist/assets/images/${logoFile}`;
+    const logoPath: string = `music_service/jp_radio/assets/images/${logoFile}`;
     const fullPath: string = `/data/plugins/${logoPath}`;
 
     try {
