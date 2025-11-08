@@ -77,7 +77,8 @@ class JpRadioController {
   private mpdPlugin: any;
   // 言語のコード('ja','en'等)
   private readonly langCode: string;
-  private baseDir: string;
+
+  private readonly baseDir: string = path.resolve(process.cwd());
 
   constructor(context: any) {
     this.context = context;
@@ -101,9 +102,6 @@ class JpRadioController {
 
     // journalctl / livelog に debug も表示させる
     this.logger.enableForceDebug(false);
-
-    // dist/ の 1 つ上 → plugin root
-    this.baseDir = path.resolve(process.cwd(), '../../');
   }
 
   public onVolumioStart(): Promise<void> {
