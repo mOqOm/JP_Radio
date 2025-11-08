@@ -70,7 +70,7 @@ export default class JpRadio {
   private readonly serviceName: string = (globalThis as any).JP_RADIO_SERVICE_NAME;
 
   private readonly acct: LoginAccount | null;
-  private readonly jpRadioConfig: any;
+  private readonly jpRadioConfig: JpRadioConfig;
   private readonly commandRouter: any;
   private rdkProg: RdkProg | null = null;
   private radikoService: RadikoService | null = null;
@@ -86,7 +86,7 @@ export default class JpRadio {
     seek: ''
   };
   private readonly messageHelper: MessageHelper;
-  private readonly baseDir: string = path.resolve(process.cwd());
+  private readonly baseDir: string = path.resolve(process.cwd(), 'assets', 'templates');
 
   constructor(acct: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
     this.app = express();
@@ -95,8 +95,10 @@ export default class JpRadio {
     this.commandRouter = commandRouter;
     this.messageHelper = messageHelper;
 
+    this.logger.info(this.baseDir);
+
     // テンプレートエンジン設定 (EJS)
-    this.app.set('views', path.join(this.baseDir, 'assets', 'templates'));
+    this.app.set('views', this.baseDir);
     this.app.set('view engine', 'ejs');
 
     // 番組表データ更新（毎日04:59）
@@ -119,18 +121,28 @@ export default class JpRadio {
       this.logger.info('JRADI01SI0002', req.url);
       // url(Live)     = /radiko/play/TBS
       // url(TimeFree) = /radiko/play/TBS?ft=##&to=##&seek=##
+      // 局ID取得
       const stationId: string = req.params['stationID'];
-      // radikoServiceの初期化 または 指定された局が存在しない場合はエラー
-      if (this.radikoService === undefined || this.radikoService === null || !this.radikoService.getStations()?.has(stationId)) {
-        const msg: string = !this.radikoService ?
-          '[JpRadio]Radiko instance not initialized' :
-          `[JpRadio]${stationId} not in available stations`;
+
+      // radikoServiceの初期化されていない場合はエラー
+      if (this.radikoService === undefined || this.radikoService === null) {
+        const msg = '[JpRadio]Radiko instance not initialized';
         this.logger.error(msg);
         res.status(500).send(msg);
         return;
       }
+
+      // 指定された局が存在しない場合はエラー
+      if (!this.radikoService.getStations()?.has(stationId)) {
+        const msg = `[JpRadio]${stationId} not in available stations`;
+        this.logger.error(msg);
+        res.status(500).send(msg);
+        return;
+      }
+
       // ストリーム開始
       this.startStream(res, stationId, req.query);
+
       this.playing.stationId = stationId;
       const ft = req.query['ft'] as string | undefined;
       const to = req.query['to'] as string | undefined;
@@ -140,10 +152,12 @@ export default class JpRadio {
     });
 
     this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
-      if (!this.radikoService) {
+      // radikoServiceの初期化されていない場合はエラー
+      if (this.radikoService === undefined || this.radikoService === null) {
         res.status(500).send('Radiko service not initialized');
         return;
       }
+
       const stations: Map<string, StationInfo> = this.radikoService.getStations();
       // Map → 配列
       const rows = Array.from(stations.entries()).map(([id, info]) => ({
@@ -152,6 +166,7 @@ export default class JpRadio {
         region: info.RegionName || '-',
         area: info.AreaName || '-'
       }));
+
       res.render('radiko_dev', { rows });
     });
 
@@ -181,7 +196,8 @@ export default class JpRadio {
    */
   private async startStream(res: Response, stationId: string, query: ParsedQs): Promise<void> {
     this.logger.info('JRADI01SI0003', stationId, query);
-    // Radikoサービスが初期化されていない場合のエラーハンドリング
+
+    // Radikoサービスが初期化されていない場合のエラー
     if (this.radikoService === undefined || this.radikoService === null) {
       this.logger.error('JRADI01SE0002');
       res.status(500).send('Radiko service not initialized');
@@ -191,7 +207,7 @@ export default class JpRadio {
     try {
       // ストリームを開始するためにRadikoサービスを呼び出す
       const ffmpeg = await this.radikoService.play(stationId, query);
-      // ffmpegが正しく初期化されていない場合のエラーハンドリング
+      // ffmpegが正しく初期化されていない または Stdoutが存在しない場合のエラー
       if (ffmpeg === undefined || ffmpeg === null
         || ffmpeg.stdout === undefined || ffmpeg.stdout === null) {
 
