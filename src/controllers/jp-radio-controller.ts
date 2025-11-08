@@ -191,11 +191,11 @@ class JpRadioController {
       defer.resolve();
     }).catch((error: any) => {
       // ログ出力（stack も自動的に表示される）
-      this.logger.error('JRADI01CE0001', { error: error });
+      this.logger.error('JRADI01CE0001', error);
 
       if (error.code === 'EADDRINUSE') {
         const message = messageHelper.get('ERROR_PORT_IN_USE', this.confParam.port);
-        this.logger.error('JRADI01CE0002', { message });
+        this.logger.error('JRADI01CE0002', message);
         this.commandRouter.pushToastMessage(
           'error',
           messageHelper.get('ERROR_BOOT_FAILED'),
@@ -223,7 +223,7 @@ class JpRadioController {
         await this.appRadio.stop();
         this.appRadio = null;
       } catch (error: any) {
-        this.logger.error('JRADI01CE0001', { error: error });
+        this.logger.error('JRADI01CE0001', error);
       }
       this.commandRouter.stateMachine.playQueue.saveQueue();
       this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
