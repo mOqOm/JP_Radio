@@ -97,6 +97,9 @@ export default class JpRadio {
 
     this.logger.info(this.baseDir);
 
+    // 静的ファイル配信設定（CSS/JS/画像）
+    this.app.use('/assets', express.static(this.baseDir));
+
     // テンプレートエンジン設定 (EJS)
     this.app.set('views', this.baseDir);
     this.app.set('view engine', 'ejs');
@@ -151,10 +154,11 @@ export default class JpRadio {
       //this.playing.seek = req.query.seek ?? '';
     });
 
-    this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
+    // API endpoint for station data (JSON)
+    this.app.get('/api/radiko/stations', (_req: Request, res: Response) => {
       // radikoServiceの初期化されていない場合はエラー
       if (this.radikoService === undefined || this.radikoService === null) {
-        res.status(500).send('Radiko service not initialized');
+        res.status(500).json({ error: 'Radiko service not initialized' });
         return;
       }
 
@@ -167,8 +171,13 @@ export default class JpRadio {
         area: info.AreaName || '-'
       }));
 
+      res.json({ stations: rows });
+    });
+
+    // View endpoint for dev page
+    this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
       // 拡張子を付けずにビュー名を指定（radiko_dev.ejs を使用）
-      res.render('radiko_dev', { rows });
+      res.render('radiko_dev', { apiEndpoint: '/api/radiko/stations' });
     });
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {

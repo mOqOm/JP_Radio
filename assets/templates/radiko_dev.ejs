@@ -17,6 +17,21 @@
             text-align: center;
         }
 
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #d32f2f;
+            background-color: #ffebee;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -44,12 +59,22 @@
         tr:hover {
             background-color: #f1f1f1;
         }
+
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
     </style>
 </head>
 
 <body>
     <h1>Radiko Stations</h1>
-    <table>
+
+    <div id="loading" class="loading">Loading stations...</div>
+    <div id="error" class="error" style="display: none;"></div>
+
+    <table id="stationsTable" style="display: none;">
         <thead>
             <tr>
                 <th>Station ID</th>
@@ -58,33 +83,77 @@
                 <th>Area</th>
             </tr>
         </thead>
-        <tbody>
-            <% if (rows && rows.length> 0) { %>
-                <% rows.forEach(row=> { %>
-                    <tr>
-                        <td>
-                            <%= row.stationId %>
-                        </td>
-                        <td>
-                            <%= row.name %>
-                        </td>
-                        <td>
-                            <%= row.region %>
-                        </td>
-                        <td>
-                            <%= row.area %>
-                        </td>
-                    </tr>
-                    <% }); %>
-                        <% } else { %>
-                            <tr>
-                                <td colspan="4" style="text-align: center; color: #999;">
-                                    No stations available
-                                </td>
-                            </tr>
-                            <% } %>
+        <tbody id="stationsBody">
         </tbody>
     </table>
+
+    <script>
+        // API エンドポイント（EJS から渡される）
+        const API_ENDPOINT = '<%= apiEndpoint %>';
+
+        /**
+         * 放送局データを API から取得して表示
+         */
+        async function loadStations() {
+            const loading = document.getElementById( 'loading' );
+            const error = document.getElementById( 'error' );
+            const table = document.getElementById( 'stationsTable' );
+            const tbody = document.getElementById( 'stationsBody' );
+
+            try {
+                // API からデータ取得
+                const response = await fetch( API_ENDPOINT );
+
+                if ( !response.ok ) {
+                    throw new Error( `HTTP error! status: ${ response.status }` );
+                }
+
+                const data = await response.json();
+                const stations = data.stations || [];
+
+                // ローディング非表示
+                loading.style.display = 'none';
+
+                if ( stations.length === 0 ) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="no-data">No stations available</td></tr>';
+                } else {
+                    // テーブル行を生成
+                    tbody.innerHTML = stations.map( station => `
+                        <tr>
+                            <td>${ escapeHtml( station.stationId ) }</td>
+                            <td>${ escapeHtml( station.name ) }</td>
+                            <td>${ escapeHtml( station.region ) }</td>
+                            <td>${ escapeHtml( station.area ) }</td>
+                        </tr>
+                    `).join( '' );
+                }
+
+                // テーブル表示
+                table.style.display = 'table';
+
+            } catch ( err ) {
+                // エラー表示
+                loading.style.display = 'none';
+                error.textContent = `Failed to load stations: ${ err.message }`;
+                error.style.display = 'block';
+                console.error( 'Error loading stations:', err );
+            }
+        }
+
+        /**
+         * HTML エスケープ処理
+         * @param {string} text - エスケープする文字列
+         * @returns {string} エスケープされた文字列
+         */
+        function escapeHtml( text ) {
+            const div = document.createElement( 'div' );
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ページ読み込み時に実行
+        document.addEventListener( 'DOMContentLoaded', loadStations );
+    </script>
 </body>
 
 </html>
