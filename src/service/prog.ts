@@ -2,6 +2,7 @@ import got from 'got';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 import Datastore from 'nedb-promises';
+import { format as FormatDate } from 'date-fns';
 
 // 定数のインポート
 import {
@@ -20,7 +21,6 @@ import { LoggerEx } from '@/utils/logger.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { DBUtil } from '@/utils/db.util';
 import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
-import { tr } from 'date-fns/locale';
 
 // TODO: 定数から呼出し可能であればそれを用いる
 const EMPTY_PROGRAM: RadikoProgramData = {
@@ -48,9 +48,38 @@ export default class RdkProg {
 
   constructor() {
     this.dbUtil = new DBUtil<RadikoProgramData>();
-    this.xmlUtil = new RadikoXmlUtil(this.dbUtil);
+    this.xmlUtil = new RadikoXmlUtil();
 
     this.initDBIndexes();
+  }
+
+  /** DBから指定局の1日分の番組データ取得 */
+  public async getDbRadikoProgramData(stationId: string, date: Date): Promise<RadikoProgramData[]> {
+    const startDate: Date = date;
+    startDate.setHours(5, 0, 0, 0);
+
+    const endDate: Date = new Date(startDate);
+    // 翌日の05:00:01
+    endDate.setDate(endDate.getDate() + 1);
+    endDate.setSeconds(endDate.getSeconds() + 1); // 05:00:01
+
+    // Radikoの日付区切りは05:00なので、05:00以前は前日扱い
+    const startDateTime: string = FormatDate(startDate, 'yyyyMMddhhmmss');
+    const endDateTime: string = FormatDate(endDate, 'yyyyMMddhhmmss');
+
+    // all programs that intersect the day [start, end)
+    let radikoProgramDataArray: RadikoProgramData[] = await this.dbUtil.find({
+      stationId,
+      // 未満
+      ft: { $lt: endDateTime },
+      // 以上
+      to: { $gte: startDateTime },
+    });
+
+    // 開始時刻でソート
+    radikoProgramDataArray.sort((a, b) => a.ft.localeCompare(b.ft));
+
+    return radikoProgramDataArray;
   }
 
   /** 現在の番組取得 */
@@ -60,9 +89,9 @@ export default class RdkProg {
 
   /** 指定局・時間の番組取得 */
   public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData> {
-    let progData = await this.findProgramData(stationId, time);
+    let radikoProgramData: RadikoProgramData = await this.findProgramData(stationId, time);
 
-    if (!progData && retry === true) {
+    if (radikoProgramData && retry === true) {
       const stations: Set<string> = await this.getDailyStationPrograms(stationId, time);
 
       if (stations.has(stationId) === true) {
@@ -70,7 +99,7 @@ export default class RdkProg {
       }
     }
 
-    return {} as RadikoProgramData;
+    return radikoProgramData
   }
 
   /** DB検索＋キャッシュ */
@@ -190,11 +219,11 @@ export default class RdkProg {
       const response = await got(url);
 
       // await を忘れずに
-      const stationsSet: Set<string> = await this.xmlUtil.parseAndSavePrograms(response.body, skipStations);
+      const radikoProgramDataArray: RadikoProgramData[] = await this.xmlUtil.parsePrograms(response.body, skipStations);
 
-      // Set<string> は値のみなので for...of でループ
-      for (const stationId of stationsSet as Set<string>) {
-        doneStations.add(stationId);
+      for (const radikoProgramData of radikoProgramDataArray) {
+        doneStations.add(radikoProgramData.stationId);
+        await this.putProgram(radikoProgramData);
       }
 
     } catch (error: any) {

@@ -234,7 +234,19 @@ export default class JpRadio {
         return;
       }
 
-      const date = (req.query['date'] as string) || broadcastTimeConverter.getCurrentRadioDate();
+      // yyyyMMdd 形式の日付文字列を取得
+      const dateStr = req.query['date'] as string;
+      if (dateStr !== undefined && dateStr !== null && dateStr !== '' && dateStr.length !== 8) {
+        res.status(400).json({ error: 'Invalid date format. Use yyyyMMdd.' });
+        return;
+      }
+
+      // YYYYMMDD → Date オブジェクトに変換
+      const year = parseInt(dateStr.substring(0, 4));
+      const month = parseInt(dateStr.substring(4, 6));
+      const day = parseInt(dateStr.substring(6, 8));
+      // 月は0始まりで処理されるため-1
+      const date = new Date(year, month - 1, day);
 
       try {
         const programs: Array<{
@@ -246,24 +258,20 @@ export default class JpRadio {
           img: string | null;
         }> = [];
 
-        let time = '0500';
-        while (time < '2900') {
-          const ft = `${date}${time}`;
-          const prog = await this.rdkProg.getProgramData(stationId, ft, true);
-          if (!prog) break;
+        const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg.getDbRadikoProgramData(stationId, date);
 
-          programs.push({
-            progId: prog.progId || '',
-            ft: prog.ft,
-            to: prog.to,
-            title: prog.title,
-            pfm: prog.pfm || '',
-            img: prog.img || null
-          });
-
-          time = prog.to.slice(8, 12);
+        if (radikoProgramDataArray.length > 0) {
+          for (const radikoProgramData of radikoProgramDataArray) {
+            programs.push({
+              progId: radikoProgramData.progId || '',
+              ft: radikoProgramData.ft,
+              to: radikoProgramData.to,
+              title: radikoProgramData.title,
+              pfm: radikoProgramData.pfm || '',
+              img: radikoProgramData.img || null
+            });
+          }
         }
-
         res.json({ stationId, date, programs });
       } catch (e: any) {
         res.status(500).json({ error: e?.message || 'Failed to read programs' });

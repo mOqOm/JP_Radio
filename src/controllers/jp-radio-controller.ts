@@ -1074,10 +1074,12 @@ class JpRadioController {
       if (broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioDate() + '050000') < -7 * 86400) {
         //「再生/キューに追加/お気に入りに追加」ボタンを消す
         modalMessage.buttons.splice(0, 3);
-      }
-      else if (broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime()) >= 0) {
-        //「再生」ボタンを消す
-        modalMessage.buttons.splice(0, 1);
+      } else {
+        const diff = broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime());
+        if (diff >= 0) {
+          //「再生/キューに追加」ボタンを消す（追っかけ再生や未配信は追加も不可）
+          modalMessage.buttons.splice(0, 2);
+        }
       }
 
       this.commandRouter.broadcastMessage('openModal', modalMessage);

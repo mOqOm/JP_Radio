@@ -1,34 +1,29 @@
 import { XMLParser } from 'fast-xml-parser';
 
 // 定数のインポート
-import { RADIKO_XML_PARSER_OPTIONS } from '@/constants/radiko-xml.constants';
+import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
 
 // Modelのインポート
-import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '@/models/radiko-xml-station.model';
-import { RadikoProgramData } from '@/models/radiko-program.model';
+import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
+import { RadikoProgramData } from '../models/radiko-program.model';
 
 // Utilsのインポート
-import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
-import { DBUtil } from '@/utils/db.util';
+import { broadcastTimeConverter } from './broadcast-time-converter.util';
 
 export class RadikoXmlUtil {
-  private readonly dbUtil: DBUtil<RadikoProgramData>;
   private readonly xmlParser: XMLParser;
 
-  constructor(dbUtil: DBUtil<RadikoProgramData>) {
-    this.dbUtil = dbUtil;
+  constructor() {
     this.xmlParser = new XMLParser(RADIKO_XML_PARSER_OPTIONS);
   }
 
   /**
-   * XML文字列を解析し、DBに保存。
+   * XML文字列を解析し、RadikoProgramDataの配列を返す
    * @param xmlString XML文字列
    * @param skipStations 既取得局IDのSet
-   * @returns 保存された局IDのSet
+   * @returns RadikoProgramDataの配列
    */
-  public async parseAndSavePrograms(xmlString: string, skipStations: Set<string> = new Set()): Promise<Set<string>> {
-    const doneStations = new Set<string>();
-
+  public parsePrograms(xmlString: string, skipStations: Set<string> = new Set()): RadikoProgramData[] {
     try {
       const xmlData: RadikoXMLData = this.xmlParser.parse(xmlString);
 
@@ -65,9 +60,10 @@ export class RadikoXmlUtil {
         let prevTo = '';
 
         for (const p of rawProgs) {
-          const ft = broadcastTimeConverter.convertRadioTime(p['@ft'], '05');
-          const to = broadcastTimeConverter.convertRadioTime(p['@to'], '29');
-          // ft.slice(8, 12) で時刻部分（HHMM）を抽出し、progIdの一意性を確保
+          // 第2引数を削除
+          const ft = broadcastTimeConverter.convertRadioTime(p['@ft']);
+          const to = broadcastTimeConverter.convertRadioTime(p['@to']);
+
           const progId = `${stationId}${p['@id']}${ft.slice(8, 12)}`;
 
           // ギャップ補完
@@ -97,8 +93,9 @@ export class RadikoXmlUtil {
 
           prevTo = to;
         }
+
         // 最終29時まで補完
-        if (Number(prevTo.slice(8)) < 290000) {
+        if (prevTo && Number(prevTo.slice(8, 12)) < 2900) {
           allProgs.push({
             stationId,
             progId: `${stationId}_${prevTo}`,
@@ -111,16 +108,7 @@ export class RadikoXmlUtil {
           });
         }
       }
-
-      // DBに並列で insert（順序保証不要の場合のみ推奨）
-      await Promise.all(allProgs.map(prog => this.dbUtil.insert(prog)));
-
-      // DB保存が完了した局IDを収集
-      for (const prog of allProgs) {
-        doneStations.add(prog.stationId);
-      }
-
-      return doneStations;
+      return allProgs;
     } catch (error: any) {
       // エラーを呼び出し元にスロー
       throw error;

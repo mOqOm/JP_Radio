@@ -14,6 +14,7 @@
         <nav class="tab-nav">
             <button class="tab-button active" data-tab="stations">放送局一覧</button>
             <button class="tab-button" data-tab="with-program">現在の番組</button>
+            <button class="tab-button" data-tab="programs">番組表</button>
         </nav>
     </header>
 
@@ -40,13 +41,33 @@
         <div id="with-program-tab" class="tab-content">
             <div id="programGrid" class="program-grid"></div>
         </div>
+
+        <!-- 番組表タブ -->
+        <div id="programs-tab" class="tab-content">
+            <div class="programs-controls">
+                <div class="station-selector">
+                    <label for="stationSelect">放送局:</label>
+                    <select id="stationSelect">
+                        <option value="">選択してください</option>
+                    </select>
+                </div>
+                <div class="date-selector">
+                    <label for="dateInput">日付:</label>
+                    <input type="date" id="dateInput">
+                    <button id="todayButton" class="btn-small">今日</button>
+                </div>
+                <button id="loadProgramsButton" class="btn-primary">番組表を表示</button>
+            </div>
+            <div id="programsList" class="programs-list"></div>
+        </div>
     </main>
 
     <script>
         // API エンドポイント（EJS から渡される）
         window.API_ENDPOINTS = {
             stations: '/api/radiko/stations',
-            withProgram: '/api/radiko/stations/with-program'
+            withProgram: '/api/radiko/stations/with-program',
+            programs: '/api/radiko/stations/:stationId/programs'
         };
     </script>
     <script src="/assets/js/radiko-stations.js"></script>

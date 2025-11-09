@@ -1,8 +1,6 @@
-import { format } from 'date-fns';
+import { format, parse, addDays, addSeconds, differenceInSeconds } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
 import { ja } from 'date-fns/locale';
-
-// 1時間をミリ秒換算
-const HOUR_msec = 3600000;
 
 /**
  * Radikoの「放送日と時刻（05:00～29:00）」を
@@ -11,13 +9,16 @@ const HOUR_msec = 3600000;
  * 放送業界の共通仕様に対応（05:00 = 1日の開始）
  * 深夜0～5時は前日の24～29時扱い
  * Radiko遅延（タイムラグ）補正機能付き
- * Date-fns によるフォーマット
+ * date-fns + date-fns-tz によるタイムゾーン対応
  */
-class BroadcastTimeConverter  {
-  // Radiko配信遅延（秒→ミリ秒）
-  private DELAY_msec: number = 0;
-  // 遅延 + ラジコ日付開始オフセット(5h)
-  private OFFSET_msec: number = 0;
+class BroadcastTimeConverter {
+  private readonly JST_TIMEZONE = 'Asia/Tokyo';
+  private readonly RADIO_DAY_START_HOUR = 5; // ラジオの1日は05:00開始
+
+  // Radiko配信遅延（秒）
+  private delaySec: number = 0;
+  // 遅延 + ラジオ日付開始オフセット(5時間)のミリ秒
+  private offsetMs: number = 0;
 
   constructor(delay: number | string) {
     this.setDelay(delay);
@@ -28,20 +29,39 @@ class BroadcastTimeConverter  {
    * @param delay 秒数（例: 20）
    */
   public setDelay(delay: number | string): void {
-    this.DELAY_msec = Number(delay) * 1000;
-    // Radiko日付開始は「05:00」
-    // → 遅延 + 5時間オフセット = ラジオ基準時
-    this.OFFSET_msec = this.DELAY_msec + 5 * HOUR_msec;
+    this.delaySec = Number(delay);
+    // ラジオ日付開始は「05:00」→ 遅延 + 5時間オフセット
+    this.offsetMs = (this.delaySec + this.RADIO_DAY_START_HOUR * 3600) * 1000;
   }
 
-  /** 現在時刻（yyyyMMddHHmmss） */
+  /**
+   * 現在のJST時刻を取得
+   */
+  private getNowJST(): Date {
+    return utcToZonedTime(new Date(), this.JST_TIMEZONE);
+  }
+
+  /**
+   * 文字列をDateオブジェクトに変換（JST）
+   * @param dateTimeStr yyyyMMddHHmmss 形式
+   */
+  private parseDateTime(dateTimeStr: string): Date {
+    const padded = dateTimeStr.padEnd(14, '0');
+    return parse(padded, 'yyyyMMddHHmmss', new Date());
+  }
+
+  /**
+   * 現在時刻（yyyyMMddHHmmss）
+   */
   public getCurrentTime(): string {
-    return format(Date.now(), 'yyyyMMddHHmmss');
+    return format(this.getNowJST(), 'yyyyMMddHHmmss');
   }
 
-  /** 今日の日付（yyyyMMdd） */
+  /**
+   * 今日の日付（yyyyMMdd）
+   */
   public getCurrentDate(): string {
-    return format(Date.now(), 'yyyyMMdd');
+    return format(this.getNowJST(), 'yyyyMMdd');
   }
 
   /**
@@ -49,160 +69,173 @@ class BroadcastTimeConverter  {
    * 遅延補正済み
    */
   public getCurrentRadioTime(): string {
-    // 現在時刻の取得
-    const date = new Date();
-    const time = date.getTime();
-    const src = format(time - this.DELAY_msec, 'yyyyMMddHHmmss');
-
-    // "29"は翌日5時までの最大時刻
-    return this.convertRadioTime(src, '29');
+    const now = this.getNowJST();
+    const delayed = addSeconds(now, -this.delaySec);
+    return format(delayed, 'yyyyMMddHHmmss');
   }
 
   /**
    * ラジコ日付（深夜0～5時は前日扱い）
+   * @returns yyyyMMdd 形式
    */
   public getCurrentRadioDate(): string {
-    return format(Date.now() - this.OFFSET_msec, 'yyyyMMdd');
+    const now = this.getNowJST();
+    const offset = new Date(now.getTime() - this.offsetMs);
+    return format(offset, 'yyyyMMdd');
+  }
+
+  /**
+   * 日付に日数を加算（yyyyMMdd → yyyyMMdd）
+   * @param dateStr yyyyMMdd 形式
+   * @param days 加算する日数
+   */
+  public addDay(dateStr: string, days: number): string {
+    const date = parse(dateStr, 'yyyyMMdd', new Date());
+    const newDate = addDays(date, days);
+    return format(newDate, 'yyyyMMdd');
   }
 
   /**
    * ラジコ日付基準で、今日からN日間の日付リストを返す
    * @param begin 例) 0=今日, -6=6日前
    * @param end   例) 0=今日, 6=6日後
+   * @param kanjiFmt 日本語フォーマット
    */
-  public getRadioWeek(begin: number | string, end: number | string, kanjiFmt: string = 'yyyy年M月d日(E)'): { index: number, date: string, kanji: string }[] {
-    // 現在時刻の取得
-    const now = Date.now();
-    const radioBase = now - this.OFFSET_msec;
-    const week = [];
+  public getRadioWeek(
+    begin: number | string,
+    end: number | string,
+    kanjiFmt: string = 'yyyy年M月d日(E)'
+  ): { index: number; date: string; kanji: string }[] {
+    const now = this.getNowJST();
+    const radioBase = new Date(now.getTime() - this.offsetMs);
+    const result: { index: number; date: string; kanji: string }[] = [];
 
-    for (let i = Number(begin); i <= Number(end); i++) {
-      const t = radioBase + i * 24 * HOUR_msec;
-      week.push({
-        // 0=今日
+    const b = Number(begin);
+    const e = Number(end);
+
+    for (let i = b; i <= e; i++) {
+      const target = addDays(radioBase, i);
+      result.push({
         index: i,
-        date : format(t, 'yyyyMMdd'),
-        kanji: format(t, kanjiFmt, {locale: ja})
+        date: format(target, 'yyyyMMdd'),
+        kanji: format(target, kanjiFmt, { locale: ja }),
       });
     }
-    return week;
+
+    return result;
   }
 
   /**
-   * 24〜29時表現を通常の日付へ変換
-   * 例: 20240201023000 → 20240131263000 (=01/31 26:30)
-   * @param src yyyyMMddHHmmss
+   * 通常時刻(00:00～05:00)をラジコ時刻(24:00～29:00)に変換
+   * @param timeStr yyyyMMddHHmmss 形式
+   * @returns yyyyMMddHHmmss 形式（深夜は前日の24～29時扱い）
    */
-  public convertRadioTime(src: string, am05: string = ''): string {
-    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
+  public convertRadioTime(timeStr: string): string {
+    const padded = timeStr.padEnd(14, '0');
+    const hour = parseInt(padded.substring(8, 10));
 
-    // 深夜0:00〜5:00 → 前日の24:00〜29:00扱い
-    if (src.slice(8, 14) <= '050000') {
-      // 29:00など特殊値は無視
-      if (src.slice(8, 10) != am05) {
-        return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d+)$/, (match, y, m, d, h, ms) => {
-          const base = new Date(y, m-1, d);
-          base.setTime(base.getTime() - 24 * HOUR_msec);
-          h = ('0' + (parseInt(h) + 24)).slice(-2);
-          return format(base, 'yyyyMMdd') + h + ms;
-        });
-      }
+    // 00:00～04:59 → 前日の24:00～28:59に変換
+    if (hour < this.RADIO_DAY_START_HOUR) {
+      const date = this.parseDateTime(padded);
+      const prevDay = addDays(date, -1);
+      const newHour = hour + 24;
+
+      return format(prevDay, 'yyyyMMdd') +
+        String(newHour).padStart(2, '0') +
+        padded.substring(10, 14);
     }
-    return src;
+
+    return padded;
   }
 
   /**
-   * 逆変換：24〜29時を通常の0〜5時へ
+   * ラジコ時刻(24:00～29:00)を通常時刻(00:00～05:00)に逆変換
+   * @param timeStr yyyyMMddHHmmss 形式
+   * @returns yyyyMMddHHmmss 形式
    */
-  public revConvertRadioTime(src: string): string {
-    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
+  public revConvertRadioTime(timeStr: string): string {
+    const padded = timeStr.padEnd(14, '0');
+    const hour = parseInt(padded.substring(8, 10));
 
-    if (src.slice(8, 14) >= '240000') {
-      return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d+)$/, (match, y, m, d, h, ms) => {
-        const base = new Date(y, m-1, d);
-        base.setTime(base.getTime() + 24 * HOUR_msec);
-        h = ('0' + (parseInt(h) - 24)).slice(-2);
-        return format(base, 'yyyyMMdd') + h + ms;
-      });
+    // 24:00～29:00 → 翌日の00:00～05:00に変換
+    if (hour >= 24) {
+      const date = this.parseDateTime(padded);
+      const nextDay = addDays(date, 1);
+      const newHour = hour - 24;
+
+      return format(nextDay, 'yyyyMMdd') +
+        String(newHour).padStart(2, '0') +
+        padded.substring(10, 14);
     }
-    return src;
+
+    return padded;
   }
 
-  // 以下フォーマット便利関数群（元コード維持）
-
-  public formatTimeString(src: string, fmt: string): string {
-    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
-    return src.replace(/^\d{8}(\d\d)(\d\d)(\d\d).*$/, fmt);
+  /**
+   * 番組時間をチェック('yyyyMMddHHmmss'形式)
+   * @param ft 番組開始時刻
+   * @param to 番組終了時刻
+   * @param currentTime 現在時刻
+   * @returns 0: 放送中、負: 過去、正: 未来（秒）
+   */
+  public checkProgramTime(ft: string, to: string, currentTime: string): number {
+    if (ft <= currentTime && currentTime < to) {
+      return 0; // 放送中
+    }
+    return this.getTimeSpan(currentTime, ft); // 過去:マイナス，未来:プラス(sec)
   }
 
-  public formatTimeString2(srcArray: string[], fmt: string): string {
+  /**
+   * 2つの時刻の差を秒単位で計算
+   * @param from 開始時刻 (yyyyMMddHHmmss)
+   * @param to 終了時刻 (yyyyMMddHHmmss)
+   * @returns 時間差（秒）
+   */
+  public getTimeSpan(from: string, to: string): number {
+    const fromDate = this.parseDateTime(from);
+    const toDate = this.parseDateTime(to);
+    return differenceInSeconds(toDate, fromDate);
+  }
+
+  /**
+   * 時刻に秒数を加算
+   * @param timeStr yyyyMMddHHmmss 形式
+   * @param seconds 加算する秒数
+   * @returns yyyyMMddHHmmss 形式
+   */
+  public addTime(timeStr: string, seconds: number | string): string {
+    if (!seconds) return timeStr;
+    const date = this.parseDateTime(timeStr);
+    const newDate = addSeconds(date, Number(seconds));
+    return format(newDate, 'yyyyMMddHHmmss');
+  }
+
+  // ['yyyyMMddHHmmss'] * '$1/$2/$3 $4:$5-$10:$11' => 'yyyy/MM/dd HH:mm-HH:mm'
+  public formatFullString2(srcArray: string[], fmt: string): string {
     let src = '', reg = '';
-    for (const s0 of srcArray) {
-      const s = s0.padEnd(14, '0');
-      src += s.replace(/^\d{8}(\d{6}).*$/, '$1');
-      reg += '(\\d{2})(\\d{2})(\\d{2})';
+    for (const s of srcArray) {
+      const padded = s.padEnd(14, '0');
+      src += padded.replace(/^(\d{14}).*$/, '$1');
+      reg += '(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})';
     }
-    return src.replace(RegExp(reg), fmt);
+    return src.replace(new RegExp(reg), fmt);
   }
 
+  // 'yyyyMMddHHmmss' * '$1/$2/$3' => 'yyyy/MM/dd'
   public formatDateString(src: string, fmt: string): string {
     src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
     return src.replace(/^(\d{4})(\d\d)(\d\d).*$/, fmt);
   }
 
-  public formatFullString(src: string, fmt: string): string {
-    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
-    return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, fmt);
-  }
-
-  public formatFullString2(srcArray: string[], fmt: string): string {
+  // ['yyyyMMddHHmmss'] * '$1:$2-$4:$5' => 'HH:mm-HH:mm'
+  public formatTimeString2(srcArray: string[], fmt: string): string {
     let src = '', reg = '';
-    for (const s0 of srcArray) {
-      const s = s0.padEnd(14, '0');
-      src += s.replace(/^(\d{14}).*$/, '$1');
-      reg += '(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})';
+    for (const s of srcArray) {
+      const padded = s.padEnd(14, '0');
+      src += padded.replace(/^\d{8}(\d{6}).*$/, '$1');
+      reg += '(\\d{2})(\\d{2})(\\d{2})';
     }
-    return src.replace(RegExp(reg), fmt);
-  }
-  
-  /**
-   * 'yyyyMMddHHmmss'形式の時間差(sec)
-   */
-  public getTimeSpan(t0: string, t1: string): number {
-    const parse = (t: string) => {
-      t = t.padEnd(14, '0');
-      const y = +t.slice(0, 4), m = +t.slice(4, 6)-1, d = +t.slice(6, 8);
-      const h = +t.slice(8,10), min = +t.slice(10,12), s = +t.slice(12,14);
-      return new Date(y, m, d, h, min, s).getTime();
-    };
-    return Math.round((parse(t1) - parse(t0)) / 1000);
-  }
-
-  /**
-   * 現在時刻が番組範囲内かチェック
-   * @returns 0 = 放送中 / プラス = 放送前 / マイナス = 終了後
-   */
-  public checkProgramTime(ft: string, to: string, currentTime: string): number {
-    
-    if (ft <= currentTime && currentTime < to) {
-      return 0;
-    }
-
-    return this.getTimeSpan(currentTime, ft);
-  }
-
-  /**
-   * yyyyMMddHHmmss に経過秒を加算
-   */
-  public addTime(src: string, elapsedSec: number | string): string {
-    if (!elapsedSec) return src;
-    src = src.padEnd(14, '0');
-
-    return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, (match, y, m, d, h, min, s) => {
-      const time = new Date(+y, +m-1, +d, +h, +min, +s);
-      time.setTime(time.getTime() + Number(elapsedSec) * 1000);
-      return format(time, 'yyyyMMddHHmmss');
-    });
+    return src.replace(new RegExp(reg), fmt);
   }
 }
 
