@@ -69,7 +69,7 @@ export default class JpRadio {
   // サービス名はプロジェクト全体のグローバルから取得
   private readonly serviceName: string = (globalThis as any).JP_RADIO_SERVICE_NAME;
 
-  private readonly acct: LoginAccount | null;
+  private readonly loginAccount: LoginAccount | null;
   private readonly jpRadioConfig: JpRadioConfig;
   private readonly commandRouter: any;
   private rdkProg: RdkProg | null = null;
@@ -88,9 +88,9 @@ export default class JpRadio {
   private readonly messageHelper: MessageHelper;
   private readonly baseDir: string = path.resolve(process.cwd(), 'assets', 'templates');
 
-  constructor(acct: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
+  constructor(loginAccount: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
     this.app = express();
-    this.acct = acct;
+    this.loginAccount = loginAccount;
     this.jpRadioConfig = jpRadioConfig;
     this.commandRouter = commandRouter;
     this.messageHelper = messageHelper;
@@ -810,7 +810,7 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0017');
     if (this.radikoService !== null) {
       this.logger.info('RadioTest0001');
-      [this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.radikoService.init(this.acct);
+      [this.myInfo.areaId, this.myInfo.areafree, this.myInfo.member_type] = await this.radikoService.init(this.loginAccount);
     }
     await this.#pgupdate(true);
     this.logger.info('JRADI01SI0018', JSON.stringify(this.myInfo));
