@@ -223,6 +223,7 @@ export default class RdkProg {
 
       for (const radikoProgramData of radikoProgramDataArray) {
         doneStations.add(radikoProgramData.stationId);
+        // DBに登録
         await this.putProgram(radikoProgramData);
       }
 
