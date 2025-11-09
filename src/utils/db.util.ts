@@ -22,11 +22,12 @@ export class DBUtil<T> {
   }
 
   /**
-   * 1件だけ検索する
+   * 1件だけ検索する（見つからない場合は null を返す）
    * @param query 検索条件
    */
-  public async findOne(query: any): Promise<T | undefined> {
-    return await this.db.findOne(query) as T;
+  public async findOne(query: any): Promise<T | null> {
+    const result = await this.db.findOne(query);
+    return (result ?? null) as T | null;
   }
 
   /**

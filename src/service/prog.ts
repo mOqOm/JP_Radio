@@ -79,13 +79,13 @@ export default class RdkProg {
 
     if (stationId !== this.lastStationId || time !== this.lastTime) {
       try {
-        const result = await this.dbUtil.findOne({
+        const result: RadikoProgramData | null = await this.dbUtil.findOne({
           stationId,
           ft: { $lt: `${time}01` },
           to: { $gt: `${time}01` },
         });
 
-        if (result) {
+        if (result !== undefined && result !== null) {
           this.cachedProgram = result;
           this.lastStationId = stationId;
           this.lastTime = time;

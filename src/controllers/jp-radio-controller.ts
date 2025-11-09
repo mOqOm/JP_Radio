@@ -600,17 +600,51 @@ class JpRadioController {
             this.logger.error('JRADI01CE0005');
             defer.reject(new Error('JpRadio service not initialized'));
           }
-        }).then((result: any) =>
-          defer.resolve(result)
-        ).fail((error: any) => {
+        }).fail((error: any) => {
           this.logger.error('JRADI01CE0006', error);
           defer.reject(error);
         });
+      } else if (playMode === 'timefree') {
+        // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
+        if (stationId === 'favourites') {
+          const browseResult: BrowseResult = await this.appRadio.radioFavouriteStations(playMode);
+          defer.resolve(browseResult);
+        } else {
+          const browseResult: BrowseResult = await this.appRadio.radioStations(playMode);
+          defer.resolve(browseResult);
+        }
+      } else if (playMode === 'timetable') {
+        libQ.resolve().then(async () => {
+          if (this.appRadio !== undefined && this.appRadio !== null) {
+
+            if (option !== undefined && option !== null) {
+              // uri = radiko/timetable/TBS/#~#
+              const [from, to] = option.split('~');
+              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, from, to);
+              defer.resolve(browseResult);
+            } else {
+              // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
+              const today = playMode.endsWith('today');
+
+              let from = 0;
+              if (today === false) {
+                from = this.jpRadioConfig.ppFrom;
+              }
+
+              let to = 0;
+              if (today === false) {
+                to = this.jpRadioConfig.ppTo;
+              }
+
+              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, -from, to);
+              defer.resolve(browseResult);
+            }
+          }
+        }).fail((error: any) => {
+          this.logger.error('JRADI01CE0007', error);
+          defer.reject(error);
+        });
       }
-      //const devBrowseResult: BrowseResult = await this.appRadio.radioStations(playMode || 'live');
-
-      //return devBrowseResult;
-
 
 
       /*if (mode === undefined || mode === null || mode === '') {

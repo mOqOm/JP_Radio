@@ -24,7 +24,6 @@ import { LoggerEx } from '@/utils/logger.util';
 import { MessageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { getRegionByPref } from '@/utils/radiko-area.util';
-import { th } from 'date-fns/locale';
 
 /**
  * JpRadioクラスは、ラジオストリーミングサービスを提供するための主要な機能を実装します。
@@ -86,7 +85,8 @@ export default class JpRadio {
     seek: ''
   };
   private readonly messageHelper: MessageHelper;
-  private readonly baseDir: string = path.resolve(process.cwd(), 'assets', 'templates');
+  //private readonly baseDir: string = path.resolve(process.cwd(), 'assets', 'templates');
+  private readonly baseDir: string = path.resolve(__dirname, '..', '..', 'assets', 'templates');
 
   constructor(loginAccount: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
     this.app = express();
@@ -167,6 +167,7 @@ export default class JpRadio {
         area: info.AreaName || '-'
       }));
 
+      // 拡張子を付けずにビュー名を指定（radiko_dev.ejs を使用）
       res.render('radiko_dev', { rows });
     });
 
@@ -477,7 +478,7 @@ export default class JpRadio {
     if (this.radikoService !== undefined && this.radikoService !== null && this.rdkProg !== undefined && this.rdkProg !== null) {
       const stationInfo = this.radikoService.getStationInfo(stationId);
 
-      if (stationInfo && this.rdkProg) {
+      if (stationInfo && this.rdkProg !== undefined && this.rdkProg !== null) {
         const lists: BrowseList[] = [];
         const week = broadcastTimeConverter.getRadioWeek(begin, end, 'M月d日(E)');
 
@@ -491,7 +492,7 @@ export default class JpRadio {
           let items: BrowseItem[] = [];
           do {
             // 一日分（05:00～29:00）の番組表
-            const progData = await this.rdkProg!.getProgramData(stationId, `${wDate.date}${time}`, true);
+            const progData = await this.rdkProg?.getProgramData(stationId, `${wDate.date}${time}`, true);
 
             if (progData) {
               const item: BrowseItem = this.createBrowseItemTimeTable('play', stationId, stationInfo, progData);
@@ -636,9 +637,11 @@ export default class JpRadio {
     const progPfm: string = progData ? progData.pfm! : '';
 
     // ft と to が存在するかチェック
-    const progTime: string = (progData?.ft && progData?.to)
-      ? broadcastTimeConverter.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5')
-      : '';
+    let progTime: string = '';
+
+    if (progData?.ft !== undefined && progData?.ft !== null && progData?.to !== undefined && progData?.to !== null) {
+      progTime = broadcastTimeConverter.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5')
+    }
 
     const albumart: string = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img);
 
@@ -697,7 +700,7 @@ export default class JpRadio {
     if (progData?.ft && progData?.to) {
       const check = broadcastTimeConverter.checkProgramTime(progData.ft,
         progData.to, broadcastTimeConverter.getCurrentRadioTime());
-      if (check == 0) {
+      if (check === 0) {
         // ライブ
         item.title = '★';
       } else if (check > 0) {
@@ -720,11 +723,17 @@ export default class JpRadio {
       item.title = '？';
     }
 
-    const time: string = progData ? broadcastTimeConverter.formatFullString2([
-      progData.ft, progData.to
-    ], this.jpRadioConfig.timeFmt) : '';
+    let time: string = ''
 
-    const duration: number = progData ? broadcastTimeConverter.getTimeSpan(progData.ft, progData.to) : 0; // sec
+    if (progData !== undefined && progData !== null) {
+      time = broadcastTimeConverter.formatFullString2([progData.ft, progData.to], this.jpRadioConfig.timeFmt);
+    }
+
+    let duration: number = 0;
+
+    if (progData !== undefined && progData !== null) {
+      duration = broadcastTimeConverter.getTimeSpan(progData.ft, progData.to); // secs
+    }
 
     // 日時 / 番組タイトル
     item.title += ` ${time} / ${progTitle}`;
