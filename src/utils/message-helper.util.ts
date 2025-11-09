@@ -75,11 +75,13 @@ export class MessageHelper {
       return `[Unknown message ID: ${messageId}]`;
     }
 
-    // Error オブジェクト対応
-    if (params.length === 1 && params[0] instanceof Error) {
-      const err = params[0] as Error;
-      params = [{ errorMessage: err.message ?? 'Unknown error', errorStack: err.stack ?? '' }];
-    }
+    // Error オブジェクト対応 (任意の位置でも対応)
+    params = params.map(param => {
+      if (param instanceof Error) {
+        return { errorMessage: param.message ?? 'Unknown error', errorStack: param.stack ?? '' };
+      }
+      return param;
+    });
 
     // 名前付き置換 {key}
     if (params.length === 1 && typeof params[0] === 'object' && !Array.isArray(params[0])) {

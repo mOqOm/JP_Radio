@@ -20,6 +20,7 @@ import { LoggerEx } from '@/utils/logger.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { DBUtil } from '@/utils/db.util';
 import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
+import { tr } from 'date-fns/locale';
 
 // TODO: 定数から呼出し可能であればそれを用いる
 const EMPTY_PROGRAM: RadikoProgramData = {
@@ -53,24 +54,27 @@ export default class RdkProg {
   }
 
   /** 現在の番組取得 */
-  public async getCurProgramData(stationId: string, retry: boolean): Promise<RadikoProgramData | undefined> {
+  public async getCurProgramData(stationId: string, retry: boolean): Promise<RadikoProgramData> {
     return await this.getProgramData(stationId, broadcastTimeConverter.getCurrentRadioTime(), retry);
   }
 
   /** 指定局・時間の番組取得 */
-  public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData | undefined> {
+  public async getProgramData(stationId: string, time: string, retry: boolean): Promise<RadikoProgramData> {
     let progData = await this.findProgramData(stationId, time);
 
-    if (!progData && retry) {
+    if (!progData && retry === true) {
       const stations: Set<string> = await this.getDailyStationPrograms(stationId, time);
-      progData = stations.has(stationId) ? await this.findProgramData(stationId, time) : undefined;
+
+      if (stations.has(stationId) === true) {
+        return await this.findProgramData(stationId, time);
+      }
     }
 
-    return progData;
+    return {} as RadikoProgramData;
   }
 
   /** DB検索＋キャッシュ */
-  private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData | undefined> {
+  private async findProgramData(stationId: string, timeFull: string): Promise<RadikoProgramData> {
     const time: string = timeFull.slice(0, 12);
 
     if (stationId !== this.lastStationId || time !== this.lastTime) {
@@ -96,7 +100,11 @@ export default class RdkProg {
       }
     }
 
-    return this.cachedProgram.progId ? this.cachedProgram : undefined;
+    if (this.cachedProgram.progId !== '') {
+      return this.cachedProgram;
+    }
+
+    return {} as RadikoProgramData;
   }
 
   /** DB登録（unique違反は無視） */

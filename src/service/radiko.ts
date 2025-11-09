@@ -196,8 +196,17 @@ export default class RadikoService {
   }
 
   // --- Station Info ---
-  public getStationInfo(stationId: string): StationInfo | undefined {
-    return this.stations?.get(stationId);
+  public getStationInfo(stationId: string): StationInfo {
+    if (this.stations !== undefined && this.stations !== null && this.stations.has(stationId) === true) {
+      const stationInfoMap: Map<string, StationInfo> = this.getStations();
+
+      const stationInfo: StationInfo | undefined = stationInfoMap.get(stationId);
+
+      if (stationInfo !== undefined && stationInfo !== null) {
+        return stationInfo;
+      }
+    }
+    return {} as StationInfo;
   }
 
   public getStationName(stationId: string): string {
