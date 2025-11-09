@@ -174,6 +174,102 @@ export default class JpRadio {
       res.json({ stations: rows });
     });
 
+    // API endpoint: stations + current program from DB
+    this.app.get('/api/radiko/stations/with-program', async (_req: Request, res: Response) => {
+      if (!this.radikoService || !this.rdkProg) {
+        res.status(500).json({ error: 'Service not initialized' });
+        return;
+      }
+
+      try {
+        const stations = this.radikoService.getStations();
+        const rows = await Promise.all(
+          Array.from(stations.entries()).map(async ([id, info]) => {
+            try {
+              const prog = await this.rdkProg!.getCurProgramData(id, false);
+              return {
+                stationId: id,
+                name: info.Name,
+                region: info.RegionName || '-',
+                area: info.AreaName || '-',
+                program: prog
+                  ? {
+                    progId: prog.progId || '',
+                    title: prog.title,
+                    pfm: prog.pfm || '',
+                    ft: prog.ft,
+                    to: prog.to,
+                    img: prog.img || null
+                  }
+                  : null
+              };
+            } catch {
+              return {
+                stationId: id,
+                name: info.Name,
+                region: info.RegionName || '-',
+                area: info.AreaName || '-',
+                program: null
+              };
+            }
+          })
+        );
+
+        res.json({ stations: rows });
+      } catch (e: any) {
+        res.status(500).json({ error: e?.message || 'Unknown error' });
+      }
+    });
+
+    // API endpoint: program list from DB by station and date (radio-day 05:00-29:00)
+    this.app.get('/api/radiko/stations/:stationId/programs', async (req: Request, res: Response) => {
+      if (!this.radikoService || !this.rdkProg) {
+        res.status(500).json({ error: 'Service not initialized' });
+        return;
+      }
+
+      const stationId = req.params['stationId'];
+      if (!this.radikoService.getStations()?.has(stationId)) {
+        res.status(404).json({ error: 'Unknown stationId' });
+        return;
+      }
+
+      const date = (req.query['date'] as string) || broadcastTimeConverter.getCurrentRadioDate();
+
+      try {
+        const programs: Array<{
+          progId: string;
+          ft: string;
+          to: string;
+          title: string;
+          pfm: string;
+          img: string | null;
+        }> = [];
+
+        let time = '0500';
+        while (time < '2900') {
+          const ft = `${date}${time}`;
+          const prog = await this.rdkProg.getProgramData(stationId, ft, true);
+          if (!prog) break;
+
+          programs.push({
+            progId: prog.progId || '',
+            ft: prog.ft,
+            to: prog.to,
+            title: prog.title,
+            pfm: prog.pfm || '',
+            img: prog.img || null
+          });
+
+          time = prog.to.slice(8, 12);
+        }
+
+        res.json({ stationId, date, programs });
+      } catch (e: any) {
+        res.status(500).json({ error: e?.message || 'Failed to read programs' });
+      }
+    });
+
     // View endpoint for dev page
     this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
       // 拡張子を付けずにビュー名を指定（radiko_dev.ejs を使用）

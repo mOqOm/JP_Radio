@@ -2,21 +2,85 @@
  * Radiko Stations 表示用スタイルシート
  */
 
+/* 基本スタイル */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background-color: #f5f5f5;
+    font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* ヘッダー */
+header {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 h1 {
     color: #333;
     text-align: center;
     margin-bottom: 20px;
+    font-size: 28px;
 }
 
+/* タブナビゲーション */
+.tab-nav {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.tab-button {
+    padding: 10px 20px;
+    border: none;
+    background: #f0f0f0;
+    color: #666;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+    background: #e0e0e0;
+}
+
+.tab-button.active {
+    background: #4CAF50;
+    color: white;
+}
+
+/* メインコンテンツ */
+main {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* タブコンテンツ */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ローディング・エラー */
 .loading {
     text-align: center;
-    padding: 20px;
+    padding: 40px 20px;
     color: #666;
     font-size: 16px;
 }
@@ -26,17 +90,17 @@ h1 {
     padding: 20px;
     color: #d32f2f;
     background-color: #ffebee;
-    border-radius: 4px;
+    border-radius: 8px;
     margin: 20px 0;
     border: 1px solid #ef5350;
 }
 
+/* テーブルスタイル */
 table {
     border-collapse: collapse;
     width: 100%;
     background-color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
+    border-radius: 8px;
     overflow: hidden;
 }
 
@@ -52,14 +116,14 @@ th {
     color: white;
     font-weight: bold;
     text-transform: uppercase;
-    font-size: 14px;
+    font-size: 13px;
 }
 
-tr:nth-child(even) {
+tbody tr:nth-child(even) {
     background-color: #f9f9f9;
 }
 
-tr:hover {
+tbody tr:hover {
     background-color: #f1f1f1;
     transition: background-color 0.2s ease;
 }
@@ -67,23 +131,148 @@ tr:hover {
 .no-data {
     text-align: center;
     color: #999;
-    padding: 20px;
+    padding: 40px 20px;
     font-style: italic;
+}
+
+/* 番組グリッドスタイル */
+.program-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 10px 0;
+}
+
+.program-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-left: 4px solid #4CAF50;
+}
+
+.program-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.station-info {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.station-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.station-meta {
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    gap: 8px;
+}
+
+.station-meta span {
+    background: #f0f0f0;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.program-info {
+    margin-top: 12px;
+}
+
+.program-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #4CAF50;
+    margin-bottom: 4px;
+}
+
+.program-pfm {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.program-time {
+    font-size: 12px;
+    color: #999;
+}
+
+.no-program {
+    color: #999;
+    font-style: italic;
+    font-size: 14px;
 }
 
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
     body {
-        margin: 10px;
+        padding: 10px;
+    }
+
+    header {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 22px;
+        margin-bottom: 15px;
+    }
+
+    .tab-nav {
+        flex-direction: column;
+    }
+
+    .tab-button {
+        width: 100%;
+    }
+
+    main {
+        padding: 15px;
     }
 
     th,
     td {
         padding: 8px;
-        font-size: 14px;
+        font-size: 13px;
     }
 
+    .program-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    table {
+        font-size: 12px;
+    }
+
+    /* テーブルをスクロール可能に */
+    .tab-content {
+        overflow-x: auto;
+    }
+
+    table {
+        min-width: 600px;
+    }
+}
+
+@media (max-width: 480px) {
     h1 {
-        font-size: 24px;
+        font-size: 20px;
+    }
+
+    .station-name {
+        font-size: 16px;
+    }
+
+    .program-title {
+        font-size: 14px;
     }
 }
