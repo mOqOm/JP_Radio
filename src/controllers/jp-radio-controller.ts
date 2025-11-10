@@ -325,7 +325,7 @@ class JpRadioController {
 
           Object.entries(regionObj.prefectures).forEach(([jpKey, jpName]) => {
             const areaId = jpKey;
-            const areaName = jpName; // from constant
+            const areaName = jpName.kanji;
             const areaStations = this.appRadio?.getAreaStations(areaId);
             const value = this.config.get(`radikoAreas.${areaId}`);
 
@@ -483,7 +483,7 @@ class JpRadioController {
       size: 'lg',
       buttons: [
         {
-          name: this.commandRouter.messageHelper.get('COMMON.RESTART'),
+          name: this.commandRouter.getI18nString.get('COMMON.RESTART'),
           class: 'btn btn-info',
           emit: 'callMethod',
           payload: {
@@ -493,7 +493,7 @@ class JpRadioController {
           }
         },
         {
-          name: this.commandRouter.messageHelper.get('COMMON.CANCEL'),
+          name: this.commandRouter.getI18nString.get('COMMON.CANCEL'),
           class: 'btn btn-warning',
           emit: 'closeModals',
           payload: ''
@@ -522,7 +522,8 @@ class JpRadioController {
     const defer = libQ.defer();
     if (this.appRadio === undefined || this.appRadio === null) {
       this.logger.error('JRADI01CE0005');
-      return {};
+      defer.resolve({});
+      return defer.promise;
     }
 
     const [base, playMode, stationId, option] = curUri.split('/');
@@ -578,7 +579,7 @@ class JpRadioController {
           }
         };
 
-        defer.resolve(browseResult);
+        return browseResult;
       } else if (playMode === 'live') {
         // uri = radiko/live
         this.logger.info('TESTController0001', 'Liveモード');
@@ -589,18 +590,20 @@ class JpRadioController {
               // uri = radiko/live/favourites
               //return this.appRadio!.radioFavouriteStations(playMode);
               const browseResult: BrowseResult = await this.appRadio.radioFavouriteStations(playMode);
-              defer.resolve(browseResult);
+              return browseResult;
             } else {
               // uri = radiko/live
               //return this.appRadio!.radioStations(playMode);
               const browseResult: BrowseResult = await this.appRadio.radioStations(playMode);
-              defer.resolve(browseResult);
+              return browseResult;
             }
           } else {
             this.logger.error('JRADI01CE0005');
             defer.reject(new Error('JpRadio service not initialized'));
           }
-        }).fail((error: any) => {
+        }).then((result: any) =>
+          defer.resolve(result)
+        ).fail((error: any) => {
           this.logger.error('JRADI01CE0006', error);
           defer.reject(error);
         });
@@ -608,20 +611,28 @@ class JpRadioController {
         // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
         if (stationId === 'favourites') {
           const browseResult: BrowseResult = await this.appRadio.radioFavouriteStations(playMode);
-          defer.resolve(browseResult);
+          return browseResult;
         } else {
           const browseResult: BrowseResult = await this.appRadio.radioStations(playMode);
-          defer.resolve(browseResult);
+          return browseResult;
         }
       } else if (playMode === 'timetable') {
+
+        this.logger.info('TESTController0001', 'TimeTableモード');
+
         libQ.resolve().then(async () => {
           if (this.appRadio !== undefined && this.appRadio !== null) {
 
             if (option !== undefined && option !== null) {
               // uri = radiko/timetable/TBS/#~#
-              const [from, to] = option.split('~');
-              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, from, to);
-              defer.resolve(browseResult);
+              const [fromStr, toStr] = option.split('~');
+
+              // yyyyMMddHHmmss 形式の文字列を Date 型に変換
+              const fromDate: Date = new Date(fromStr);
+              const toDate: Date = new Date(toStr);
+
+              const browseResult: BrowseResult = await this.appRadio.radioTimeTableDate(playMode, stationId, fromDate, toDate);
+              return browseResult;
             } else {
               // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
               const today = playMode.endsWith('today');
@@ -637,133 +648,21 @@ class JpRadioController {
               }
 
               const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, -from, to);
-              defer.resolve(browseResult);
+              return browseResult;
             }
           }
-        }).fail((error: any) => {
-          this.logger.error('JRADI01CE0007', error);
-          defer.reject(error);
-        });
-      }
-
-
-      /*if (mode === undefined || mode === null || mode === '') {
-        // uri = radiko
-
-        const browseResult: BrowseResult = {
-          navigation: {
-            lists: [{
-              title: '',
-              availableListViews: ['grid', 'list'],
-              items: [
-                {
-                  service: this.serviceName,
-                  type: 'radio-category',
-                  title: messageHelper.get('BROWSE_LABEL_LIVE'),
-                  icon: 'fa fa-microphone',
-                  uri: 'radiko/live'
-                },
-                {
-                  service: this.serviceName,
-                  type: 'radio-favourites',
-                  title: messageHelper.get('BROWSE_LABEL_LIVE_FAVOURITES'),
-                  icon: 'fa fa-heart',
-                  uri: 'radiko/live/favourites'
-                },
-                {
-                  service: this.serviceName,
-                  type: 'radio-category',
-                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE'),
-                  icon: 'fa fa-clock-o',
-                  uri: 'radiko/timefree'
-                },
-                {
-                  service: this.serviceName,
-                  type: 'radio-category',
-                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE_TODAY'),
-                  icon: 'fa fa-map-marker',
-                  uri: 'radiko/timefree_today'
-                },
-                {
-                  service: this.serviceName,
-                  type: 'radio-favourites',
-                  title: messageHelper.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
-                  icon: 'fa fa-heartbeat',
-                  uri: 'radiko/timefree/favourites'
-                }
-              ]
-            }],
-            prev: { uri: 'radiko' }
-          }
-        };
-
-        const devBrowseResult: BrowseResult = {
-          navigation: {
-            lists: [{
-              title: '',
-              availableListViews: ['grid', 'list'],
-              items: [
-                {
-                  service: this.serviceName,
-                  type: 'radio-category',
-                  title: messageHelper.get('BROWSE_LABEL_LIVE'),
-                  icon: 'fa fa-microphone',
-                  uri: 'radiko/live'
-                }
-              ]
-            }],
-            prev: { uri: 'radiko' }
-          }
-        }
-
-        defer.resolve(browseResult);
-      } else if (mode.startsWith('live')) {
-        this.logger.info('TESTController0001', 'Liveモード');
-        // uri = radiko/live or radiko/live/favourites
-        libQ.resolve().then(() => {
-          if (stationId === 'favourites') {
-            return this.appRadio!.radioFavouriteStations(mode);
-          } else {
-            return this.appRadio!.radioStations(mode);
-          }
-        }).then((result: any) =>
-          defer.resolve(result)
-        ).fail((error: any) => {
-          this.logger.error('JRADI01CE0006', error);
-          defer.reject(error);
-        });
-      } else if (mode.startsWith('timefree')) {
-        // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
-        if (stationId === 'favourites') {
-          defer.resolve(this.appRadio.radioFavouriteStations(mode));
-        } else {
-          defer.resolve(this.appRadio.radioStations(mode));
-        }
-      } else if (mode.startsWith('timetable')) {
-        libQ.resolve().then(() => {
-          if (option === undefined && option === null) {
-            // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
-            const today = mode.endsWith('today');
-            const from = today ? 0 : this.jpRadioConfig.ppFrom;
-            const to = today ? 0 : this.jpRadioConfig.ppTo;
-            return this.appRadio!.radioTimeTable(mode, stationId, -from, to);
-          } else {
-            // uri = radiko/timetable/TBS/#~#
-            const [from, to] = option.split('~');
-            return this.appRadio!.radioTimeTable(mode, stationId, from, to);
-          }
         }).then((result: any) =>
           defer.resolve(result)
         ).fail((error: any) => {
           this.logger.error('JRADI01CE0007', error);
           defer.reject(error);
         });
-      } else if (mode.startsWith('progtable')) {
+      } else if (playMode === 'progtable') {
         // uri = radiko/progtable/TBS/#~#
         const [from, to]: string[] = option.split('~');
 
         libQ.resolve().then(() =>
-          this.appRadio!.radioTimeTable(mode, stationId, from, to)
+          this.appRadio!.radioTimeTable(playMode, stationId, from, to)
         ).then((result: any) =>
           defer.resolve(result)
         ).fail((error: any) => {
@@ -771,7 +670,7 @@ class JpRadioController {
           defer.reject(error);
         });
 
-      } else if (mode.startsWith('proginfo')) {
+      } else if (playMode === 'proginfo') {
         // uri = radiko/proginfo/TBS?tt&sn&aa&ft&to
         libQ.resolve().then(() => {
           this.explodeUri(curUri)
@@ -780,8 +679,7 @@ class JpRadioController {
           this.logger.error('JRADI01CE0009', error);
           defer.reject(error);
         });
-      }*/
-
+      }
     } else { // base != 'radiko'
       this.logger.error('JRADI01CE0010');
       defer.resolve({});
@@ -1008,7 +906,7 @@ class JpRadioController {
     const [liveUri, timefree]: string = data.uri.split('?');
     const stationId = liveUri.split('/').pop();
 
-    if ((liveUri.includes('/radiko/play/') || liveUri.includes('/radiko/proginfo/')) && stationId) {
+    if ((liveUri.includes('/radiko/play/') || liveUri.includes('/radiko/proginfo/')) && (stationId !== undefined && stationId !== null)) {
       let ft: string = broadcastTimeConverter.getCurrentRadioTime();
       let to: string = ft;
 
