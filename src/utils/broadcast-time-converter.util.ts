@@ -153,6 +153,36 @@ class BroadcastTimeConverter {
   }
 
   /**
+ * ラジコ日付基準で、指定した日付範囲のリストを返す
+ * @param from 開始日 (Date)
+ * @param to   終了日 (Date)
+ * @param kanjiFmt 日本語フォーマット
+ */
+  public getRadioWeekByDateRange(
+    from: Date,
+    to: Date,
+    kanjiFmt: string = 'yyyy年M月d日(E)'
+  ): { index: number; date: string; kanji: string }[] {
+    const radioBase = new Date(this.getNowJST().getTime() - this.offsetMs);
+
+    // 日付のみ比較できるように時刻を切り捨て
+    const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+
+    const result: { index: number; date: string; kanji: string }[] = [];
+    for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
+      const index = Math.floor((date.getTime() - radioBase.getTime()) / 86400000);
+
+      result.push({
+        index,
+        date: format(date, 'yyyyMMdd'),
+        kanji: format(date, kanjiFmt, { locale: ja }),
+      });
+    }
+    return result;
+  }
+
+  /**
    * 通常時刻(00:00～05:00)をラジコ時刻(24:00～29:00)に変換
    * @param timeStr yyyyMMddHHmmss 形式
    * @returns yyyyMMddHHmmss 形式（深夜は前日の24～29時扱い）

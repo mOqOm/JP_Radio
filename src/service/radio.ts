@@ -587,126 +587,158 @@ export default class JpRadio {
     return defer.promise;
   }
 
-  // TODO: リファクタリング実施
+  /**
+   * 指定されたモードとステーションIDに基づいて、ラジオのタイムテーブルを取得します。
+   *
+   * @param mode - プログラム情報を取得するモード（例: 'timetable' または 'progtable'）。
+   * @param stationId - ラジオステーションのID。
+   * @param from - 取得するデータの開始日。
+   * @param to - 取得するデータの終了日。
+   * @returns 指定された期間のラジオプログラム情報を含む BrowseResult オブジェクトの Promise。
+   */
   public async radioTimeTableDate(mode: string, stationId: string, from: Date, to: Date): Promise<BrowseResult> {
-    this.logger.info('JRADI01SI0011', mode, stationId, format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd"));
+    this.logger.info('JRADI01SI0011', mode, stationId, format(from, 'yyyy-MM-dd'), format(to, 'yyyy-MM-dd'));
 
     const defer = libQ.defer();
 
-    if (this.radikoService !== undefined && this.radikoService !== null && this.rdkProg !== undefined && this.rdkProg !== null) {
-      const stationInfo = this.radikoService.getStationInfo(stationId);
+    if (!this.radikoService || !this.rdkProg) {
+      defer.resolve(this.createBrowseResult([]));
+      return defer.promise;
+    }
 
-      if (stationInfo && this.rdkProg !== undefined && this.rdkProg !== null) {
-        const browseListArray: BrowseList[] = [];
-        // 指定期間の曜日リストを取得
-        const weekArray = broadcastTimeConverter.getRadioWeekDateRange(from, to, 'M月d日(E)');
+    const stationInfo: StationInfo = this.radikoService.getStationInfo(stationId);
 
-        if (weekArray.length > 1) {
-          this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('PROGRAM_DATA_GETTING2', stationInfo.Name));
-        }
+    if (!stationInfo || !stationInfo.AreaId) {
+      defer.resolve(this.createBrowseResult([]));
+      return defer.promise;
+    }
 
-        const weekPromises = weekArray.map(async (dateData: any) => {
-          let browseItemArray: BrowseItem[] = [];
+    try {
+      const browseListArray: BrowseList[] = [];
+      const weekArray = broadcastTimeConverter.getRadioWeekDateRange(from, to, 'M月d日(E)');
 
-          if (this.rdkProg !== undefined && this.rdkProg !== null) {
+      if (weekArray.length > 1) {
+        this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('PROGRAM_DATA_GETTING2', stationInfo.Name));
+      }
 
-            const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg.getDbRadikoProgramData(stationId, dateData.date);
+      const lists = await Promise.all(
+        weekArray.map(async (dateData: {
+          index: number;
+          date: Date;
+          kanji: string;
+        }) => {
+          const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg!.getDbRadikoProgramData(stationId, dateData.date);
 
-            if (mode === 'prog') {
-              radikoProgramDataArray.forEach((radikoProgramData: RadikoProgramData) => {
-                let browseItem: BrowseItem = {
-                  // サービス名
-                  service: this.serviceName,
-                  // アイテムタイプ
-                  type: 'radio-program',
-                  // タイトル
-                  title: radikoProgramData.title,
-                  // 表示用の画像 URL
-                  album: radikoProgramData.pfm || '',
-                  // アーティスト名
-                  artist: stationInfo.Name,
-                  // URI
-                  uri: `radiko/proginfo/${stationId}/${radikoProgramData.progId}`,
-                  // アルバムアート
-                  albumart: radikoProgramData.img || '',
-                  // 再生時間（秒）
-                  duration: broadcastTimeConverter.getTimeSpan(radikoProgramData.ft, radikoProgramData.to) // sec
-                };
-                browseItemArray.push(browseItem);
-              });
+          const browseItemArray: BrowseItem[] = radikoProgramDataArray.map((radikoProgramData: RadikoProgramData) => {
+            const browseItem: BrowseItem = this.createBrowseItemTimeTable(
+              mode === 'progtable' ? 'proginfo' : 'play',
+              stationId,
+              stationInfo,
+              radikoProgramData
+            );
+
+            if (mode === 'progtable') {
+              browseItem.type = 'radio-category';
+              browseItem.uri = browseItem.uri.replace(/\/play\//, '/proginfo/');
             }
-          }
 
-          let title: string = '';
-          if (!mode.startsWith('prog')) {
-            title = this.messageHelper.get('PROGINFO_TIME_INFO');
-          }
-
-          title += dateData.kanji;
-
-          if (dateData.index === 0) {
-            title += this.messageHelper.get('BROWSE_BUTTON_TODAY');
-          } else {
-            title += '';
-          }
-
-          const browseList: BrowseList = this.createBrowseList(title, ['list'], browseItemArray, dateData.date);
-          browseListArray.push(browseList);
-        });
-
-        libQ.all(weekPromises).then(async () => {
-          // '日付'でソート
-          browseListArray.sort((a, b) => {
-            return a.sortKey!.localeCompare(b.sortKey!);
+            return browseItem;
           });
 
-          // <<前へ，次へ>>
-          const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
-          const uri: string = `radiko/${mode}/${stationId}`;
+          const title = mode.startsWith('progtable')
+            ? `${this.messageHelper.get('PROGINFO_PROG_INFO')}${dateData.kanji}`
+            : `${dateData.kanji}${dateData.index === 0 ? this.messageHelper.get('BROWSE_BUTTON_TODAY') : ''}`;
 
-          const prevWeekFrom: Date = from;
-          prevWeekFrom.setDate(prevWeekFrom.getDate() - 7);
-          const prevWeekTo: Date = to;
-          prevWeekTo.setDate(prevWeekTo.getDate() - 7);
 
-          const prevDayFrom: Date = to;
-          prevDayFrom.setDate(prevDayFrom.getDate() - 1);
-          const prevDayTo: Date = to;
-          prevDayTo.setDate(prevDayTo.getDate() - 1);
+          const dateStr: string = format(dateData.date, 'yyyyMMdd');
+          return this.createBrowseList(title, ['list'], browseItemArray, dateStr);
+        })
+      );
 
-          browseListArray.unshift(this.createBrowseList('<<', ['list'], [
-            this.createBrowseItemNoMenu(space + this.messageHelper.get('BROWSE_BUTTON_PREV_WEEK'), `${uri}/${prevWeekFrom}~${prevWeekTo}`),
-            this.createBrowseItemNoMenu(space + this.messageHelper.get('BROWSE_BUTTON_PREV_DAY'), `${uri}/${prevDayFrom}~${prevDayTo}`)
-          ]));
+      browseListArray.push(...lists);
 
-          const nextWeekFrom: Date = from;
-          nextWeekFrom.setDate(nextWeekFrom.getDate() - 7);
-          const nextWeekTo: Date = to;
-          nextWeekTo.setDate(nextWeekTo.getDate() - 7);
+      // sortKey の Null チェックを追加
+      browseListArray.sort((a, b) => {
+        const aKey = a.sortKey ?? '';
+        const bKey = b.sortKey ?? '';
+        return aKey.localeCompare(bKey);
+      });
 
-          const nextDayFrom: Date = to;
-          nextDayFrom.setDate(nextDayFrom.getDate() - 1);
-          const nextDayTo: Date = to;
-          nextDayTo.setDate(nextDayTo.getDate() - 1);
+      // ナビゲーションボタンの追加
+      const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
+      const uri = `radiko/${mode}/${stationId}`;
 
-          browseListArray.push(this.createBrowseList('>>', ['list'], [
-            this.createBrowseItemNoMenu(space + this.messageHelper.get('BROWSE_BUTTON_NEXT_DAY'), `${uri}/${nextDayFrom}~${nextDayTo}`),
-            this.createBrowseItemNoMenu(space + this.messageHelper.get('BROWSE_BUTTON_NEXT_WEEK'), `${uri}/${nextWeekFrom}~${nextWeekTo}`)
-          ]));
+      // 日付オフセット計算用のヘルパー関数
+      const createDateOffset = (baseDate: Date, offset: number): Date => {
+        const newDate = new Date(baseDate);
+        newDate.setDate(newDate.getDate() + offset);
+        return newDate;
+      };
 
-          if (mode.startsWith('prog')) {
-            // 下段にお気に入り局
-            const [items]: BrowseItem[][] = await this.commonRadioFavouriteStations('timefree', true);
-            items.forEach((item) =>
-              item.uri = item.uri.replace('timetable', 'progtable') + `/${from}~${to}`
-            );
-            browseListArray.push(this.createBrowseList(this.messageHelper.get('BROWSE_PROG_FAVOURITES'), ['grid', 'list'], items));
-          }
-          defer.resolve(this.createBrowseResult(browseListArray));
+      // 前週の日付範囲を計算（現在の from/to から7日前）
+      const prevWeekFrom = createDateOffset(from, -7);
+      const prevWeekTo = createDateOffset(to, -7);
+
+      // 前日の日付範囲を計算（from の前日）
+      const prevDayFrom = createDateOffset(from, -1);
+      const prevDayTo = createDateOffset(from, -1);
+
+      // 次週の日付範囲を計算（現在の from/to から7日後）
+      const nextWeekFrom = createDateOffset(from, 7);
+      const nextWeekTo = createDateOffset(to, 7);
+
+      // 翌日の日付範囲を計算（to の翌日）
+      const nextDayFrom = createDateOffset(to, 1);
+      const nextDayTo = createDateOffset(to, 1);
+
+      // 前週/前日ボタン（sortKey を '0000' に設定して先頭に配置）
+      browseListArray.unshift(
+        this.createBrowseList('<<', ['list'], [
+          this.createBrowseItemNoMenu(
+            space + this.messageHelper.get('BROWSE_BUTTON_PREV_WEEK'),
+            `${uri}/${format(prevWeekFrom, 'yyyy-MM-dd')}~${format(prevWeekTo, 'yyyy-MM-dd')}`
+          ),
+          this.createBrowseItemNoMenu(
+            space + this.messageHelper.get('BROWSE_BUTTON_PREV_DAY'),
+            `${uri}/${format(prevDayFrom, 'yyyy-MM-dd')}~${format(prevDayTo, 'yyyy-MM-dd')}`
+          )
+        ], '0000')
+      );
+
+      // 次週/翌日ボタン（sortKey を '9999' に設定して末尾に配置）
+      browseListArray.push(
+        this.createBrowseList('>>', ['list'], [
+          this.createBrowseItemNoMenu(
+            space + this.messageHelper.get('BROWSE_BUTTON_NEXT_DAY'),
+            `${uri}/${format(nextDayFrom, 'yyyy-MM-dd')}~${format(nextDayTo, 'yyyy-MM-dd')}`
+          ),
+          this.createBrowseItemNoMenu(
+            space + this.messageHelper.get('BROWSE_BUTTON_NEXT_WEEK'),
+            `${uri}/${format(nextWeekFrom, 'yyyy-MM-dd')}~${format(nextWeekTo, 'yyyy-MM-dd')}`
+          )
+        ], '9999')
+      );
+
+      // progtable モードの場合、お気に入り局を追加
+      if (mode.startsWith('progtable')) {
+        const [items] = await this.commonRadioFavouriteStations('timefree', true);
+        items.forEach((item) => {
+          item.uri = item.uri.replace('timetable', 'progtable') + `/${format(from, 'yyyy-MM-dd')}~${format(to, 'yyyy-MM-dd')}`;
         });
-      } else {
-        defer.resolve([]);
+        browseListArray.push(
+          this.createBrowseList(
+            this.messageHelper.get('BROWSE_PROG_FAVOURITES'),
+            ['grid', 'list'],
+            items,
+            'zzzz' // 最後に表示
+          )
+        );
       }
+
+      defer.resolve(this.createBrowseResult(browseListArray));
+    } catch (error: any) {
+      this.logger.error('JRADI01SE0007', error);
+      defer.reject(error);
     }
 
     return defer.promise;

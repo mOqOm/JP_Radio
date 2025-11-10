@@ -625,8 +625,8 @@ class JpRadioController {
           const today = playMode.endsWith('_today');
           const nowJstDate = broadcastTimeConverter.getNowJST();
 
-          let fromJstDate = new Date(nowJstDate);
-          let toJstDate = new Date(nowJstDate);
+          let fromJstDate: Date = new Date(nowJstDate);
+          let toJstDate: Date = new Date(nowJstDate);
 
           if (!today) {
             fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
@@ -644,7 +644,15 @@ class JpRadioController {
             throw new Error('Invalid date format');
           }
 
-          return await this.appRadio.radioTimeTable(playMode, stationId, from, to);
+          // YYYYMMDD → Date
+          const parseDate = (dateStr: string): Date => {
+            const y = parseInt(dateStr.substring(0, 4));
+            const m = parseInt(dateStr.substring(4, 6)) - 1;
+            const d = parseInt(dateStr.substring(6, 8));
+            return new Date(y, m, d);
+          };
+
+          return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
         }
 
         // ProgInfo
