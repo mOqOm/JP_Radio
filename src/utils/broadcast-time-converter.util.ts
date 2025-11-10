@@ -37,7 +37,7 @@ class BroadcastTimeConverter {
   /**
    * 現在のJST時刻を取得
    */
-  private getNowJST(): Date {
+  public getNowJST(): Date {
     return utcToZonedTime(new Date(), this.JST_TIMEZONE);
   }
 
