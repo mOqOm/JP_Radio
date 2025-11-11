@@ -921,17 +921,17 @@ export default class JpRadio {
 
     const albumart: string = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img);
 
-    /*
     const uri: string = `radiko/${mode}/${stationId}` + '?' + encodeURIComponent(progTitle) +
       '&' + encodeURIComponent(progPfm) + '&' + encodeURIComponent(
         `${stationName} / ${progTime}`) + '&' + encodeURIComponent(albumart);
-    */
 
-    const uri: string = `http://localhost:9000/radiko/play/${stationId}`;
+    //const uri: string = `http://localhost:9000/radiko/play/${stationId}`;
 
     const browseItem: BrowseItem = {
-      service: 'webradio',
-      type: 'webradio',
+      //service: 'webradio',
+      //type: 'webradio',
+      service: 'jp_radio',
+      type: 'song',
       // 番組タイトル
       title: progTitle,
       // パーソナリティ名
@@ -1083,7 +1083,7 @@ export default class JpRadio {
 
         const areaFree: string = this.myInfo.areafree ? ` / ${this.messageHelper.get('AREA_FREE')}` : '';
 
-        const msg1: string = this.messageHelper.get('BOOT_COMPLETED');
+        const msg1: string = this.messageHelper.get('BOOT_COMPLETED') + '　'.repeat(10);
         const msg2: string = this.messageHelper.get('AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
 
         this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + '\n' + msg2);

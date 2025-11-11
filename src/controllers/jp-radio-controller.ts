@@ -483,7 +483,7 @@ class JpRadioController {
       size: 'lg',
       buttons: [
         {
-          name: this.commandRouter.getI18nString.get('COMMON.RESTART'),
+          name: this.commandRouter.getI18nString('COMMON.RESTART'),
           class: 'btn btn-info',
           emit: 'callMethod',
           payload: {
@@ -493,7 +493,7 @@ class JpRadioController {
           }
         },
         {
-          name: this.commandRouter.getI18nString.get('COMMON.CANCEL'),
+          name: this.commandRouter.getI18nString('COMMON.CANCEL'),
           class: 'btn btn-warning',
           emit: 'closeModals',
           payload: ''
@@ -516,10 +516,17 @@ class JpRadioController {
   }
 
   // Radikoを押下した際のメニューを追加
+  //public async handleBrowseUri(curUri: string): Promise<any> {
   public handleBrowseUri(curUri: string): Promise<any> {
     this.logger.info('JRADI01CI0015', curUri);
 
     const defer = libQ.defer();
+    if (this.appRadio === undefined || this.appRadio === null) {
+      this.logger.error('JRADI01CE0005');
+      //return {};
+      defer.resolve({});
+      return defer.promise;
+    }
 
     (async () => {
       try {
@@ -590,6 +597,44 @@ class JpRadioController {
           if (stationId === 'favourites') {
             return await this.appRadio.radioFavouriteStations(playMode);
           }
+        }).fail((error: any) => {
+          this.logger.error('JRADI01CE0006', error);
+          defer.reject(error);
+        });
+      } else if (playMode === 'timefree') {
+        // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
+        if (stationId === 'favourites') {
+          this.appRadio.radioFavouriteStations(playMode)
+            .then((browseResult: BrowseResult) => defer.resolve(browseResult));
+        } else {
+          this.appRadio.radioStations(playMode)
+            .then((browseResult: BrowseResult) => defer.resolve(browseResult));
+        }
+      } else if (playMode.startsWith('timetable') === true) {
+        libQ.resolve().then(async () => {
+          if (this.appRadio !== undefined && this.appRadio !== null) {
+
+            if (option !== undefined && option !== null) {
+              // uri = radiko/timetable/TBS/#~#
+              const [from, to] = option.split('~');
+              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, from, to);
+              defer.resolve(browseResult);
+            } else {
+              // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
+              const today = playMode.endsWith('today');
+
+              let from = 0;
+              if (today === false) {
+                from = this.jpRadioConfig.ppFrom;
+              }
+
+              let to = 0;
+              if (today === false) {
+                to = this.jpRadioConfig.ppTo;
+              }
+
+              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, -from, to);
+              defer.resolve(browseResult);
           return await this.appRadio.radioStations(playMode);
         }
 
@@ -728,7 +773,7 @@ class JpRadioController {
 
         this.logger.info('TESTController0001', 'ライブ-不明');
 
-        await this.mpdPlugin.sendMpdCommand(`add '${uri}'`, []);
+        await this.mpdPlugin.sendMpdCommand(`add "${uri}"`, []);
         this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
         await this.mpdPlugin.sendMpdCommand('play', []);
       })();
@@ -813,7 +858,7 @@ class JpRadioController {
         if (timefree) {
           // タイムフリー：シーク情報を付加したURIに切り替え
           uri = uri.replace(/&seek=\d+/, '') + `&seek=${Math.round(timepos / 1000)}`; // sec
-          return this.mpdPlugin.sendMpdCommand(`add '${uri}'`, [])
+          return this.mpdPlugin.sendMpdCommand(`add "${uri}"`, [])
             .then(() => {
               return this.mpdPlugin.sendMpdCommand('delete 0', []);
             });

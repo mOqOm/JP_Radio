@@ -62,6 +62,7 @@ export default class RadikoService {
       if (!loginOK) {
         const jar = await this.authLogic.login(acct);
         this.authLogic.setCookieJar(jar);
+        loginOK = await this.authLogic.checkLogin();
       }
 
       this.loginState = loginOK;
