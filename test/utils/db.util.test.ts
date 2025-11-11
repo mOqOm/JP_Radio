@@ -57,7 +57,7 @@ describe('DBUtil<T>', () => {
 
     const remain = await db.findOne({ name: 'Bob' });
     // Assert
-    // ✅ 空オブジェクトを期待
+    // 空オブジェクトを期待
     expect(remain).toEqual({});
   });
 
