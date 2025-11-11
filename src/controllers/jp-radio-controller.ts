@@ -840,11 +840,8 @@ class JpRadioController {
           }
         }
 
-<<<<<<< Updated upstream
         this.logger.info('TESTController0001', 'ライブ-不明');
 
-=======
->>>>>>> Stashed changes
         await this.mpdPlugin.sendMpdCommand(`add "${uri}"`, []);
         this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
         await this.mpdPlugin.sendMpdCommand('play', []);
