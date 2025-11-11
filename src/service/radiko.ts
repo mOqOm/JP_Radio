@@ -1,4 +1,3 @@
-import 'date-utils';
 import { format } from 'util';
 import got from 'got';
 import { spawn, execFile, ChildProcess } from 'child_process';
