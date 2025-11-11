@@ -1,37 +1,25 @@
 import { format, parse, addDays, addSeconds, differenceInSeconds } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { ja } from 'date-fns/locale';
+import type { DateString, DateTime, DateTimeString } from '@/types/date-time.types';
+import { toDateString, toDateTimeString, parseToDate, parseToDateTime } from '@/types/date-time.types';
 
-/**
- * Radikoの「放送日と時刻（05:00～29:00）」を
- * 通常のカレンダー時刻（00:00～24:00）と相互変換するユーティリティ
- *
- * 放送業界の共通仕様に対応（05:00 = 1日の開始）
- * 深夜0～5時は前日の24～29時扱い
- * Radiko遅延（タイムラグ）補正機能付き
- * date-fns + date-fns-tz によるタイムゾーン対応
- */
 class BroadcastTimeConverter {
   private readonly JST_TIMEZONE = 'Asia/Tokyo';
-  private readonly RADIO_DAY_START_HOUR = 5; // ラジオの1日は05:00開始
+  private readonly RADIO_DAY_START_HOUR = 5;
+  private readonly offsetMs: number;
+  private delaySec: number;
 
-  // Radiko配信遅延（秒）
-  private delaySec: number = 0;
-  // 遅延 + ラジオ日付開始オフセット(5時間)のミリ秒
-  private offsetMs: number = 0;
-
-  constructor(delay: number | string) {
-    this.setDelay(delay);
+  constructor(delaySec: number = 20) {
+    this.delaySec = delaySec;
+    this.offsetMs = this.RADIO_DAY_START_HOUR * 60 * 60 * 1000;
   }
 
   /**
-   * Radiko遅延秒を設定し、内部オフセットを更新
-   * @param delay 秒数（例: 20）
+   * 遅延設定
    */
   public setDelay(delay: number | string): void {
     this.delaySec = Number(delay);
-    // ラジオ日付開始は「05:00」→ 遅延 + 5時間オフセット
-    this.offsetMs = (this.delaySec + this.RADIO_DAY_START_HOUR * 3600) * 1000;
   }
 
   /**
@@ -42,73 +30,121 @@ class BroadcastTimeConverter {
   }
 
   /**
-   * 文字列をDateオブジェクトに変換（JST）
-   * @param dateTimeStr yyyyMMddHHmmss 形式
+   * 現在の日付を取得（yyyyMMdd）
    */
-  private parseDateTime(dateTimeStr: string): Date {
-    const padded = dateTimeStr.padEnd(14, '0');
-    return parse(padded, 'yyyyMMddHHmmss', new Date());
+  public getCurrentDate(): Date {
+    return this.getNowJST();
   }
 
   /**
-   * 現在時刻（yyyyMMddHHmmss）
+   * 現在のラジオ日付を取得（05:00 = 1日の開始）
    */
-  public getCurrentTime(): string {
-    return format(this.getNowJST(), 'yyyyMMddHHmmss');
+  public getCurrentRadioDate(): Date {
+    const nowDate: Date = this.getNowJST();
+    const radioBase: Date = new Date(nowDate.getTime() - this.offsetMs);
+    return radioBase;
   }
 
   /**
-   * 今日の日付（yyyyMMdd）
+   * 現在時刻をラジコ時間で返す（yyyyMMddHHmmss）
    */
-  public getCurrentDate(): string {
-    return format(this.getNowJST(), 'yyyyMMdd');
+  public getCurrentRadioTime(): DateTime {
+    const nowDate: Date = this.getNowJST();
+    const delayed: DateTime = addSeconds(nowDate, -this.delaySec) as DateTime;
+    return delayed;
   }
 
   /**
-   * 現在時刻をラジコ時間(05:00=1日開始)で返す
-   * 遅延補正済み
+   * 文字列をDateオブジェクトに変換
    */
-  public getCurrentRadioTime(): string {
-    const now = this.getNowJST();
-    const delayed = addSeconds(now, -this.delaySec);
-    return format(delayed, 'yyyyMMddHHmmss');
+  public parseStringToDate(dateStr: string): Date {
+    return parseToDate(dateStr);
   }
 
   /**
-   * ラジコ日付（深夜0～5時は前日扱い）
-   * @returns yyyyMMdd 形式
+   * 文字列をDateTimeオブジェクトに変換
    */
-  public getCurrentRadioDate(): string {
-    const now = this.getNowJST();
-    const offset = new Date(now.getTime() - this.offsetMs);
-    return format(offset, 'yyyyMMdd');
+  public parseStringToDateTime(dateTimeStr: string): DateTime {
+    return parseToDateTime(dateTimeStr);
+  }
+
+  /**
+   * DateTimeオブジェクトを'HHmm'形式の文字列に変換します。
+   *
+   * @param dateTime - 変換するDateTimeオブジェクト。
+   * @returns 'HHmm'形式の時間を表す文字列。
+   */
+  public revConvertRadioTime(dateTime: DateTime): string {
+    return format(dateTime, 'HHmm');
+  }
+
+  /**
+   * DateTimeオブジェクトを'HHmmss'形式の文字列に変換します。
+   *
+   * @param dateTime - 変換するDateTimeオブジェクト。
+   * @returns 'HHmmss'形式の時間を表す文字列。
+   */
+  public revConvertRadioTimeWithSeconds(dateTime: DateTime): string {
+    return format(dateTime, 'HHmmss');
+  }
+
+  /**
+   * DateTimeを'yyyyMMdd'形式の文字列に変換
+   * @param dateTime
+   * @returns
+   */
+  public parseDateTimeToStringDate(dateTime: DateTime): string {
+    return format(dateTime, 'yyyyMMdd');
+  }
+
+  /**
+   * DateTimeを'yyyyMMddHHmmss'形式の文字列に変換
+   * @param dateTime
+   * @returns
+   */
+  public parseDateTimeToStringDateTime(dateTime: DateTime): string {
+    return format(dateTime, 'yyyyMMddHHmmss');
+  }
+
+  // 番組時間をチェック('yyyyMMddHHmmss'形式)
+  public checkProgramTime(ftDateTime: DateTime, toDateTime: DateTime, currentTime: DateTime): number {
+    if (ftDateTime <= currentTime && currentTime < toDateTime) {
+      // 放送中
+      return 0;
+    }
+    // 過去:マイナス，未来:プラス(sec)
+    return this.getTimeSpanByDateTime(currentTime, ftDateTime);
   }
 
   /**
    * 日付に日数を加算（yyyyMMdd → yyyyMMdd）
-   * @param dateStr yyyyMMdd 形式
-   * @param days 加算する日数
    */
-  public addDay(dateStr: string, days: number): string {
-    const date = parse(dateStr, 'yyyyMMdd', new Date());
-    const newDate = addDays(date, days);
-    return format(newDate, 'yyyyMMdd');
+  public addDay(dateStr: DateString | string, days: number): DateString {
+    const date = typeof dateStr === 'string' ? toDateString(dateStr) : dateStr;
+    const parsed = parse(date, 'yyyyMMdd', new Date());
+    const newDate = addDays(parsed, days);
+    return toDateString(format(newDate, 'yyyyMMdd'));
+  }
+
+  /**
+   * 日時に秒数を加算（DateTime → DateTime）
+   */
+  public addTime(dateTime: DateTime, seconds: number): DateTime {
+    const newDateTime = addSeconds(dateTime, seconds);
+    return newDateTime as DateTime;
   }
 
   /**
    * ラジコ日付基準で、今日からN日間の日付リストを返す
-   * @param begin 例) 0=今日, -6=6日前
-   * @param end   例) 0=今日, 6=6日後
-   * @param kanjiFmt 日本語フォーマット
    */
   public getRadioWeek(
     begin: number | string,
     end: number | string,
     kanjiFmt: string = 'yyyy年M月d日(E)'
-  ): { index: number; date: string; kanji: string }[] {
+  ): { index: number; date: DateString; kanji: string }[] {
     const now = this.getNowJST();
     const radioBase = new Date(now.getTime() - this.offsetMs);
-    const result: { index: number; date: string; kanji: string }[] = [];
+    const result: { index: number; date: DateString; kanji: string }[] = [];
 
     const b = Number(begin);
     const e = Number(end);
@@ -117,7 +153,7 @@ class BroadcastTimeConverter {
       const target = addDays(radioBase, i);
       result.push({
         index: i,
-        date: format(target, 'yyyyMMdd'),
+        date: toDateString(format(target, 'yyyyMMdd')),
         kanji: format(target, kanjiFmt, { locale: ja }),
       });
     }
@@ -125,23 +161,18 @@ class BroadcastTimeConverter {
     return result;
   }
 
-
   /**
    * ラジコ日付基準で、指定した日付範囲のリストを返す
-   * @param from 開始日 (Date)
-   * @param to   終了日 (Date)
-   * @param kanjiFmt 日本語フォーマット
    */
-  public getRadioWeekDateRange(from: Date, to: Date, kanjiFmt: string = 'yyyy年M月d日(E)'): { index: number; date: Date; kanji: string }[] {
+  public getRadioWeekByDateRange(from: Date, to: Date, kanjiFmt: string = 'yyyy年M月d日(E)'): { index: number; date: Date; kanji: string }[] {
     const radioBase = new Date(this.getNowJST().getTime() - this.offsetMs);
 
-    // 日付のみ比較できるように時刻を切り捨て
     const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
     const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
 
     const result: { index: number; date: Date; kanji: string }[] = [];
-    for (let date = start; date <= end; date = addDays(date, 1)) {
-      const index = Math.floor((date.getTime() - radioBase.getTime()) / 86400000);
+    for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
+      const index: number = Math.floor((date.getTime() - radioBase.getTime()) / 86400000);
 
       result.push({
         index,
@@ -153,148 +184,169 @@ class BroadcastTimeConverter {
   }
 
   /**
- * ラジコ日付基準で、指定した日付範囲のリストを返す
- * @param from 開始日 (Date)
- * @param to   終了日 (Date)
- * @param kanjiFmt 日本語フォーマット
- */
-  public getRadioWeekByDateRange(
-    from: Date,
-    to: Date,
-    kanjiFmt: string = 'yyyy年M月d日(E)'
-  ): { index: number; date: string; kanji: string }[] {
-    const radioBase = new Date(this.getNowJST().getTime() - this.offsetMs);
-
-    // 日付のみ比較できるように時刻を切り捨て
-    const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-    const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-
-    const result: { index: number; date: string; kanji: string }[] = [];
-    for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
-      const index = Math.floor((date.getTime() - radioBase.getTime()) / 86400000);
-
-      result.push({
-        index,
-        date: format(date, 'yyyyMMdd'),
-        kanji: format(date, kanjiFmt, { locale: ja }),
-      });
-    }
-    return result;
-  }
-
-  /**
-   * 通常時刻(00:00～05:00)をラジコ時刻(24:00～29:00)に変換
-   * @param timeStr yyyyMMddHHmmss 形式
-   * @returns yyyyMMddHHmmss 形式（深夜は前日の24～29時扱い）
+   * 2つの Date の差を秒単位で計算
    */
-  public convertRadioTime(timeStr: string): string {
-    const padded = timeStr.padEnd(14, '0');
-    const hour = parseInt(padded.substring(8, 10));
-
-    // 00:00～04:59 → 前日の24:00～28:59に変換
-    if (hour < this.RADIO_DAY_START_HOUR) {
-      const date = this.parseDateTime(padded);
-      const prevDay = addDays(date, -1);
-      const newHour = hour + 24;
-
-      return format(prevDay, 'yyyyMMdd') +
-        String(newHour).padStart(2, '0') +
-        padded.substring(10, 14);
-    }
-
-    return padded;
-  }
-
-  /**
-   * ラジコ時刻(24:00～29:00)を通常時刻(00:00～05:00)に逆変換
-   * @param timeStr yyyyMMddHHmmss 形式
-   * @returns yyyyMMddHHmmss 形式
-   */
-  public revConvertRadioTime(timeStr: string): string {
-    const padded = timeStr.padEnd(14, '0');
-    const hour = parseInt(padded.substring(8, 10));
-
-    // 24:00～29:00 → 翌日の00:00～05:00に変換
-    if (hour >= 24) {
-      const date = this.parseDateTime(padded);
-      const nextDay = addDays(date, 1);
-      const newHour = hour - 24;
-
-      return format(nextDay, 'yyyyMMdd') +
-        String(newHour).padStart(2, '0') +
-        padded.substring(10, 14);
-    }
-
-    return padded;
-  }
-
-  /**
-   * 番組時間をチェック('yyyyMMddHHmmss'形式)
-   * @param ft 番組開始時刻
-   * @param to 番組終了時刻
-   * @param currentTime 現在時刻
-   * @returns 0: 放送中、負: 過去、正: 未来（秒）
-   */
-  public checkProgramTime(ft: string, to: string, currentTime: string): number {
-    if (ft <= currentTime && currentTime < to) {
-      return 0; // 放送中
-    }
-    return this.getTimeSpan(currentTime, ft); // 過去:マイナス，未来:プラス(sec)
-  }
-
-  /**
-   * 2つの時刻の差を秒単位で計算
-   * @param from 開始時刻 (yyyyMMddHHmmss)
-   * @param to 終了時刻 (yyyyMMddHHmmss)
-   * @returns 時間差（秒）
-   */
-  public getTimeSpan(from: string, to: string): number {
-    const fromDate = this.parseDateTime(from);
-    const toDate = this.parseDateTime(to);
+  public getTimeSpanByDate(fromDate: Date, toDate: Date): number {
     return differenceInSeconds(toDate, fromDate);
   }
 
   /**
-   * 時刻に秒数を加算
-   * @param timeStr yyyyMMddHHmmss 形式
-   * @param seconds 加算する秒数
-   * @returns yyyyMMddHHmmss 形式
+ * 2つの Date の差を秒単位で計算
+ */
+  public getTimeSpanByDateTime(fromDateTime: DateTime, toDateTime: DateTime): number {
+    return differenceInSeconds(toDateTime, fromDateTime);
+  }
+
+  /**
+   * 2つの DateTimeString の差を秒単位で計算
    */
-  public addTime(timeStr: string, seconds: number | string): string {
-    if (!seconds) return timeStr;
-    const date = this.parseDateTime(timeStr);
-    const newDate = addSeconds(date, Number(seconds));
-    return format(newDate, 'yyyyMMddHHmmss');
+  public getTimeSpan(from: DateTimeString | string, to: DateTimeString | string): number {
+    const fromNormalized = typeof from === 'string' ? toDateTimeString(from) : from;
+    const toNormalized = typeof to === 'string' ? toDateTimeString(to) : to;
+
+    const fromDate = parseToDateTime(fromNormalized);
+    const toDate = parseToDateTime(toNormalized);
+
+    return differenceInSeconds(toDate, fromDate);
   }
 
-  // ['yyyyMMddHHmmss'] * '$1/$2/$3 $4:$5-$10:$11' => 'yyyy/MM/dd HH:mm-HH:mm'
-  public formatFullString2(srcArray: string[], fmt: string): string {
-    let src = '', reg = '';
-    for (const s of srcArray) {
-      const padded = s.padEnd(14, '0');
-      src += padded.replace(/^(\d{14}).*$/, '$1');
-      reg += '(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})';
+  /**
+   * 通常時刻(00:00～05:00)をラジコ時刻(24:00～29:00)に変換
+   */
+  public convertRadioTime(timeStr: string): DateTimeString {
+    // 14桁にパディング
+    const padded: string = timeStr.padEnd(14, '0');
+    // 時間部分を抽出
+    const hour: number = parseInt(padded.substring(8, 10));
+
+    if (hour < this.RADIO_DAY_START_HOUR) {
+      const date: DateTime = this.parseStringToDateTime(padded);
+      const prevDay: Date = addDays(date, -1);
+      const newHour: number = hour + 24;
+
+      const result = format(prevDay, 'yyyyMMdd') +
+        String(newHour).padStart(2, '0') +
+        padded.substring(10, 14);
+
+      return toDateTimeString(result);
     }
-    return src.replace(new RegExp(reg), fmt);
+
+    return toDateTimeString(padded);
   }
 
-  // 'yyyyMMddHHmmss' * '$1/$2/$3' => 'yyyy/MM/dd'
-  public formatDateString(src: string, fmt: string): string {
-    src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
-    return src.replace(/^(\d{4})(\d\d)(\d\d).*$/, fmt);
-  }
 
-  // ['yyyyMMddHHmmss'] * '$1:$2-$4:$5' => 'HH:mm-HH:mm'
-  public formatTimeString2(srcArray: string[], fmt: string): string {
-    let src = '', reg = '';
-    for (const s of srcArray) {
-      const padded = s.padEnd(14, '0');
-      src += padded.replace(/^\d{8}(\d{6}).*$/, '$1');
-      reg += '(\\d{2})(\\d{2})(\\d{2})';
+  /**
+   * 通常時刻(00:00～05:00)をラジコ時刻(24:00～29:00)に変換
+   */
+  public convertRadioDateTime(timeStr: string): DateTime {
+    // 14桁にパディング
+    const padded: string = timeStr.padEnd(14, '0');
+    // 時間部分を抽出
+    const hour: number = parseInt(padded.substring(8, 10));
+
+    if (hour < this.RADIO_DAY_START_HOUR) {
+      const date: DateTime = this.parseStringToDateTime(padded);
+      const prevDay: Date = addDays(date, -1);
+      const newHour: number = hour + 24;
+
+      const result = format(prevDay, 'yyyyMMdd') +
+        String(newHour).padStart(2, '0') +
+        padded.substring(10, 14);
+
+      return this.parseStringToDateTime(result);
     }
-    return src.replace(new RegExp(reg), fmt);
+
+    return this.parseStringToDateTime(padded);
+  }
+
+  /**
+   * DateTimeString をフォーマット
+   */
+  public formatDateString(dateTimeStr: DateTimeString | string, formatStr: string): string {
+    const normalized = typeof dateTimeStr === 'string' ? toDateTimeString(dateTimeStr) : dateTimeStr;
+    const date = parseToDateTime(normalized);
+    return format(date, formatStr, { locale: ja });
+  }
+
+  /**
+   * 複数の DateTimeString をフォーマット（正規表現置換）
+   */
+  public formatTimeString2(dateTimeStrArray: (DateTimeString | string)[], formatStr: string): string {
+    const regex = /(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/g;
+    return dateTimeStrArray.join('~').replace(regex, formatStr);
+  }
+
+  /**
+   * 日時の範囲をフォーマット（開始～終了）
+   *
+   * @param start 開始日時
+   * @param end 終了日時
+   * @param startFormat 開始日時のフォーマット (date-fns形式)
+   * @param endFormat 終了日時のフォーマット（省略時は startFormat と同じ）
+   * @param separator セパレーター（デフォルト: '-'）
+   * @returns フォーマット済み文字列
+   *
+   * @example
+   * const start = createDateTime(2025, 10, 10, 12, 0, 0);
+   * const end = createDateTime(2025, 10, 10, 13, 0, 0);
+   *
+   * // 年月日 時:分-時:分
+   * formatDateTimeRange(start, end, 'yyyy/MM/dd HH:mm', 'HH:mm')
+   * // => '2025/11/10 12:00-13:00'
+   *
+   * // 時刻のみ
+   * formatDateTimeRange(start, end, 'HH:mm')
+   * // => '12:00-13:00'
+   *
+   * // カスタムセパレーター
+   * formatDateTimeRange(start, end, 'HH:mm', 'HH:mm', ' ～ ')
+   * // => '12:00 ～ 13:00'
+   */
+  public formatDateTimeRange(startDateTime: DateTime, endDateTime: DateTime, startFormat: string, endFormat?: string, separator: string = '-'): string {
+    // 開始日時を指定フォーマットで文字列化（日本語ロケール使用）
+    const startStr: string = format(startDateTime, startFormat, { locale: ja });
+
+    // 終了日時を指定フォーマットで文字列化（endFormat未指定時はstartFormatを使用）
+    const endStr: string = format(endDateTime, endFormat || startFormat, { locale: ja });
+
+    // 開始時刻 + セパレーター + 終了時刻 の形式で返却
+    return `${startStr}${separator}${endStr}`;
+  }
+
+
+  /**
+   * 複数の Date をフォーマット（正規表現置換）
+   *
+   * @param srcArray Date の配列
+   * @param fmt フォーマット文字列 (例: '$1/$2/$3')
+   *            - $1-$3: 日付 (年、月、日)
+   * @returns フォーマット済み文字列
+   *
+   * @example
+   * const date1 = new Date(2025, 10, 10);
+   * const date2 = new Date(2025, 10, 11);
+   * formatDateArray([date1, date2], '$1/$2/$3')
+   * // => '2025/11/10-2025/11/11'
+   */
+  public formatDateArray(srcArray: Date[], fmt: string): string {
+    let concatenatedDates = '';
+    let regexPattern = '';
+
+    for (const item of srcArray) {
+      // Date → 'yyyyMMdd' 形式に変換
+      const dateStr = format(item, 'yyyyMMdd');
+
+      // 連結
+      concatenatedDates += dateStr;
+
+      // 正規表現パターンを追加（年月日の3グループ）
+      regexPattern += '(\\d{4})(\\d{2})(\\d{2})';
+    }
+
+    // 連結した文字列を正規表現で置換
+    return concatenatedDates.replace(new RegExp(regexPattern), fmt);
   }
 }
 
-// デフォルト20秒遅延
+// デフォルトの遅延時間は20秒
 export const broadcastTimeConverter = new BroadcastTimeConverter(20);

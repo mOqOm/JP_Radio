@@ -7,6 +7,8 @@ import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
 import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
 import { RadikoProgramData } from '../models/radiko-program.model';
 
+import type { DateOnly, DateTime } from '@/types/date-time.types';
+
 // Utilsのインポート
 import { broadcastTimeConverter } from './broadcast-time-converter.util';
 
@@ -57,22 +59,25 @@ export class RadikoXmlUtil {
 
         rawProgs.sort((a, b) => a['@ft'].localeCompare(b['@ft']));
 
-        let prevTo = '';
+        // ギャップ補完しながら allProgs に追加
+        let prevTo: DateTime = broadcastTimeConverter.parseStringToDateTime('00000000000000');
 
         for (const p of rawProgs) {
           // 第2引数を削除
-          const ft = broadcastTimeConverter.convertRadioTime(p['@ft']);
-          const to = broadcastTimeConverter.convertRadioTime(p['@to']);
+          const ftDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(p['@ft']);
+          const toDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(p['@to']);
 
-          const progId = `${stationId}${p['@id']}${ft.slice(8, 12)}`;
+          // DateTime からHHmm形式の時間文字列を取得
+          const time: string = broadcastTimeConverter.revConvertRadioTime(ftDateTime)
+          const progId: string = `${stationId}${p['@id']}${time}`;
 
           // ギャップ補完
-          if (prevTo && prevTo < ft) {
+          if (prevTo < ftDateTime) {
             allProgs.push({
               stationId,
               progId: `${stationId}_${prevTo}`,
               ft: prevTo,
-              to: ft,
+              to: ftDateTime,
               title: '',
               info: '',
               pfm: '',
@@ -83,24 +88,24 @@ export class RadikoXmlUtil {
           allProgs.push({
             stationId,
             progId,
-            ft,
-            to,
+            ft: ftDateTime,
+            to: toDateTime,
             title: p.title,
             info: p.info ?? '',
             pfm: p.pfm ?? '',
             img: p.img ?? ''
           });
 
-          prevTo = to;
+          prevTo = toDateTime;
         }
 
         // 最終29時まで補完
-        if (prevTo && Number(prevTo.slice(8, 12)) < 2900) {
+        if (Number(broadcastTimeConverter.revConvertRadioTime(prevTo)) < 2900) {
           allProgs.push({
             stationId,
             progId: `${stationId}_${prevTo}`,
             ft: prevTo,
-            to: `${prevTo.slice(0, 8)}290000`,
+            to: broadcastTimeConverter.convertRadioDateTime(`${broadcastTimeConverter.parseDateTimeToStringDate(prevTo)}290000`),
             title: '',
             info: '',
             pfm: '',

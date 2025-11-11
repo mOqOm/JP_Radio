@@ -4,7 +4,7 @@ import VConf from 'v-conf';
 import path from 'path';
 import { exec } from 'child_process';
 import { format } from 'util';
-import { parse as queryParse } from 'querystring';
+import { parse as queryParse, ParsedUrlQuery } from 'querystring';
 import { ParsedQs } from 'qs';
 
 // 定数のインポート
@@ -12,7 +12,6 @@ import { RADIKO_AREA } from '@/constants/radiko-area.const'
 
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
-import type { BrowseResult } from '@/models/browse-result.model';
 import type { JpRadioConfig } from '@/models/jp-radio-config.model';
 
 // Utilsのインポート
@@ -20,9 +19,11 @@ import { LoggerEx } from '@/utils/logger.util';
 import { messageHelper } from '@/utils/message-helper.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 
+import type { DateOnly, DateTime } from '@/types/date-time.types';
+import { createDateTime } from '@/types/date-time.types';
+
 // Seviceのインポート
 import JpRadio from '@/service/radio';
-import e from 'express';
 
 export = JpRadioController;
 
@@ -292,12 +293,17 @@ class JpRadioController {
       if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = programPeriodTo;
       if (uiconf.sections?.[sectionIdx]?.content?.[2]) {
 
-        const today: string = broadcastTimeConverter.getCurrentDate();
+        const toDay: Date = broadcastTimeConverter.getCurrentDate();
+        // サンプルで12時と13時のDateオブジェクトを作成
+        const sample1DateTime: DateTime = createDateTime(toDay.getFullYear(), toDay.getMonth(), toDay.getDate(), 12, 0, 0);
+        const sample2DateTime: DateTime = createDateTime(toDay.getFullYear(), toDay.getMonth(), toDay.getDate(), 13, 0, 0);
+
         const content = uiconf.sections[sectionIdx].content[2];
         content.value.value = timeFormat;
 
         for (const opt of content.options) {
-          opt.label = format(opt.label, broadcastTimeConverter.formatFullString2([today + '120000', today + '130000'], opt.value));
+          const formattedExample = broadcastTimeConverter.formatDateTimeRange(sample1DateTime, sample2DateTime, opt.value);
+          opt.label = format(opt.label, formattedExample);
 
           if (opt.value === timeFormat) {
             content.value.label = opt.label;
@@ -635,93 +641,93 @@ class JpRadioController {
 
               const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, -from, to);
               defer.resolve(browseResult);
-          return await this.appRadio.radioStations(playMode);
-        }
-
-        // TimeTable
-        if (playMode === 'timetable' || playMode === 'timetable_today') {
-          this.logger.info('TESTController0001', 'TimeTableモード');
-
-          if (option) {
-            // uri = radiko/timetable/TBS/20251109~20251110
-            const [fromStr, toStr] = option.split('~');
-
-            if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
-              throw new Error('Invalid date format');
+              return await this.appRadio.radioStations(playMode);
             }
 
-            // YYYYMMDD → Date
-            const parseDate = (dateStr: string): Date => {
-              const y = parseInt(dateStr.substring(0, 4));
-              const m = parseInt(dateStr.substring(4, 6)) - 1;
-              const d = parseInt(dateStr.substring(6, 8));
-              return new Date(y, m, d);
-            };
+            // TimeTable
+            if (playMode === 'timetable' || playMode === 'timetable_today') {
+              this.logger.info('TESTController0001', 'TimeTableモード');
 
-            return await this.appRadio.radioTimeTableDate(
-              playMode,
-              stationId,
-              parseDate(fromStr),
-              parseDate(toStr)
-            );
+              if (option) {
+                // uri = radiko/timetable/TBS/20251109~20251110
+                const [fromStr, toStr] = option.split('~');
+
+                if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
+                  throw new Error('Invalid date format');
+                }
+
+                // YYYYMMDD → Date
+                const parseDate = (dateStr: string): Date => {
+                  const y = parseInt(dateStr.substring(0, 4));
+                  const m = parseInt(dateStr.substring(4, 6)) - 1;
+                  const d = parseInt(dateStr.substring(6, 8));
+                  return new Date(y, m, d);
+                };
+
+                return await this.appRadio.radioTimeTableDate(
+                  playMode,
+                  stationId,
+                  parseDate(fromStr),
+                  parseDate(toStr)
+                );
+              }
+
+              // 今日 or 設定期間
+              const today = playMode.endsWith('_today');
+              const nowJstDate = broadcastTimeConverter.getNowJST();
+
+              let fromJstDate: Date = new Date(nowJstDate);
+              let toJstDate: Date = new Date(nowJstDate);
+
+              if (!today) {
+                fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
+                toJstDate.setDate(toJstDate.getDate() + this.jpRadioConfig.ppTo);
+              }
+
+              return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDate, toJstDate);
+            }
+
+            // ProgTable
+            if (playMode === 'progtable') {
+              const [from, to] = option.split('~');
+
+              if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
+                throw new Error('Invalid date format');
+              }
+
+              // YYYYMMDD → Date
+              const parseDate = (dateStr: string): Date => {
+                const y = parseInt(dateStr.substring(0, 4));
+                const m = parseInt(dateStr.substring(4, 6)) - 1;
+                const d = parseInt(dateStr.substring(6, 8));
+                return new Date(y, m, d);
+              };
+
+              return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
+            }
+
+            // ProgInfo
+            if (playMode === 'proginfo') {
+              const data = await this.explodeUri(curUri);
+              await this.showProgInfoModal(data);
+              return {};
+            }
+
+            throw new Error(`Unknown playMode: ${playMode}`);
+
+          } catch (error: any) {
+            this.logger.error('JRADI01CE0006', error);
+            defer.reject(error);
+            return;
           }
+        })().then((result) => {
+          defer.resolve(result);
+        }).catch((error) => {
+          defer.reject(error);
+        });
 
-          // 今日 or 設定期間
-          const today = playMode.endsWith('_today');
-          const nowJstDate = broadcastTimeConverter.getNowJST();
-
-          let fromJstDate: Date = new Date(nowJstDate);
-          let toJstDate: Date = new Date(nowJstDate);
-
-          if (!today) {
-            fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
-            toJstDate.setDate(toJstDate.getDate() + this.jpRadioConfig.ppTo);
-          }
-
-          return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDate, toJstDate);
-        }
-
-        // ProgTable
-        if (playMode === 'progtable') {
-          const [from, to] = option.split('~');
-
-          if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
-            throw new Error('Invalid date format');
-          }
-
-          // YYYYMMDD → Date
-          const parseDate = (dateStr: string): Date => {
-            const y = parseInt(dateStr.substring(0, 4));
-            const m = parseInt(dateStr.substring(4, 6)) - 1;
-            const d = parseInt(dateStr.substring(6, 8));
-            return new Date(y, m, d);
-          };
-
-          return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
-        }
-
-        // ProgInfo
-        if (playMode === 'proginfo') {
-          const data = await this.explodeUri(curUri);
-          await this.showProgInfoModal(data);
-          return {};
-        }
-
-        throw new Error(`Unknown playMode: ${playMode}`);
-
-      } catch (error: any) {
-        this.logger.error('JRADI01CE0006', error);
-        defer.reject(error);
-        return;
+        return defer.promise;
       }
-    })().then((result) => {
-      defer.resolve(result);
-    }).catch((error) => {
-      defer.reject(error);
-    });
-
-    return defer.promise;
-  }
 
   public clearAddPlayTrack(track: any): any {
     this.logger.info('JRADI01CI0016', track.uri);
@@ -732,49 +738,71 @@ class JpRadioController {
     if (uri.includes('/radiko/play/') === true) {
       (async () => {
         // 再生中の曲を停止してキューをクリア
-        await this.mpdPlugin.sendMpdCommand('stop', []);
-        await this.mpdPlugin.sendMpdCommand('clear', []);
+        await this.mpdPlugin.sendMpdCommand('stop', []); // 現在の曲を停止
+        await this.mpdPlugin.sendMpdCommand('clear', []); // 再生キューをクリア
 
-        const [liveUri, timefree]: string[] = uri.split('?');
+        const [liveUri, timefree]: string[] = uri.split('?'); // URIをライブとタイムフリーで分割
 
         if (timefree !== undefined && timefree !== null && timefree !== '') {
-          // タイムフリー
-          const query = queryParse(timefree);
-          const ft = query.ft ? String(query.ft) : '';
-          const to = query.to ? String(query.to) : '';
-          const check: number = broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime());
+          // タイムフリーの場合
+          const query = queryParse(timefree); // タイムフリーのクエリを解析
+
+          // 現在のラジオ時間を取得
+          const radiko1DayDate: DateTime = broadcastTimeConverter.getCurrentRadioTime();
+
+          // タイムフリーのパラメータが不正な場合
+          if (query.ft === undefined || query.to === undefined || query.ft === '' || query.to === ''
+            || String(query.ft).length !== 14 || String(query.to).length !== 14) {
+            // エラーログを出力
+            this.logger.error('JRADI01CE0007', 'Invalid TimeFree parameters');
+            // ライブ放送に切り替え
+            uri = liveUri;
+            // エラーメッセージを表示
+            this.commandRouter.pushToastMessage('error', 'JP Radio', messageHelper.get('ERROR_INVALID_TIMEFREE_PARAMS'));
+            // 処理を終了
+            return;
+          }
+
+          // 開始時間(yyyyMMddHHmmss)のStringをDateTime型に変換
+          const ftDate: DateTime = broadcastTimeConverter.parseStringToDateTime(String(query.ft));
+          // 終了時間(yyyyMMddHHmmss)をDateTime型に変換
+          const toDate: DateTime = broadcastTimeConverter.parseStringToDateTime(String(query.to));
+
+          // プログラム時間をチェック
+          const check: number = broadcastTimeConverter.checkProgramTime(ftDate, toDate, radiko1DayDate);
 
           if (check > 0) {
             // 配信前の番組は再生できないのでライブ放送に切り替え
-            uri = liveUri;
-            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE1'));
+            uri = liveUri; // ライブ放送に切り替え
+            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE1')); // 警告メッセージを表示
           } else if (check === 0) {
-            // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
-            uri = liveUri;
-            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2'));
+            // 追っかけ再生はうまくいかないのでライブ放送に切り替え
+            uri = liveUri; // ライブ放送に切り替え
+            this.commandRouter.pushToastMessage('info', 'JP Radio', messageHelper.get('WARNING_SWITCH_LIVE2')); // 警告メッセージを表示
           }
         } else {
+          // タイムフリーがない場合はライブを再生
           this.logger.info('TESTController0001', 'ライブ-タイムフリー無し');
-          // ライブ
-          const currentPosition = this.commandRouter.stateMachine.currentPosition;
+          const currentPosition = this.commandRouter.stateMachine.currentPosition; // 現在の再生位置を取得
           if (currentPosition > 0) {
             this.logger.info('TESTController0001', 'ライブ-キュー並べ替え');
             // 再生キューを並べ替えて対象局を先頭に
-            let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
-            const arrayCurrentQueue = arrayQueue.splice(currentPosition);
-            arrayQueue = arrayCurrentQueue.concat(arrayQueue);
-            this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
-            //this.commandRouter.stateMachine.playQueue.saveQueue();
-            // 再生位置を先頭に戻す
-            this.commandRouter.stateMachine.currentPosition = 0;
-            this.commandRouter.volumioPushQueue(arrayQueue);
+            let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue; // 現在の再生キューを取得
+            const arrayCurrentQueue = arrayQueue.splice(currentPosition); // 現在の位置以降のキューを取得
+            arrayQueue = arrayCurrentQueue.concat(arrayQueue); // 並べ替えたキューを作成
+            this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue; // 新しいキューを設定
+            this.commandRouter.stateMachine.currentPosition = 0; // 再生位置を先頭に戻す
+            this.commandRouter.volumioPushQueue(arrayQueue); // 新しいキューをプッシュ
           }
         }
 
         this.logger.info('TESTController0001', 'ライブ-不明');
 
+        // 新しいURIをキューに追加
         await this.mpdPlugin.sendMpdCommand(`add "${uri}"`, []);
+        // MPDサービスを更新
         this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
+        // 再生を開始
         await this.mpdPlugin.sendMpdCommand('play', []);
       })();
     }
@@ -913,27 +941,37 @@ class JpRadioController {
       try {
         // uri = http://localhost:9000/radiko/play/TBS?ft=##&to=##
         if (!data.uri.includes('/radiko/play/')) {
-          return {};
+          return new Error('Invalid URI');
         }
 
         const [liveUri, timefree] = data.uri.split('?');
         const stationId = liveUri.replace(/\/+$/, '').split('/').pop() ?? '';
-        let d = 0;
 
-        if (timefree) {
-          const currentDate = broadcastTimeConverter.getCurrentRadioDate() + '000000';
-          const query = queryParse(timefree);
-          const ftDate = query.ft ? String(query.ft).slice(0, 8) + '000000' : currentDate;
-          d = -Math.floor(broadcastTimeConverter.getTimeSpan(ftDate, currentDate) / 86400);
+        // 日付範囲を計算
+        let fromDate = broadcastTimeConverter.getNowJST();
+        let toDate = broadcastTimeConverter.getNowJST();
+
+        if (timefree !== undefined && timefree !== null && timefree !== '') {
+          const query: ParsedUrlQuery = queryParse(timefree);
+
+          if (query.ft) {
+            // ft から日付を取得（yyyyMMdd 部分）
+            const ftStr = String(query.ft).slice(0, 8);
+            // YYYYMMDD000000 を Date に変換
+            fromDate = broadcastTimeConverter.parseStringToDateTime(ftStr + '000000');
+            toDate = new Date(fromDate);
+          }
         }
 
         if (data.type === 'artist') {
           // 'アーティストへ移動' ⇒ 番組情報 & 番組表
           await this.showProgInfoModal(data);
-          return await this.appRadio!.radioTimeTable('progtable', stationId, d, d);
-        } else if (data.type === 'album') {
+          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDate, toDate);
+        }
+
+        if (data.type === 'album') {
           // 'アルバムへ移動' ⇒ 番組表
-          return await this.appRadio!.radioTimeTable('progtable', stationId, d, d);
+          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDate, toDate);
         }
 
         return {};
@@ -963,16 +1001,25 @@ class JpRadioController {
     const stationId = liveUri.split('/').pop();
 
     if ((liveUri.includes('/radiko/play/') || liveUri.includes('/radiko/proginfo/')) && (stationId !== undefined && stationId !== null)) {
-      let ft: string = broadcastTimeConverter.getCurrentRadioTime();
-      let to: string = ft;
+      let ftDateTime: DateTime = broadcastTimeConverter.getCurrentRadioTime();
+      let toDateTime: DateTime = ftDateTime;
 
       if (timefree) {
         const query = queryParse(timefree);
-        ft = query.ft ? String(query.ft) : '';
-        to = query.to ? String(query.to) : '';
+
+        // 開始時間
+        if (query.ft !== undefined && query.ft !== null && query.ft !== '') {
+          ftDateTime = broadcastTimeConverter.parseStringToDateTime(String(query.ft));
+
+        }
+
+        // 終了時間
+        if (query.to !== undefined && query.to !== null && query.to !== '') {
+          toDateTime = broadcastTimeConverter.parseStringToDateTime(String(query.to));
+        }
       }
 
-      const progData = await prg.getProgramData(stationId, ft, true);
+      const progData = await prg.getProgramData(stationId, ftDateTime, true);
 
       if (!progData) {
         return;
@@ -1025,11 +1072,12 @@ class JpRadioController {
         ]
       };
 
-      if (broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioDate() + '050000') < -7 * 86400) {
+      const diffSec = (broadcastTimeConverter.getCurrentRadioTime().getTime() - ftDateTime.getTime()) / 1000;
+      if (diffSec < -7 * 86400) {
         //「再生/キューに追加/お気に入りに追加」ボタンを消す
         modalMessage.buttons.splice(0, 3);
       } else {
-        const diff = broadcastTimeConverter.checkProgramTime(ft, to, broadcastTimeConverter.getCurrentRadioTime());
+        const diff = broadcastTimeConverter.checkProgramTime(ftDateTime, toDateTime, broadcastTimeConverter.getCurrentRadioTime());
         if (diff >= 0) {
           //「再生/キューに追加」ボタンを消す（追っかけ再生や未配信は追加も不可）
           modalMessage.buttons.splice(0, 2);

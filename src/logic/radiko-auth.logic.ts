@@ -14,9 +14,9 @@ export class RadikoAuthLogic {
   }
 
   /** ログイン状態チェック */
-  public async checkLogin(): Promise<LoginState | null> {
+  public async checkLogin(): Promise<LoginState> {
     if (!this.cookieJar) {
-      return null;
+      throw new Error('CookieJar is not initialized');
     }
 
     try {
@@ -28,28 +28,28 @@ export class RadikoAuthLogic {
 
       return response.body as LoginState;
     } catch (error: any) {
-      const statusCode = error?.response?.statusCode;
+      const statusCode = error.response.statusCode;
 
       if (statusCode === 400) {
-        return null;
+        throw new Error('Login failed');
       }
 
       // HTTPステータスが400以外の場合
       this.logger.error('RADI0001E0002', error);
-      return null;
+      throw error;
     }
   }
 
   /** 認証してCookieJarを取得 */
-  public async login(acct: LoginAccount): Promise<CookieJar> {
-    const jar: CookieJar = new tough.CookieJar();
+  public async login(loginAccount: LoginAccount): Promise<CookieJar> {
+    const cookieJar: CookieJar = new tough.CookieJar();
 
     try {
-      await got.post(LOGIN_URL, { cookieJar: jar, form: acct });
-      return jar;
+      await got.post(LOGIN_URL, { cookieJar: cookieJar, form: loginAccount });
+      return cookieJar;
     } catch (error: any) {
       if (error.statusCode === 302) {
-        return jar;
+        return cookieJar;
       }
 
       // HTTPステータスが302以外の場合
@@ -115,8 +115,8 @@ export class RadikoAuthLogic {
   }
 
   /** CookieJarセット */
-  public setCookieJar(jar: CookieJar) {
-    this.cookieJar = jar;
+  public setCookieJar(cookieJar: CookieJar) {
+    this.cookieJar = cookieJar;
   }
 
   /** CookieJar取得 */

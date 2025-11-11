@@ -1,5 +1,7 @@
 {
-  "include": [ "src/**/*.ts", "types/**/*.d.ts" ],
+  "include": [
+    "src/**/*.ts"
+  ],
   "compilerOptions": {
     "rootDir": "src",
     "target": "es2020",
@@ -15,11 +17,15 @@
     "strict": true,
     "strictPropertyInitialization": false,
     "resolveJsonModule": true,
-    "typeRoots": [ "node_modules/@types", "types" ],
+    "typeRoots": [
+      "node_modules/@types",
+      "src/types"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": [ "src/*" ],
-      "@/types/*": [ "types/*" ]
+      "@/*": [
+        "./src/*"
+      ]
     }
   }
 }

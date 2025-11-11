@@ -1,8 +1,10 @@
+import { DateTime } from "@/types/date-time.types";
+
 export interface RadikoProgramData {
   stationId: string;
   progId: string;
-  ft: string;
-  to: string;
+  ft: DateTime;
+  to: DateTime;
   title: string;
   info?: string;
   pfm?: string;
