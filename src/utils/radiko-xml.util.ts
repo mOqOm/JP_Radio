@@ -60,7 +60,7 @@ export class RadikoXmlUtil {
         rawProgs.sort((a, b) => a['@ft'].localeCompare(b['@ft']));
 
         // ギャップ補完しながら allProgs に追加
-        let prevTo: DateTime = broadcastTimeConverter.parseStringToDateTime('00000000000000');
+        let prevTo: DateTime = broadcastTimeConverter.parseStringToDateTime('19700101000000');
 
         for (const p of rawProgs) {
           // 第2引数を削除

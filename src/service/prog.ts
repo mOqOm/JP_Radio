@@ -29,8 +29,8 @@ import { DateTime } from '@/types/date-time.types';
 export const EMPTY_PROGRAM: Readonly<RadikoProgramData> = Object.freeze({
   stationId: '',
   progId: '',
-  ft: broadcastTimeConverter.parseStringToDateTime('00000000000000'),
-  to: broadcastTimeConverter.parseStringToDateTime('00000000000000'),
+  ft: broadcastTimeConverter.parseStringToDateTime('19700101000000'),
+  to: broadcastTimeConverter.parseStringToDateTime('19700101000000'),
   title: '',
   info: '',
   pfm: '',
