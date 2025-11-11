@@ -603,131 +603,93 @@ class JpRadioController {
           if (stationId === 'favourites') {
             return await this.appRadio.radioFavouriteStations(playMode);
           }
-        }).fail((error: any) => {
-          this.logger.error('JRADI01CE0006', error);
-          defer.reject(error);
-        });
-      } else if (playMode === 'timefree') {
-        // uri = radiko/timefree or radiko/timefree_today or radiko/timefree/favourites
-        if (stationId === 'favourites') {
-          this.appRadio.radioFavouriteStations(playMode)
-            .then((browseResult: BrowseResult) => defer.resolve(browseResult));
-        } else {
-          this.appRadio.radioStations(playMode)
-            .then((browseResult: BrowseResult) => defer.resolve(browseResult));
+          return await this.appRadio.radioStations(playMode);
         }
-      } else if (playMode.startsWith('timetable') === true) {
-        libQ.resolve().then(async () => {
-          if (this.appRadio !== undefined && this.appRadio !== null) {
 
-            if (option !== undefined && option !== null) {
-              // uri = radiko/timetable/TBS/#~#
-              const [from, to] = option.split('~');
-              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, from, to);
-              defer.resolve(browseResult);
-            } else {
-              // uri = radiko/timetable/TBS or radiko/timetable_today/TBS
-              const today = playMode.endsWith('today');
+        // TimeTable
+        if (playMode === 'timetable' || playMode === 'timetable_today') {
+          this.logger.info('TESTController0001', 'TimeTableモード');
 
-              let from = 0;
-              if (today === false) {
-                from = this.jpRadioConfig.ppFrom;
-              }
+          if (option) {
+            // uri = radiko/timetable/TBS/20251109~20251110
+            const [fromStr, toStr] = option.split('~');
 
-              let to = 0;
-              if (today === false) {
-                to = this.jpRadioConfig.ppTo;
-              }
-
-              const browseResult: BrowseResult = await this.appRadio.radioTimeTable(playMode, stationId, -from, to);
-              defer.resolve(browseResult);
-              return await this.appRadio.radioStations(playMode);
+            if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
+              throw new Error('Invalid date format');
             }
 
-            // TimeTable
-            if (playMode === 'timetable' || playMode === 'timetable_today') {
-              this.logger.info('TESTController0001', 'TimeTableモード');
+            // YYYYMMDD → Date
+            const parseDate = (dateStr: string): Date => {
+              const y = parseInt(dateStr.substring(0, 4));
+              const m = parseInt(dateStr.substring(4, 6)) - 1;
+              const d = parseInt(dateStr.substring(6, 8));
+              return new Date(y, m, d);
+            };
 
-              if (option) {
-                // uri = radiko/timetable/TBS/20251109~20251110
-                const [fromStr, toStr] = option.split('~');
-
-                if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
-                  throw new Error('Invalid date format');
-                }
-
-                // YYYYMMDD → Date
-                const parseDate = (dateStr: string): Date => {
-                  const y = parseInt(dateStr.substring(0, 4));
-                  const m = parseInt(dateStr.substring(4, 6)) - 1;
-                  const d = parseInt(dateStr.substring(6, 8));
-                  return new Date(y, m, d);
-                };
-
-                return await this.appRadio.radioTimeTableDate(
-                  playMode,
-                  stationId,
-                  parseDate(fromStr),
-                  parseDate(toStr)
-                );
-              }
-
-              // 今日 or 設定期間
-              const today = playMode.endsWith('_today');
-              const nowJstDate = broadcastTimeConverter.getNowJST();
-
-              let fromJstDate: Date = new Date(nowJstDate);
-              let toJstDate: Date = new Date(nowJstDate);
-
-              if (!today) {
-                fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
-                toJstDate.setDate(toJstDate.getDate() + this.jpRadioConfig.ppTo);
-              }
-
-              return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDate, toJstDate);
-            }
-
-            // ProgTable
-            if (playMode === 'progtable') {
-              const [from, to] = option.split('~');
-
-              if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
-                throw new Error('Invalid date format');
-              }
-
-              // YYYYMMDD → Date
-              const parseDate = (dateStr: string): Date => {
-                const y = parseInt(dateStr.substring(0, 4));
-                const m = parseInt(dateStr.substring(4, 6)) - 1;
-                const d = parseInt(dateStr.substring(6, 8));
-                return new Date(y, m, d);
-              };
-
-              return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
-            }
-
-            // ProgInfo
-            if (playMode === 'proginfo') {
-              const data = await this.explodeUri(curUri);
-              await this.showProgInfoModal(data);
-              return {};
-            }
-
-            throw new Error(`Unknown playMode: ${playMode}`);
-
-          } catch (error: any) {
-            this.logger.error('JRADI01CE0006', error);
-            defer.reject(error);
-            return;
+            return await this.appRadio.radioTimeTableDate(
+              playMode,
+              stationId,
+              parseDate(fromStr),
+              parseDate(toStr)
+            );
           }
-        })().then((result) => {
-          defer.resolve(result);
-        }).catch((error) => {
-          defer.reject(error);
-        });
 
-        return defer.promise;
+          // 今日 or 設定期間
+          const today = playMode.endsWith('_today');
+          const nowJstDate = broadcastTimeConverter.getNowJST();
+
+          let fromJstDate = new Date(nowJstDate);
+          let toJstDate = new Date(nowJstDate);
+
+          if (!today) {
+            fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
+            toJstDate.setDate(toJstDate.getDate() + this.jpRadioConfig.ppTo);
+          }
+
+          return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDate, toJstDate);
+        }
+
+        // ProgTable
+        if (playMode === 'progtable') {
+          const [from, to] = option.split('~');
+
+          if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
+            throw new Error('Invalid date format');
+          }
+
+          // YYYYMMDD → Date
+          const parseDate = (dateStr: string): Date => {
+            const y = parseInt(dateStr.substring(0, 4));
+            const m = parseInt(dateStr.substring(4, 6)) - 1;
+            const d = parseInt(dateStr.substring(6, 8));
+            return new Date(y, m, d);
+          };
+
+          return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
+        }
+
+        // ProgInfo
+        if (playMode === 'proginfo') {
+          const data = await this.explodeUri(curUri);
+          await this.showProgInfoModal(data);
+          return {};
+        }
+
+        throw new Error(`Unknown playMode: ${playMode}`);
+
+      } catch (error: any) {
+        this.logger.error('JRADI01CE0006', error);
+        defer.reject(error);
+        return;
       }
+    })().then((result) => {
+      defer.resolve(result);
+    }).catch((error) => {
+      defer.reject(error);
+    });
+
+    return defer.promise;
+  }
 
   public clearAddPlayTrack(track: any): any {
     this.logger.info('JRADI01CI0016', track.uri);
