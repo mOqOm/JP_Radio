@@ -249,6 +249,7 @@ export default class RdkProg {
 
     } catch (error: any) {
       this.logger.error('JRADI02SE0005', url, error);
+      throw error;
     }
 
     await this.dbCount();

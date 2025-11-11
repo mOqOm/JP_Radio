@@ -777,7 +777,7 @@ class JpRadioController {
     const defer = libQ.defer();
 
     try {
-      const [liveUri, tt, pf, sn, aa, ft, to, sk] = uri.split(/[?&]/);
+      const [liveUri, tt, pf, sn, aa, ft, to, seek]: string[] = uri.split(/[?&]/);
 
       if (!liveUri.startsWith('radiko/play/') && !liveUri.startsWith('radiko/proginfo/')) {
         throw new Error('Invalid URI');
@@ -794,10 +794,20 @@ class JpRadioController {
         uri: `http://localhost:${this.jpRadioConfig.port}/${liveUri}`
       };
 
-      if (ft && to) {
+      if (ft !== undefined && ft !== null && ft !== '' && to !== undefined && to !== null && to !== '') {
+        // DateTime型に変換
+        const ftDate: DateTime = broadcastTimeConverter.parseStringToDateTime(ft);
+        const toDate: DateTime = broadcastTimeConverter.parseStringToDateTime(to);
+
+        // 開始日時・終了日時をyyyyMMddHHmmss文字列に変換
+        const ftDateStr = broadcastTimeConverter.parseDateTimeToStringDateTime(ftDate);
+        const toDateStr = broadcastTimeConverter.parseDateTimeToStringDateTime(toDate);
+        // シーク位置
+        const seekNumber: number = seek ? Number(seek) : 0;
+
         // タイムフリー
-        response.artist += broadcastTimeConverter.formatDateString(ft, ` @${this.jpRadioConfig.dateFmt}`);
-        response.uri += `?ft=${ft}&to=${to}` + (sk ? `&seek=${sk}` : '');
+        response.artist += broadcastTimeConverter.formatDate(ftDate, ` @${this.jpRadioConfig.dateFmt}`);
+        response.uri += `?ft=${ftDateStr}&to=${toDateStr}` + (seekNumber ? `&seek=${seekNumber}` : '');
       }
 
       defer.resolve(response);
