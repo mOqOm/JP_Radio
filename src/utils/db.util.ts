@@ -1,4 +1,11 @@
-import Datastore from 'nedb-promises';
+import Nedb from 'nedb-promises';
+
+/**
+ * NeDB の RemoveOptions 型定義
+ */
+interface RemoveOptions {
+  multi?: boolean;
+}
 
 /**
  * NeDB を扱うユーティリティクラス
@@ -6,11 +13,11 @@ import Datastore from 'nedb-promises';
  * inMemoryOnly(true) により、メモリDBとして動作（永続化しない）
  */
 export class DBUtil<T> {
-  private db: Datastore<T>;
+  private db: Nedb<T>;
 
   constructor() {
     // メモリ内データベース
-    this.db = Datastore.create({ inMemoryOnly: true });
+    this.db = Nedb.create({ inMemoryOnly: true });
   }
 
   /**
@@ -22,7 +29,7 @@ export class DBUtil<T> {
   }
 
   /**
-   * 1件だけ検索する（見つからない場合は空のオブジェクトを返す）
+   * 1件だけ検索する
    * @param query 検索条件
    */
   public async findOne(query: any): Promise<T> {
@@ -41,10 +48,15 @@ export class DBUtil<T> {
   /**
    * データ削除
    * @param query 削除条件
-   * @param opts {multi: true} で複数削除
+   * @param options {multi: true} で複数削除
    */
-  public async remove(query: any, opts = { multi: true }): Promise<number> {
-    return await this.db.remove(query, opts);
+  public async remove(query: any): Promise<number>;
+  public async remove(query: any, options: RemoveOptions): Promise<number>;
+  public async remove(query: any, options?: RemoveOptions): Promise<number> {
+    if (options) {
+      return this.db.remove(query, options);
+    }
+    return this.db.remove(query, {});
   }
 
   /**
