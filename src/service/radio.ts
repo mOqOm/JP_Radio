@@ -432,15 +432,15 @@ export default class JpRadio {
         }
 
         // HH:mm-HH:mmの形式で取得
-        const time: string = broadcastTimeConverter.formatTimeString(ftDateTime, toDateTime);
+        const timeStr: string = broadcastTimeConverter.formatTimeString(ftDateTime, toDateTime);
 
         // yyyyMMdd形式の形式で取得
         //const date: string = broadcastTimeConverter.formatDateString(ftStr, this.jpRadioConfig.dateFmt);
-        const date: string = broadcastTimeConverter.parseDateTimeToStringDate(ftDateTime);
+        const dateStr: string = broadcastTimeConverter.parseDateTimeToStringDate(ftDateTime);
 
         const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
         state.title = queueItem.name + (queueItem.album ? ` - ${queueItem.album}` : '');
-        state.artist = `${stationName} / ${time} @${date} (TimeFree)`;
+        state.artist = `${stationName} / ${timeStr} @${dateStr} (TimeFree)`;
 
         if (!state.duration) {
           state.duration = broadcastTimeConverter.getTimeSpanByDateTime(ftDateTime, toDateTime); // sec
