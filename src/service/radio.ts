@@ -535,11 +535,11 @@ export default class JpRadio {
     }
   }
 
-  public async radioStations(mode: string): Promise<BrowseResult> {
-    this.logger.info('JRADI01SI0009', mode);
+  public async radioStations(playMode: string): Promise<BrowseResult> {
+    this.logger.info('JRADI01SI0009', playMode);
     const defer = libQ.defer();
 
-    // mode = live or timefree or timefree_today
+    // playMode = live or timefree or timefree_today
     if (this.radikoService !== undefined && this.radikoService !== null) {
       // RadikoServiceから局情報を取得
       const stations: Map<string, StationInfo> = this.radikoService.getStations();
@@ -557,14 +557,19 @@ export default class JpRadio {
             grouped[region] = [];
           }
 
-          if (mode === 'timefree') {
-            const modeReplaceData: string = mode.replace('free', 'table');
+          if (playMode === 'timefree') {
+            const modeReplaceData: string = playMode.replace('free', 'table');
+            // タイムフリー再生用BrowseItemを作成
             const browseItem: BrowseItem = this.createBrowseItemTimeFree(modeReplaceData, stationId, stationInfo);
+            // グループに追加
             grouped[region].push(browseItem);
           } else {
             if (this.rdkProg !== undefined && this.rdkProg !== null) {
+              // ライブ番組情報を取得
               const radikoProgramData: RadikoProgramData = await this.rdkProg.getCurProgramData(stationId, false);
+              // ライブ再生用BrowseItemを作成
               const browseItem: BrowseItem = this.createBrowseItemLive('play', stationId, stationInfo, radikoProgramData);
+              // グループに追加
               grouped[region].push(browseItem);
             }
           }
@@ -575,9 +580,11 @@ export default class JpRadio {
       });
 
       libQ.all(stationPromises).then(() => {
+        // BrowseList配列を作成
         const browseList: BrowseList[] = Object.entries(grouped).map(([regionName, items]) =>
           this.createBrowseList(regionName, ['grid', 'list'], items)
         );
+        // BrowseResultを作成して返す
         return this.createBrowseResult(browseList);
       }).then((result: any) => {
         defer.resolve(result);
