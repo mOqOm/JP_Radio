@@ -198,7 +198,7 @@ class JpRadioController {
     this.appRadio.start().then(() => {
       this.addToBrowseSources();
       const endTime = Date.now();
-      const processingTime = endTime - startTime;
+      const processingTime: number = endTime - startTime;
       this.logger.info('JRADI01CI0006', processingTime);
       defer.resolve();
     }).catch((error: any) => {
@@ -509,7 +509,7 @@ class JpRadioController {
     this.commandRouter.broadcastMessage('openModal', message);
   }
 
-  // BrowseにRadikoのメニューを追加
+  // Browse に Radiko のメニューを追加
   public addToBrowseSources(): void {
     this.logger.info('JRADI01CI0014', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
@@ -522,14 +522,12 @@ class JpRadioController {
   }
 
   // Radikoを押下した際のメニューを追加
-  //public async handleBrowseUri(curUri: string): Promise<any> {
   public handleBrowseUri(curUri: string): Promise<any> {
     this.logger.info('JRADI01CI0015', curUri);
 
     const defer = libQ.defer();
     if (this.appRadio === undefined || this.appRadio === null) {
       this.logger.error('JRADI01CE0005');
-      //return {};
       defer.resolve({});
       return defer.promise;
     }
@@ -612,60 +610,52 @@ class JpRadioController {
 
           if (option) {
             // uri = radiko/timetable/TBS/20251109~20251110
-            const [fromStr, toStr] = option.split('~');
+            const [fromStr, toStr]: string[] = option.split('~');
 
+            // 8桁の数字でない場合はエラー
             if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
               throw new Error('Invalid date format');
             }
 
-            // YYYYMMDD → Date
-            const parseDate = (dateStr: string): Date => {
-              const y = parseInt(dateStr.substring(0, 4));
-              const m = parseInt(dateStr.substring(4, 6)) - 1;
-              const d = parseInt(dateStr.substring(6, 8));
-              return new Date(y, m, d);
-            };
+            // yyyyMMdd の string型 から DateOnly型 に変換
+            const fromDateOnly: DateOnly = broadcastTimeConverter.parseDateToDateOnly(fromStr);
+            const toDateOnly: DateOnly = broadcastTimeConverter.parseDateToDateOnly(toStr);
 
             return await this.appRadio.radioTimeTableDate(
               playMode,
               stationId,
-              parseDate(fromStr),
-              parseDate(toStr)
+              fromDateOnly,
+              toDateOnly
             );
           }
 
           // 今日 or 設定期間
-          const today = playMode.endsWith('_today');
-          const nowJstDate = broadcastTimeConverter.getNowJST();
+          let fromJstDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
+          let toJstDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
 
-          let fromJstDate = new Date(nowJstDate);
-          let toJstDate = new Date(nowJstDate);
-
-          if (!today) {
-            fromJstDate.setDate(fromJstDate.getDate() - this.jpRadioConfig.ppFrom);
-            toJstDate.setDate(toJstDate.getDate() + this.jpRadioConfig.ppTo);
+          // 設定期間の場合
+          if (playMode.endsWith('_today') === false) {
+            fromJstDateOnly.setDate(fromJstDateOnly.getDate() - this.jpRadioConfig.ppFrom);
+            toJstDateOnly.setDate(toJstDateOnly.getDate() + this.jpRadioConfig.ppTo);
           }
 
-          return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDate, toJstDate);
+          return await this.appRadio.radioTimeTableDate(playMode, stationId, fromJstDateOnly, toJstDateOnly);
         }
 
         // ProgTable
         if (playMode === 'progtable') {
-          const [from, to] = option.split('~');
+          const [fromStr, toStr]: string[] = option.split('~');
 
-          if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
+          // 8桁の数字でない場合はエラー
+          if (!/^\d{8}$/.test(fromStr) || !/^\d{8}$/.test(toStr)) {
             throw new Error('Invalid date format');
           }
 
-          // YYYYMMDD → Date
-          const parseDate = (dateStr: string): Date => {
-            const y = parseInt(dateStr.substring(0, 4));
-            const m = parseInt(dateStr.substring(4, 6)) - 1;
-            const d = parseInt(dateStr.substring(6, 8));
-            return new Date(y, m, d);
-          };
+          // yyyyMMdd の string型 から DateOnly型 に変換
+          const fromDateOnly: DateOnly = broadcastTimeConverter.parseDateToDateOnly(fromStr);
+          const toDateOnly: DateOnly = broadcastTimeConverter.parseDateToDateOnly(toStr);
 
-          return await this.appRadio.radioTimeTableDate(playMode, stationId, parseDate(from), parseDate(to));
+          return await this.appRadio.radioTimeTableDate(playMode, stationId, fromDateOnly, toDateOnly);
         }
 
         // ProgInfo
@@ -808,7 +798,7 @@ class JpRadioController {
         const seekNumber: number = seek ? Number(seek) : 0;
 
         // タイムフリー
-        response.artist += broadcastTimeConverter.formatDate(ftDate, ` @${this.jpRadioConfig.dateFmt}`);
+        response.artist += broadcastTimeConverter.formatDateTime(ftDate, ` @${this.jpRadioConfig.dateFmt}`);
         response.uri += `?ft=${ftDateStr}&to=${toDateStr}` + (seekNumber ? `&seek=${seekNumber}` : '');
       }
 
@@ -922,30 +912,28 @@ class JpRadioController {
         const stationId = liveUri.replace(/\/+$/, '').split('/').pop() ?? '';
 
         // 日付範囲を計算
-        let fromDate = broadcastTimeConverter.getNowJST();
-        let toDate = broadcastTimeConverter.getNowJST();
+        let fromDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
+        let toDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
 
         if (timefree !== undefined && timefree !== null && timefree !== '') {
           const query: ParsedUrlQuery = queryParse(timefree);
 
           if (query.ft) {
-            // ft から日付を取得（yyyyMMdd 部分）
-            const ftStr = String(query.ft).slice(0, 8);
-            // YYYYMMDD000000 を Date に変換
-            fromDate = broadcastTimeConverter.parseStringToDateTime(ftStr + '000000');
-            toDate = new Date(fromDate);
+            // ft から DateOnly に変換
+            fromDateOnly = broadcastTimeConverter.parseDateToDateOnly(String(query.ft));
+            toDateOnly = fromDateOnly;
           }
         }
 
         if (data.type === 'artist') {
           // 'アーティストへ移動' ⇒ 番組情報 & 番組表
           await this.showProgInfoModal(data);
-          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDate, toDate);
+          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDateOnly, toDateOnly);
         }
 
         if (data.type === 'album') {
           // 'アルバムへ移動' ⇒ 番組表
-          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDate, toDate);
+          return await this.appRadio!.radioTimeTableDate('progtable', stationId, fromDateOnly, toDateOnly);
         }
 
         return {};
@@ -953,7 +941,7 @@ class JpRadioController {
         this.logger.error('JRADI01CE0010', error);
         throw error;
       }
-    })().then((result) => {
+    })().then((result: any) => {
       defer.resolve(result);
     }).catch((error) => {
       defer.reject(error);

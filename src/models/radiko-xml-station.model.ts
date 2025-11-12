@@ -35,10 +35,12 @@ export interface RadikoXMLProgSet {
 export interface RadikoXMLProg {
   // 番組ID
   '@id': string;
-  // 開始時刻
+  // 開始時刻(yyyyMMddHHmmss 形式)
   '@ft': string;
-  // 終了時刻
+  // 終了時刻(yyyyMMddHHmmss 形式)
   '@to': string;
+  // 再生時間(秒)
+  '@dur': string;
   // タイトル
   title: string;
   // 番組詳細

@@ -231,6 +231,7 @@ export default class RadikoService {
         return stationInfo;
       }
     }
+    // 該当局情報が存在しない場合は空オブジェクトを返す
     return {} as StationInfo;
   }
 
@@ -260,7 +261,7 @@ export default class RadikoService {
       let seekSeconds: number = query.seek ? parseInt(query.seek, 10) : 0;
 
       // Seekが指定されている場合、開始時間を調整
-      const adjustedStartDateTime: DateTime = broadcastTimeConverter.addTime(ftDateTime, seekSeconds);
+      const adjustedStartDateTime: DateTime = broadcastTimeConverter.addSecondsTime(ftDateTime, seekSeconds);
 
       const ftDateTimeStr: string = format(adjustedStartDateTime, 'yyyyMMddhhmmss');
       const toDateTimeStr: string = format(toDateTime, 'yyyyMMddhhmmss');

@@ -6,13 +6,20 @@
 /** yyyyMMdd 形式（文字列） */
 export type DateString = string & { readonly __brand: 'DateString' };
 
-/** yyyyMMddHHmmss 形式（文字列） */
+/**
+ * yyyyMMddHHmmss 形式（文字列）
+ * 不足分は末尾を0で埋める
+ * 例: "2024010112" -> "20240101120000"
+ * 24時間以上の時刻もそのまま受け入れる
+ */
 export type DateTimeString = string & { readonly __brand: 'DateTimeString' };
 
 /** yyyyMMddHHmmssSSS 形式（文字列） */
 export type DateTimeMsString = string & { readonly __brand: 'DateTimeMsString' };
 
-/** Date オブジェクト（日付のみ、時刻は 00:00:00.000） */
+/**
+ * Date オブジェクト（日付のみ、時刻は 00:00:00.000）
+ */
 export type DateOnly = Date & { readonly __brand: 'DateOnly' };
 
 /** Date オブジェクト（日付と時刻） */
@@ -30,6 +37,9 @@ export function toDateString(value: string): DateString {
 
 /**
  * 通常の string を DateTimeString に変換（型チェック付き）
+ * 不足分は末尾を0で埋める
+ * 例: "2024010112" -> "20240101120000"
+ * 24時間以上の時刻もそのまま受け入れる
  */
 export function toDateTimeString(value: string): DateTimeString {
   const padded = value.padEnd(14, '0');

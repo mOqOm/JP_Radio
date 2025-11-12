@@ -21,7 +21,7 @@ import { LoggerEx } from '@/utils/logger.util';
 import { broadcastTimeConverter } from '@/utils/broadcast-time-converter.util';
 import { DBUtil } from '@/utils/db.util';
 import { RadikoXmlUtil } from '@/utils/radiko-xml.util';
-import { DateTime } from '@/types/date-time.types';
+import { DateOnly, DateTime } from '@/types/date-time.types';
 
 /**
  * 空の番組データ（初期値・エラー時のフォールバック用）
@@ -53,9 +53,12 @@ export default class RdkProg {
   private readonly dbUtil: DBUtil<RadikoProgramData>;
   private readonly xmlUtil: RadikoXmlUtil;
 
+  // 局IDのキャッシュ用変数
   private lastStationId: string = '';
-  private lastTime: string = '';
-  private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
+  // staticなDateTime初期値は1970年1月1日00:00:00
+  private lastTime: DateTime = broadcastTimeConverter.parseStringToDateTime('19700101000000');
+  // RadikoProgramData型のキャッシュ用変数
+  private cachedProgram: RadikoProgramData = {} as RadikoProgramData;
 
   constructor() {
     this.dbUtil = new DBUtil<RadikoProgramData>();
@@ -64,27 +67,50 @@ export default class RdkProg {
     this.initDBIndexes();
   }
 
-  /** DBから指定局の1日分の番組データ取得 */
-  public async getDbRadikoProgramData(stationId: string, date: Date): Promise<RadikoProgramData[]> {
-    const startDate: Date = date;
-    startDate.setHours(5, 0, 0, 0);
+  /**
+   * DBから現在放送中の番組データ取得
+   */
+  public async getDbCurProgramData(stationId: string): Promise<RadikoProgramData> {
+    // 現在時刻取得
+    const searchDateTime: DateTime = broadcastTimeConverter.getCurrentDateTime();
 
-    const endDate: Date = new Date(startDate);
-    // 翌日の05:00:01
-    endDate.setDate(endDate.getDate() + 1);
-    endDate.setSeconds(endDate.getSeconds() + 1); // 05:00:01
+    /**
+     * DB検索
+     * 放送開始 <= 指定日の05:00:00 かつ 放送終了 > 指定日の翌日の05:00:00
+     */
+    let radikoProgramData: RadikoProgramData | null = await this.dbUtil.findOne({
+      stationId,
+      // 放送開始日時以下(現在日時 <= 放送開始)
+      ft: { $lte: searchDateTime },
+    });
 
-    // Radikoの日付区切りは05:00なので、05:00以前は前日扱い
-    const startDateTime: string = FormatDate(startDate, 'yyyyMMddhhmmss');
-    const endDateTime: string = FormatDate(endDate, 'yyyyMMddhhmmss');
+    return radikoProgramData;
+  }
 
-    // all programs that intersect the day [start, end)
+  /**
+   * DBから指定局の1日分の番組データ取得
+   */
+  public async getDbRadikoProgramData(stationId: string, dateOnly: DateOnly): Promise<RadikoProgramData[]> {
+    // 指定日の05:00:00に設定
+    const startDateTime: DateTime = broadcastTimeConverter.parseDateOnlyToDateTime(dateOnly);
+    startDateTime.setHours(5, 0, 0, 0);
+
+    // 指定日の翌日の05:00:00に設定
+    const endDateTime: DateTime = broadcastTimeConverter.parseDateOnlyToDateTime(dateOnly);
+    endDateTime.setHours(5, 0, 0, 0);
+    // 翌日の05:00:00にするため1日加算
+    endDateTime.setDate(endDateTime.getDate() + 1);
+
+    /**
+     * DB検索
+     * 放送開始 <= 指定日の05:00:00 かつ 放送終了 > 指定日の翌日の05:00:00
+     */
     let radikoProgramDataArray: RadikoProgramData[] = await this.dbUtil.find({
       stationId,
       // 未満
-      ft: { $lt: endDateTime },
+      ft: { $lte: startDateTime },
       // 以上
-      to: { $gte: startDateTime },
+      to: { $gt: endDateTime },
     });
 
     // 開始時刻 → 終了時刻でソート（localeCompareより明示的）
@@ -101,15 +127,18 @@ export default class RdkProg {
 
   /** 現在の番組取得 */
   public async getCurProgramData(stationId: string, retry: boolean): Promise<RadikoProgramData> {
+    // 現在時刻取得
     const radikoTime: DateTime = broadcastTimeConverter.getCurrentRadioTime();
+    // 指定局・現在時刻の番組取得
     return await this.getProgramData(stationId, radikoTime, retry);
   }
 
   /** 指定局・時間の番組取得 */
   public async getProgramData(stationId: string, dateTime: DateTime, retry: boolean): Promise<RadikoProgramData> {
+    // 指定局・時間の番組取得
     let radikoProgramData: RadikoProgramData = await this.findProgramData(stationId, dateTime);
 
-    if (radikoProgramData && retry === true) {
+    if ((!radikoProgramData || Object.keys(radikoProgramData).length === 0) && retry === true) {
       const stations: Set<string> = await this.getDailyStationPrograms(stationId, dateTime);
 
       if (stations.has(stationId) === true) {
@@ -121,37 +150,47 @@ export default class RdkProg {
   }
 
   /** DB検索＋キャッシュ */
-  private async findProgramData(stationId: string, timeFull: DateTime): Promise<RadikoProgramData> {
-    // 'yyyyMMddHHmmss'形式に変換
-    const time: string = broadcastTimeConverter.parseDateTimeToStringDateTime(timeFull);
-
-    if (stationId !== this.lastStationId || time !== this.lastTime) {
+  private async findProgramData(stationId: string, dateTime: DateTime): Promise<RadikoProgramData> {
+    // キャッシュしている局・時間と異なる場合はDB検索
+    if (stationId !== this.lastStationId || dateTime !== this.lastTime) {
       try {
-        const result: RadikoProgramData | null = await this.dbUtil.findOne({
+        /**
+         * DB検索
+         * 放送開始 <= 指定時間 < 放送終了
+         */
+        const result: RadikoProgramData = await this.dbUtil.findOne({
           stationId,
-          ft: { $lt: `${time}01` },
-          to: { $gt: `${time}01` },
+          ft: { $lte: dateTime }, // DateTime型で比較可能
+          to: { $gt: dateTime }, // DateTime型で比較可能
         });
 
-        if (result !== undefined && result !== null) {
+        // 結果が存在する場合はキャッシュ更新
+        if (result !== undefined && result !== null && Object.keys(result).length > 0) {
+          // キャッシュ更新
           this.cachedProgram = result;
+          // 局IDの更新
           this.lastStationId = stationId;
-          this.lastTime = time;
+          // 時間の更新
+          this.lastTime = dateTime;
         } else {
-          this.logger.error('JRADI02SE0001', stationId, time);
-          this.cachedProgram = { ...EMPTY_PROGRAM };
+          // 番組データが見つからない場合はエラーログに局ID・日時(yyyyMMddHHmmss形式)を出力
+          this.logger.error('JRADI02SE0001', stationId, broadcastTimeConverter.parseDateTimeToStringDateTime(dateTime));
+          throw new Error('Program data not found');
         }
 
       } catch (error: any) {
+        // DB検索エラー時はエラーログに局IDを出力
         this.logger.error('JRADI02SE0002', stationId);
-        this.cachedProgram = { ...EMPTY_PROGRAM };
+        throw error;
       }
     }
 
-    if (this.cachedProgram.progId !== '') {
+    // キャッシュしているRadikoProgramDataModelが空でない場合はキャッシュを返す
+    if (Object.keys(this.cachedProgram).length > 0) {
       return this.cachedProgram;
     }
 
+    // それ以外は空の番組データを返す
     return {} as RadikoProgramData;
   }
 
@@ -238,7 +277,7 @@ export default class RdkProg {
     try {
       const response = await got(url);
 
-      // await を忘れずに
+      // XML解析してRadikoProgramDataの配列に変換(ソートなどはしていない)
       const radikoProgramDataArray: RadikoProgramData[] = await this.xmlUtil.parsePrograms(response.body, skipStations);
 
       for (const radikoProgramData of radikoProgramDataArray) {
@@ -278,9 +317,19 @@ export default class RdkProg {
 
   /** DBインデックス作成 */
   private initDBIndexes(): void {
+    // progIdはユニーク
     this.dbUtil.ensureIndex({ fieldName: 'progId', unique: true });
-    this.dbUtil.ensureIndex({ fieldName: 'stationId' });
-    this.dbUtil.ensureIndex({ fieldName: 'ft' });
-    this.dbUtil.ensureIndex({ fieldName: 'to' });
+
+    /**
+     * 他のフィールドはインデックス不要なのでは？
+     * → DB検索時に複合インデックスを使うため、単一フィールドのインデックスは不要
+    */
+
+    // 局ID
+    //this.dbUtil.ensureIndex({ fieldName: 'stationId' });
+    // 放送開始(yyyyMMddHHmmss形式)
+    //this.dbUtil.ensureIndex({ fieldName: 'ft' });
+    // 放送終了(yyyyMMddHHmmss形式)
+    //this.dbUtil.ensureIndex({ fieldName: 'to' });
   }
 }

@@ -1,7 +1,7 @@
 import { format, parse, addDays, addSeconds, differenceInSeconds } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import { ja } from 'date-fns/locale';
-import type { DateString, DateTime, DateTimeString } from '@/types/date-time.types';
+import type { DateOnly, DateString, DateTime, DateTimeString } from '@/types/date-time.types';
 import { toDateString, toDateTimeString, parseToDate, parseToDateTime } from '@/types/date-time.types';
 
 /**
@@ -12,13 +12,6 @@ import { toDateString, toDateTimeString, parseToDate, parseToDateTime } from '@/
  * - ラジオの1日は午前5時を基準とします
  * - 放送遅延を考慮した時刻計算が可能です
  * - JST（日本標準時）での時刻処理を行います
- *
- * @example
- * ```typescript
- * const converter = new BroadcastTimeConverter(20);
- * const currentRadioDate = converter.getCurrentRadioDate();
- * const currentRadioTime = converter.getCurrentRadioTime();
- * ```
  */
 class BroadcastTimeConverter {
   private readonly JST_TIMEZONE = 'Asia/Tokyo';
@@ -50,7 +43,7 @@ class BroadcastTimeConverter {
    *
    * @returns 現在のJST時刻
    */
-  public getNowJST(): Date {
+  private getNowJST(): Date {
     return utcToZonedTime(new Date(), this.JST_TIMEZONE);
   }
 
@@ -59,8 +52,16 @@ class BroadcastTimeConverter {
    *
    * @returns 現在のJST日付
    */
-  public getCurrentDate(): Date {
-    return this.getNowJST();
+  public getCurrentDate(): DateOnly {
+    return this.getNowJST() as DateOnly;
+  }
+
+  /**
+   *
+   * @returns
+   */
+  public getCurrentDateTime(): DateTime {
+    return this.getNowJST() as DateTime;
   }
 
   /**
@@ -71,10 +72,12 @@ class BroadcastTimeConverter {
    *
    * @returns ラジオ基準での現在日付
    */
-  public getCurrentRadioDate(): Date {
+  public getCurrentRadioDateTime(): DateTime {
+    // 現在のJST時刻を取得
     const nowDate: Date = this.getNowJST();
+    // 5時基準で調整
     const radioBase: Date = new Date(nowDate.getTime() - this.offsetMs);
-    return radioBase;
+    return radioBase as DateTime;
   }
 
   /**
@@ -94,13 +97,35 @@ class BroadcastTimeConverter {
   }
 
   /**
-   * 文字列をDateオブジェクトに変換する
+   * 日付文字列をDateオブジェクトに変換する
    *
-   * @param dateStr - 変換する日付文字列
+   * @param dateStr - 変換する日付文字列（yyyyMMdd形式）
    * @returns 変換されたDateオブジェクト
    */
-  public parseStringToDate(dateStr: string): Date {
-    return parseToDate(dateStr);
+  public parseDateToDateOnly(dateStr: string): DateOnly {
+    return parse(dateStr, 'yyyyMMdd', new Date()) as DateOnly;
+  }
+
+  /**
+   * DateOnlyをDateTimeに変換する
+   * 時分秒は00:00:00に設定されます
+   *
+   * @param dateOnly - 変換するDateOnlyオブジェクト
+   * @returns 変換されたDateTimeオブジェクト
+   */
+  public parseDateOnlyToDateTime(dateOnly: DateOnly): DateTime {
+    const date: Date = this.parseDateOnlyToDate(dateOnly);
+    return new Date(date.setHours(0, 0, 0, 0)) as DateTime;
+  }
+
+  /**
+   * DateOnly を Dateに変換する
+   *
+   * @param dateOnly - 変換するDateOnlyオブジェクト
+   * @returns 変換されたDateオブジェクト
+   */
+  public parseDateOnlyToDate(dateOnly: DateOnly): Date {
+    return new Date(dateOnly.getFullYear(), dateOnly.getMonth(), dateOnly.getDate());
   }
 
   /**
@@ -188,65 +213,9 @@ class BroadcastTimeConverter {
    * @param seconds - 加算する秒数（負の値で減算）
    * @returns 計算結果の日時
    */
-  public addTime(dateTime: DateTime, seconds: number): DateTime {
+  public addSecondsTime(dateTime: DateTime, seconds: number): DateTime {
     const newDateTime = addSeconds(dateTime, seconds);
     return newDateTime as DateTime;
-  }
-
-  /**
-   * ラジオ週間の日付リストを取得する
-   *
-   * @param begin - 開始インデックス（0が基準日）
-   * @param end - 終了インデックス
-   * @param kanjiFmt - 漢字表記のフォーマット。デフォルトは'yyyy年M月d日(E)'
-   * @returns 日付情報の配列（インデックス、日付文字列、漢字表記を含む）
-   */
-  public getRadioWeek(
-    begin: number,
-    end: number,
-    kanjiFmt: string = 'yyyy年M月d日(E)'
-  ): { index: number; date: DateString; kanji: string }[] {
-    const now = this.getNowJST();
-    const radioBase = new Date(now.getTime() - this.offsetMs);
-    const result: { index: number; date: DateString; kanji: string }[] = [];
-
-    for (let i = begin; i <= end; i++) {
-      const target = addDays(radioBase, i);
-      result.push({
-        index: i,
-        date: toDateString(format(target, 'yyyyMMdd')),
-        kanji: format(target, kanjiFmt, { locale: ja }),
-      });
-    }
-
-    return result;
-  }
-
-  /**
-   * 指定期間のラジオ週間の日付リストを取得する
-   *
-   * @param from - 開始日
-   * @param to - 終了日
-   * @param kanjiFmt - 漢字表記のフォーマット。デフォルトは'yyyy年M月d日(E)'
-   * @returns 日付情報の配列（インデックス、Dateオブジェクト、漢字表記を含む）
-   */
-  public getRadioWeekByDateRange(from: Date, to: Date, kanjiFmt: string = 'yyyy年M月d日(E)'): { index: number; date: Date; kanji: string }[] {
-    const radioBase = new Date(this.getNowJST().getTime() - this.offsetMs);
-
-    const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-    const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-
-    const result: { index: number; date: Date; kanji: string }[] = [];
-    for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
-      const index: number = Math.floor((date.getTime() - radioBase.getTime()) / 86400000);
-
-      result.push({
-        index,
-        date: date,
-        kanji: format(date, kanjiFmt, { locale: ja }),
-      });
-    }
-    return result;
   }
 
   /**
@@ -292,8 +261,12 @@ class BroadcastTimeConverter {
    * @param formatStr - 出力フォーマット（date-fnsのformat関数の形式）
    * @returns 整形された日時文字列
    */
-  public formatDate(dateTime: DateTime, formatStr: string): string {
+  public formatDateTime(dateTime: DateTime, formatStr: string): string {
     return format(dateTime, formatStr, { locale: ja });
+  }
+
+  public formatDateOnly(dateOnly: DateOnly, formatStr: string): string {
+    return format(dateOnly, formatStr, { locale: ja });
   }
 
 
@@ -308,18 +281,6 @@ class BroadcastTimeConverter {
     const fromTimeStr: string = this.revConvertRadioTime(fromDateTime);
     const toTimeStr: string = this.revConvertRadioTime(toDateTime);
     return `${fromTimeStr}-${toTimeStr}`;
-  }
-
-  /**
-   * 日時文字列配列を指定フォーマットで整形する
-   *
-   * @param dateTimeStrArray - 整形する日時文字列の配列
-   * @param formatStr - 出力フォーマット（正規表現のキャプチャグループを使用）
-   * @returns 整形された日時文字列（~で連結）
-   */
-  public formatTimeString2(dateTimeStrArray: DateTimeString[], formatStr: string): string {
-    const regex = /(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/g;
-    return dateTimeStrArray.join('~').replace(regex, formatStr);
   }
 
   /**
@@ -339,67 +300,57 @@ class BroadcastTimeConverter {
   }
 
   /**
-   * Date配列を指定フォーマットで整形する
+   * ラジオ業界特有の24時以降の時刻表記（放送時刻）を通常の日時（DateTime）に変換します。
    *
-   * @param srcArray - 整形するDateオブジェクトの配列
-   * @param fmt - 出力フォーマット（正規表現のキャプチャグループを使用）
-   * @returns 整形された日付文字列
+   * ラジオ局では、深夜帯の番組を前日の延長として表記するため、
+   * 24:00以降（例: 25:30 = 翌日01:30）の時刻表記が使用されます。
+   * この関数は、そのような放送時刻を標準的なDateTime型に正規化します。
+   *
+   * @param dateTimeString - 変換対象の日時文字列（yyyyMMddHHmmss形式、最大14桁）
+   *                         14桁未満の場合は自動的に'0'でパディングされます
+   * @returns 変換後のDateTime型オブジェクト
+   *          - 24時以降の場合: 翌日の該当時刻に変換（例: 20240101250000 → 2024-01-02 01:00:00）
+   *          - 23時以前の場合: そのままDateTime型に変換
+   *
+   * @example
+   * ```typescript
+   * // 通常の時刻（23時以前）
+   * convertRadioTime('20240101120000') // → 2024-01-01 12:00:00
+   *
+   * // 深夜時刻（24時以降）
+   * convertRadioTime('20240101250000') // → 2024-01-02 01:00:00
+   * convertRadioTime('20240101273000') // → 2024-01-02 03:30:00
+   * ```
    */
-  public formatDateArray(srcArray: Date[], fmt: string): string {
-    let concatenatedDates = '';
-    let regexPattern = '';
+  public convertRadioTime(dateTimeString: DateTimeString): DateTime {
+    // yyyyMMddHHmmss の 14桁にパディング
+    const padded: string = dateTimeString.padEnd(14, '0');
 
-    for (const item of srcArray) {
-      const dateStr = format(item, 'yyyyMMdd');
-      concatenatedDates += dateStr;
-      regexPattern += '(\\d{4})(\\d{2})(\\d{2})';
+    // HH（時）の部分を抽出
+    const hour: number = parseInt(padded.slice(8, 10), 10);
+
+    // 24時間未満の場合はそのまま変換
+    if (hour < 24) {
+      return parseToDateTime(padded);
     }
 
-    return concatenatedDates.replace(new RegExp(regexPattern), fmt);
-  }
+    // 24時間以上の場合
+    // 年月日部分
+    const dateStr: string = padded.slice(0, 8);
 
-  /**
-   * ラジオ時刻形式の文字列を DateTimeString に変換する（24時間以上対応）
-   *
-   * @remarks
-   * Radikoは深夜を24:00, 25:00のように表記します。
-   * これを翌日の00:00, 01:00に変換します。
-   *
-   * @param timeStr - ラジオ時刻文字列（yyyyMMddHHmmss形式、部分指定可）
-   * @returns 正規化された DateTimeString（24時間以上を翌日に変換）
-   */
-  public convertRadioTime(timeStr: string): DateTimeString {
-    // 14桁にパディング
-    const padded: string = timeStr.padEnd(14, '0');
+    // 時分秒部分（24を引く）
+    const adjustedHour: number = hour - 24;
 
-    // 時間部分を抽出
-    const hourStr: string = padded.slice(8, 10);
-    const hour: number = parseInt(hourStr, 10);
+    // 分秒部分
+    const minute: string = padded.slice(10, 12);
+    const second: string = padded.slice(12, 14);
 
-    // 24時間以上の場合は通常の日時に変換（24:00 → 翌日00:00）
-    if (hour >= 24) {
-      const year: number = parseInt(padded.slice(0, 4), 10);
-      const month: number = parseInt(padded.slice(4, 6), 10);
-      const day: number = parseInt(padded.slice(6, 8), 10);
-      const adjustedHour: number = hour - 24;
-      const minute: string = padded.slice(10, 12);
-      const second: string = padded.slice(12, 14);
+    // 一旦その日の時刻として DateTime を作成
+    const baseDate: string = `${dateStr}${String(adjustedHour).padStart(2, '0')}${minute}${second}`;
+    const dateTime: DateTime = parseToDateTime(baseDate);
 
-      // 一旦通常の時刻として DateTime を作成
-      const normalizedTimeStr =
-        `${padded.slice(0, 4)}${padded.slice(4, 6)}${padded.slice(6, 8)}` +
-        `${String(adjustedHour).padStart(2, '0')}${minute}${second}`;
-
-      // DateTime に変換して1日加算
-      const dateTime: DateTime = parseToDateTime(normalizedTimeStr);
-      const nextDay: DateTime = addDays(dateTime, 1) as DateTime;
-
-      // DateTimeString に変換
-      return toDateTimeString(format(nextDay, 'yyyyMMddHHmmss'));
-    }
-
-    // 通常の時刻（0～23時）はそのまま返す
-    return toDateTimeString(padded);
+    // 翌日に変換
+    return addDays(dateTime, 1) as DateTime;
   }
 
   /**
@@ -409,15 +360,15 @@ class BroadcastTimeConverter {
    * - Radikoの深夜表記（24:00～29:00）を正しく翌日の時刻に変換します
    * - 午前0時～4時59分の時刻は、放送日基準（前日扱い）ではありません
    *
-   * @param timeStr - ラジオ日時文字列（yyyyMMddHHmmss形式、部分指定可）
+   * @param dateTimeString - ラジオ日時文字列（yyyyMMddHHmmss形式、部分指定可）
    * @returns 変換されたDateTime
    */
-  public convertRadioDateTime(timeStr: string): DateTime {
+  public convertRadioDateTime(dateTimeString: DateTimeString): DateTime {
     // まず24時間以上を正規化
-    const normalized: DateTimeString = this.convertRadioTime(timeStr);
+    const normalized: DateTime = this.convertRadioTime(dateTimeString);
 
     // DateTime に変換
-    return parseToDateTime(normalized);
+    return normalized;
   }
 }
 

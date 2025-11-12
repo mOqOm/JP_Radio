@@ -7,7 +7,7 @@ import path from 'path';
 import cron from 'node-cron';
 import libQ from 'kew';
 
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 
 // Serviceのインポート
 import RdkProg from '@/service/prog';
@@ -21,7 +21,7 @@ import type { RadikoProgramData } from '@/models/radiko-program.model';
 import type { RadikoMyInfo } from '@/models/radiko-myinfo.model';
 import type { JpRadioConfig } from '@/models/jp-radio-config.model';
 
-import type { DateTime } from '@/types/date-time.types';
+import type { DateOnly, DateTime } from '@/types/date-time.types';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
@@ -162,7 +162,11 @@ export default class JpRadio {
       }
     });
 
-    // API endpoint for station data (JSON)
+    /**
+     * Debug/Test 用
+     * 放送局情報一覧の表示用
+     * API endpoint for station data (JSON)
+     */
     this.app.get('/api/radiko/stations', (_req: Request, res: Response) => {
       // radikoServiceの初期化されていない場合はエラー
       if (this.radikoService === undefined || this.radikoService === null) {
@@ -182,7 +186,11 @@ export default class JpRadio {
       res.json({ stations: rows });
     });
 
-    // API endpoint: stations + current program from DB
+    /**
+     * Debug/Test 用
+     * 現在日時で放送中の番組情報をDBから検索する
+     * API endpoint: stations + current program from DB
+     */
     this.app.get('/api/radiko/stations/with-program', async (_req: Request, res: Response) => {
       if (!this.radikoService || !this.rdkProg) {
         res.status(500).json({ error: 'Service not initialized' });
@@ -191,29 +199,36 @@ export default class JpRadio {
 
       try {
         const stations = this.radikoService.getStations();
+
         const rows = await Promise.all(
-          Array.from(stations.entries()).map(async ([id, info]) => {
+          Array.from(stations.entries()).map(async ([stationId, info]) => {
             try {
-              const prog = await this.rdkProg!.getCurProgramData(id, false);
+              // DBから指定した放送局IDの現在放送中の番組情報を取得
+              const radikoProgramData: RadikoProgramData = await this.rdkProg!.getDbCurProgramData(stationId);
+
+              const ftDateStr: string = radikoProgramData.ft.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+              const toDateStr: string = radikoProgramData.to.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
+
               return {
-                stationId: id,
+                stationId: stationId,
                 name: info.Name,
                 region: info.RegionName || '-',
                 area: info.AreaName || '-',
-                program: prog
+                program: radikoProgramData
                   ? {
-                    progId: prog.progId || '',
-                    title: prog.title,
-                    pfm: prog.pfm || '',
-                    ft: prog.ft,
-                    to: prog.to,
-                    img: prog.img || null
+                    progId: radikoProgramData.progId || '',
+                    title: radikoProgramData.title,
+                    pfm: radikoProgramData.pfm || '',
+                    ft: ftDateStr,
+                    to: toDateStr,
+                    img: radikoProgramData.img || null
                   }
                   : null
               };
             } catch {
               return {
-                stationId: id,
+                stationId: stationId,
                 name: info.Name,
                 region: info.RegionName || '-',
                 area: info.AreaName || '-',
@@ -229,7 +244,12 @@ export default class JpRadio {
       }
     });
 
-    // API endpoint: program list from DB by station and date (radio-day 05:00-29:00)
+    /**
+     * Debug/Test 用
+     * 指定の放送局IDを用いて番組表情報をDBから検索する
+     * ft/toは string 型でJSTに変換して返す
+     * API endpoint: program list from DB by station and date (radio-day 05:00-29:00)
+     */
     this.app.get('/api/radiko/stations/:stationId/programs', async (req: Request, res: Response) => {
       if (!this.radikoService || !this.rdkProg) {
         res.status(500).json({ error: 'Service not initialized' });
@@ -243,44 +263,44 @@ export default class JpRadio {
       }
 
       // yyyyMMdd 形式の日付文字列を取得
-      const dateStr = req.query['date'] as string;
-      if (dateStr !== undefined && dateStr !== null && dateStr !== '' && dateStr.length !== 8) {
+      const dateStr: string = req.query['date'] as string;
+      if (dateStr === undefined || dateStr === null || dateStr === '' || dateStr.length !== 8) {
         res.status(400).json({ error: 'Invalid date format. Use yyyyMMdd.' });
         return;
       }
 
-      // YYYYMMDD → Date オブジェクトに変換
-      const year = parseInt(dateStr.substring(0, 4));
-      const month = parseInt(dateStr.substring(4, 6));
-      const day = parseInt(dateStr.substring(6, 8));
-      // 月は0始まりで処理されるため-1
-      const date = new Date(year, month - 1, day);
+      // yyyyMMdd → DateOnly オブジェクトに変換
+      const dateOnly: DateOnly = broadcastTimeConverter.parseDateToDateOnly(dateStr);
 
       try {
         const programs: Array<{
           progId: string;
-          ft: DateTime;
-          to: DateTime;
+          ft: string;
+          to: string;
           title: string;
           pfm: string;
           img: string | null;
         }> = [];
 
-        const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg.getDbRadikoProgramData(stationId, date);
+        const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg.getDbRadikoProgramData(stationId, dateOnly);
 
         if (radikoProgramDataArray.length > 0) {
           for (const radikoProgramData of radikoProgramDataArray) {
+
+            const ftDateStr: string = radikoProgramData.ft.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+            const toDateStr: string = radikoProgramData.to.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
             programs.push({
               progId: radikoProgramData.progId || '',
-              ft: radikoProgramData.ft,
-              to: radikoProgramData.to,
+              ft: ftDateStr,
+              to: toDateStr,
               title: radikoProgramData.title,
               pfm: radikoProgramData.pfm || '',
               img: radikoProgramData.img || null
             });
           }
         }
-        res.json({ stationId, date, programs });
+        res.json({ stationId, date: dateOnly, programs });
       } catch (e: any) {
         res.status(500).json({ error: e?.message || 'Failed to read programs' });
       }
@@ -624,11 +644,11 @@ export default class JpRadio {
    * @param mode - プログラム情報を取得するモード（例: 'timetable' または 'progtable'）。
    * @param stationId - ラジオステーションのID。
    * @param from - 取得するデータの開始日。
-   * @param to - 取得するデータの終了日。
+   * @param toDate - 取得するデータの終了日。
    * @returns 指定された期間のラジオプログラム情報を含む BrowseResult オブジェクトの Promise。
    */
-  public async radioTimeTableDate(mode: string, stationId: string, from: Date, to: Date): Promise<BrowseResult> {
-    this.logger.info('JRADI01SI0011', mode, stationId, format(from, 'yyyy-MM-dd'), format(to, 'yyyy-MM-dd'));
+  public async radioTimeTableDate(mode: string, stationId: string, fromDateOnly: DateOnly, toDateOnly: DateOnly): Promise<BrowseResult> {
+    this.logger.info('JRADI01SI0011', mode, stationId, format(fromDateOnly, 'yyyy-MM-dd'), format(toDateOnly, 'yyyy-MM-dd'));
 
     const defer = libQ.defer();
 
@@ -646,47 +666,61 @@ export default class JpRadio {
 
     try {
       const browseListArray: BrowseList[] = [];
-      const weekArray = broadcastTimeConverter.getRadioWeekByDateRange(from, to, 'M月d日(E)');
 
-      if (weekArray.length > 1) {
+      const weekArray: DateOnly[] = [];
+
+      // 指定された日付範囲の日付を配列に追加
+      for (let workDateOnly: DateOnly = fromDateOnly; workDateOnly > toDateOnly; workDateOnly = addDays(workDateOnly, 1) as DateOnly) {
+        weekArray.push(workDateOnly);
+      }
+
+      if (weekArray.length > 0) {
         this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('PROGRAM_DATA_GETTING2', stationInfo.Name));
       }
 
-      const lists = await Promise.all(
-        weekArray.map(async (dateData: {
-          index: number;
-          date: Date;
-          kanji: string;
-        }) => {
-          const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg!.getDbRadikoProgramData(stationId, dateData.date);
+      for (let i = 0; i < weekArray.length; i++) {
+        // M月d日(E) 形式の文字列を生成
+        const kanji = broadcastTimeConverter.formatDateOnly(weekArray[i], 'M月d日(E)');
 
-          const browseItemArray: BrowseItem[] = radikoProgramDataArray.map((radikoProgramData: RadikoProgramData) => {
-            const browseItem: BrowseItem = this.createBrowseItemTimeTable(
-              mode === 'progtable' ? 'proginfo' : 'play',
-              stationId,
-              stationInfo,
-              radikoProgramData
-            );
+        const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg!.getDbRadikoProgramData(stationId, weekArray[i]);
 
-            if (mode === 'progtable') {
-              browseItem.type = 'radio-category';
-              browseItem.uri = browseItem.uri.replace(/\/play\//, '/proginfo/');
-            }
+        const browseItemArray: BrowseItem[] = radikoProgramDataArray.map((radikoProgramData: RadikoProgramData) => {
+          const browseItem: BrowseItem = this.createBrowseItemTimeTable(
+            mode === 'progtable' ? 'proginfo' : 'play',
+            stationId,
+            stationInfo,
+            radikoProgramData
+          );
 
-            return browseItem;
-          });
+          if (mode === 'progtable') {
+            browseItem.type = 'radio-category';
+            browseItem.uri = browseItem.uri.replace(/\/play\//, '/proginfo/');
+          }
 
-          const title = mode.startsWith('progtable')
-            ? `${this.messageHelper.get('PROGINFO_PROG_INFO')}${dateData.kanji}`
-            : `${dateData.kanji}${dateData.index === 0 ? this.messageHelper.get('BROWSE_BUTTON_TODAY') : ''}`;
+          return browseItem;
+        });
+
+        let title = `${this.messageHelper.get('PROGINFO_PROG_INFO')}${kanji}`;
+        if (mode.startsWith('progtable') === false) {
+          if (i === 0) {
+            title += this.messageHelper.get('BROWSE_BUTTON_TODAY');
+          }
+        }
+
+        const dateStr: string = broadcastTimeConverter.formatDateOnly(weekArray[i], 'yyyyMMdd');
+
+        const browseList: BrowseList = {
+          title: title,
+          availableListViews: ['list'],
+          items: browseItemArray,
+          sortKey: dateStr
+        };
+
+        browseListArray.push(browseList);
+      }
 
 
-          const dateStr: string = format(dateData.date, 'yyyyMMdd');
-          return this.createBrowseList(title, ['list'], browseItemArray, dateStr);
-        })
-      );
-
-      browseListArray.push(...lists);
+      browseListArray.push(...browseListArray);
 
       // sortKey の Null チェックを追加
       browseListArray.sort((a, b) => {
@@ -699,39 +733,32 @@ export default class JpRadio {
       const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
       const uri = `radiko/${mode}/${stationId}`;
 
-      // 日付オフセット計算用のヘルパー関数
-      const createDateOffset = (baseDate: Date, offset: number): Date => {
-        const newDate = new Date(baseDate);
-        newDate.setDate(newDate.getDate() + offset);
-        return newDate;
-      };
-
       // 前週の日付範囲を計算（現在の from/to から7日前）
-      const prevWeekFrom = createDateOffset(from, -7);
-      const prevWeekTo = createDateOffset(to, -7);
+      const prevWeekFromDateOnly: DateOnly = addDays(fromDateOnly, -7) as DateOnly;
+      const prevWeekToDateOnly: DateOnly = addDays(toDateOnly, -7) as DateOnly;
 
       // 前日の日付範囲を計算（from の前日）
-      const prevDayFrom = createDateOffset(from, -1);
-      const prevDayTo = createDateOffset(from, -1);
+      const prevDayFromDateOnly: DateOnly = addDays(fromDateOnly, -1) as DateOnly;
+      const prevDayToDateOnly: DateOnly = addDays(fromDateOnly, -1) as DateOnly;
 
       // 次週の日付範囲を計算（現在の from/to から7日後）
-      const nextWeekFrom = createDateOffset(from, 7);
-      const nextWeekTo = createDateOffset(to, 7);
+      const nextWeekFromDateOnly: DateOnly = addDays(fromDateOnly, 7) as DateOnly;
+      const nextWeekToDateOnly: DateOnly = addDays(toDateOnly, 7) as DateOnly;
 
       // 翌日の日付範囲を計算（to の翌日）
-      const nextDayFrom = createDateOffset(to, 1);
-      const nextDayTo = createDateOffset(to, 1);
+      const nextDayFromDateOnly: DateOnly = addDays(toDateOnly, 1) as DateOnly;
+      const nextDayToDateOnly: DateOnly = addDays(toDateOnly, 1) as DateOnly;
 
       // 前週/前日ボタン（sortKey を '0000' に設定して先頭に配置）
       browseListArray.unshift(
         this.createBrowseList('<<', ['list'], [
           this.createBrowseItemNoMenu(
             space + this.messageHelper.get('BROWSE_BUTTON_PREV_WEEK'),
-            `${uri}/${format(prevWeekFrom, 'yyyy-MM-dd')}~${format(prevWeekTo, 'yyyy-MM-dd')}`
+            `${uri}/${format(prevWeekFromDateOnly, 'yyyy-MM-dd')}~${format(prevWeekToDateOnly, 'yyyy-MM-dd')}`
           ),
           this.createBrowseItemNoMenu(
             space + this.messageHelper.get('BROWSE_BUTTON_PREV_DAY'),
-            `${uri}/${format(prevDayFrom, 'yyyy-MM-dd')}~${format(prevDayTo, 'yyyy-MM-dd')}`
+            `${uri}/${format(prevDayFromDateOnly, 'yyyy-MM-dd')}~${format(prevDayToDateOnly, 'yyyy-MM-dd')}`
           )
         ], '0000')
       );
@@ -741,11 +768,11 @@ export default class JpRadio {
         this.createBrowseList('>>', ['list'], [
           this.createBrowseItemNoMenu(
             space + this.messageHelper.get('BROWSE_BUTTON_NEXT_DAY'),
-            `${uri}/${format(nextDayFrom, 'yyyy-MM-dd')}~${format(nextDayTo, 'yyyy-MM-dd')}`
+            `${uri}/${format(nextDayFromDateOnly, 'yyyy-MM-dd')}~${format(nextDayToDateOnly, 'yyyy-MM-dd')}`
           ),
           this.createBrowseItemNoMenu(
             space + this.messageHelper.get('BROWSE_BUTTON_NEXT_WEEK'),
-            `${uri}/${format(nextWeekFrom, 'yyyy-MM-dd')}~${format(nextWeekTo, 'yyyy-MM-dd')}`
+            `${uri}/${format(nextWeekFromDateOnly, 'yyyy-MM-dd')}~${format(nextWeekToDateOnly, 'yyyy-MM-dd')}`
           )
         ], '9999')
       );
@@ -754,7 +781,7 @@ export default class JpRadio {
       if (mode.startsWith('progtable')) {
         const [items] = await this.commonRadioFavouriteStations('timefree', true);
         items.forEach((item) => {
-          item.uri = item.uri.replace('timetable', 'progtable') + `/${format(from, 'yyyy-MM-dd')}~${format(to, 'yyyy-MM-dd')}`;
+          item.uri = item.uri.replace('timetable', 'progtable') + `/${format(fromDateOnly, 'yyyy-MM-dd')}~${format(toDateOnly, 'yyyy-MM-dd')}`;
         });
         browseListArray.push(
           this.createBrowseList(
@@ -787,14 +814,14 @@ export default class JpRadio {
       // uri = http://localhost:9000/radiko/play/TBS?ft=##&to=##&seek=##
       const [liveUri, timefree] = data.uri.split('?');
 
-      if (liveUri.includes('/radiko/play/')) {
+      if (liveUri.includes('/radiko/play/') === true) {
         const stationId = liveUri.split('/').pop();
 
         if (this.radikoService !== undefined && this.radikoService !== null && this.rdkProg !== undefined && this.rdkProg !== null && stationId !== undefined && stationId !== null) {
 
           const stationInfo: StationInfo = this.radikoService.getStationInfo(stationId);
 
-          if (mode.startsWith('live')) {
+          if (mode.startsWith('live') === true) {
             // ライブ
             if (timefree !== undefined && timefree !== null) { // タイムフリー番組は無視
               const progData: RadikoProgramData = await this.rdkProg.getCurProgramData(stationId, false);
@@ -802,7 +829,7 @@ export default class JpRadio {
               browseItem.favourite = true;
               items[0].push(browseItem);
             }
-          } else if (mode.startsWith('timefree')) {
+          } else if (mode.startsWith('timefree') === true) {
             // タイムフリー
             if (!timefree) { // 日時指定の有無で放送局・番組に分けて表示
               // 放送局

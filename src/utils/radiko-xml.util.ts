@@ -4,10 +4,10 @@ import { XMLParser } from 'fast-xml-parser';
 import { RADIKO_XML_PARSER_OPTIONS } from '../constants/radiko-xml.constants';
 
 // Modelのインポート
-import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg } from '../models/radiko-xml-station.model';
+import { RadikoXMLData, RadikoXMLStation, RadikoXMLProg, RadikoXMLProgSet } from '../models/radiko-xml-station.model';
 import { RadikoProgramData } from '../models/radiko-program.model';
 
-import type { DateOnly, DateTime } from '@/types/date-time.types';
+import type { DateOnly, DateTime, DateTimeString } from '@/types/date-time.types';
 
 // Utilsのインポート
 import { broadcastTimeConverter } from './broadcast-time-converter.util';
@@ -35,85 +35,68 @@ export class RadikoXmlUtil {
       }
 
       const stationRaw = xmlData.radiko.stations?.station ?? [];
-      const stations: RadikoXMLStation[] = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
+      const radikoXMLStationArray: RadikoXMLStation[] = Array.isArray(stationRaw) ? stationRaw : [stationRaw];
 
-      // 全プログラムを ft順に格納
-      const allProgs: RadikoProgramData[] = [];
+      // 全番組表を格納する配列(ft/to は DateTime型 で管理)
+      const allRadikoProgramData: RadikoProgramData[] = [];
 
-      for (const s of stations) {
-        const stationId = s['@id'];
+      for (const radikoXMLStation of radikoXMLStationArray) {
+        // 放送局ID取得
+        const stationId: string = radikoXMLStation['@id'];
 
-        if (!stationId || skipStations.has(stationId)) {
+        // スキップ対象の局IDは処理しない
+        if (stationId === undefined || stationId === null || stationId === '' || skipStations.has(stationId)) {
           continue;
         }
 
-        const progSetsRaw = s.progs ?? [];
-        const progSets: any[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
+        // 番組セットが存在する場合のみ処理
+        if (radikoXMLStation.progs !== undefined && radikoXMLStation.progs !== null) {
 
-        // まず元番組を flat にして sorted に
-        let rawProgs: RadikoXMLProg[] = [];
-        for (const ps of progSets) {
-          const progsRaw: RadikoXMLProg[] = ps.prog ?? [];
-          rawProgs = rawProgs.concat(Array.isArray(progsRaw) ? progsRaw : [progsRaw]);
-        }
+          // 配列でない場合は配列に変換
+          const progSetsRaw = radikoXMLStation.progs;
+          const progSetsArray: RadikoXMLProgSet[] = Array.isArray(progSetsRaw) ? progSetsRaw : [progSetsRaw];
 
-        rawProgs.sort((a, b) => a['@ft'].localeCompare(b['@ft']));
+          for (const progSets of progSetsArray) {
+            if (progSets.prog !== undefined && progSets.prog !== null) {
+              // 配列でない場合は配列に変換
+              const progRaw = progSets.prog;
+              const radikoXMLProgArray: RadikoXMLProg[] = Array.isArray(progRaw) ? progRaw : [progRaw];
 
-        // ギャップ補完しながら allProgs に追加
-        let prevTo: DateTime = broadcastTimeConverter.parseStringToDateTime('19700101000000');
+              for (const radikoXMLProg of radikoXMLProgArray) {
 
-        for (const p of rawProgs) {
-          // 第2引数を削除
-          const ftDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(p['@ft']);
-          const toDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(p['@to']);
+                // ft/to は yyyyMMddHHmmss 形式の文字列のため DateTime に変換
+                const ftDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(String(radikoXMLProg['@ft']) as DateTimeString);
+                const toDateTime: DateTime = broadcastTimeConverter.convertRadioDateTime(String(radikoXMLProg['@to']) as DateTimeString);
 
-          // DateTime からHHmm形式の時間文字列を取得
-          const time: string = broadcastTimeConverter.revConvertRadioTime(ftDateTime)
-          const progId: string = `${stationId}${p['@id']}${time}`;
+                // DateTime からHHmm形式の時間文字列を取得
+                const time: string = broadcastTimeConverter.revConvertRadioTime(ftDateTime);
+                const progId: string = `${stationId}${radikoXMLProg['@id']}${time}`;
 
-          // ギャップ補完
-          if (prevTo < ftDateTime) {
-            allProgs.push({
-              stationId,
-              progId: `${stationId}_${prevTo}`,
-              ft: prevTo,
-              to: ftDateTime,
-              title: '',
-              info: '',
-              pfm: '',
-              img: ''
-            });
+                const radikoProgramData: RadikoProgramData = {
+                  // 番組情報
+                  stationId: stationId,
+                  // 番組IDは局ID＋番組ID＋開始時間(HHmm形式)
+                  progId: progId,
+                  // 開始日時
+                  ft: ftDateTime,
+                  // 終了日時
+                  to: toDateTime,
+                  // 番組タイトル
+                  title: radikoXMLProg.title,
+                  // 番組情報
+                  info: radikoXMLProg.info ?? '',
+                  // パーソナリティ
+                  pfm: radikoXMLProg.pfm ?? '',
+                  // 画像URL
+                  img: radikoXMLProg.img ?? ''
+                };
+                allRadikoProgramData.push(radikoProgramData);
+              }
+            }
           }
-
-          allProgs.push({
-            stationId,
-            progId,
-            ft: ftDateTime,
-            to: toDateTime,
-            title: p.title,
-            info: p.info ?? '',
-            pfm: p.pfm ?? '',
-            img: p.img ?? ''
-          });
-
-          prevTo = toDateTime;
-        }
-
-        // 最終29時まで補完
-        if (Number(broadcastTimeConverter.revConvertRadioTime(prevTo)) < 2900) {
-          allProgs.push({
-            stationId,
-            progId: `${stationId}_${prevTo}`,
-            ft: prevTo,
-            to: broadcastTimeConverter.convertRadioDateTime(`${broadcastTimeConverter.parseDateTimeToStringDate(prevTo)}290000`),
-            title: '',
-            info: '',
-            pfm: '',
-            img: ''
-          });
         }
       }
-      return allProgs;
+      return allRadikoProgramData;
     } catch (error: any) {
       // エラーを呼び出し元にスロー
       throw error;
