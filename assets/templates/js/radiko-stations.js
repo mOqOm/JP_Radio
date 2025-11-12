@@ -242,8 +242,10 @@ async function loadProgramsList() {
     hideError();
     loadButton.disabled = true;
 
+    // yyyy-MM-DD から yyyyMMdd に変換
+    const dateParam = date.replace( /-/g, '' );
     // yyyyMMdd で渡す
-    const url = window.API_ENDPOINTS.programs.replace( ':stationId', stationId ) + `?date=${ date }`;
+    const url = window.API_ENDPOINTS.programs.replace( ':stationId', stationId ) + `?date=${ dateParam }`;
 
     const response = await fetch( url );
 
