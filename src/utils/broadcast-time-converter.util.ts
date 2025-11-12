@@ -86,7 +86,9 @@ class BroadcastTimeConverter {
    * @returns 遅延を考慮したラジオ時刻
    */
   public getCurrentRadioTime(): DateTime {
+    // 現在のJST時刻を取得
     const nowDate: Date = this.getNowJST();
+    // 遅延時間を差し引く
     const delayed: DateTime = addSeconds(nowDate, -this.delaySec) as DateTime;
     return delayed;
   }

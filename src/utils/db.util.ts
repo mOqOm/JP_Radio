@@ -25,6 +25,7 @@ export class DBUtil<T> {
    * @param doc 挿入するオブジェクト
    */
   public async insert(doc: T): Promise<T> {
+    // データ挿入
     return await this.db.insert(doc);
   }
 
@@ -33,7 +34,9 @@ export class DBUtil<T> {
    * @param query 検索条件
    */
   public async findOne(query: any): Promise<T> {
+    // 1件だけ検索
     const result = await this.db.findOne(query);
+    // 結果がnullの場合は空オブジェクトを返す
     return result === null ? ({} as T) : (result as T);
   }
 
@@ -42,6 +45,7 @@ export class DBUtil<T> {
    * @param query 検索条件
    */
   public async find(query: any): Promise<T[]> {
+    // 複数件検索
     return await this.db.find(query) as T[];
   }
 
