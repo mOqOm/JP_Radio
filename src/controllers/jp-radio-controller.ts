@@ -745,7 +745,9 @@ class JpRadioController {
         } else {
           // タイムフリーがない場合はライブを再生
           this.logger.info('TESTController0001', 'ライブ-タイムフリー無し');
-          const currentPosition = this.commandRouter.stateMachine.currentPosition; // 現在の再生位置を取得
+
+          // 現在の再生位置を取得
+          const currentPosition = this.commandRouter.stateMachine.currentPosition;
           if (currentPosition > 0) {
             this.logger.info('TESTController0001', 'ライブ-キュー並べ替え');
             // 再生キューを並べ替えて対象局を先頭に
