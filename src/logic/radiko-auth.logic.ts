@@ -15,10 +15,6 @@ export class RadikoAuthLogic {
 
   /** ログイン状態チェック */
   public async checkLogin(): Promise<LoginState> {
-    if (!this.cookieJar) {
-      throw new Error('CookieJar is not initialized');
-    }
-
     try {
       const response = await got(CHECK_URL, {
         cookieJar: this.cookieJar,
@@ -113,15 +109,5 @@ export class RadikoAuthLogic {
     const partialKey = Buffer.from(AUTH_KEY.slice(offset, offset + length)).toString('base64');
 
     return [partialKey, token];
-  }
-
-  /** CookieJarセット */
-  public setCookieJar(cookieJar: CookieJar) {
-    this.cookieJar = cookieJar;
-  }
-
-  /** CookieJar取得 */
-  public getCookieJar(): CookieJar {
-    return this.cookieJar;
   }
 }

@@ -64,16 +64,12 @@ export default class RadikoService {
       this.logger.info('JRADI03SI0002');
 
       try {
-        let loginState: LoginState = await this.authLogic.checkLogin();
-        if (loginState.status !== '200') {
-          throw new Error('Not logged in');
-        }
         await this.authLogic.login(loginAccount);
-        this.loginState = loginState;
+        //this.loginState = loginState;
         this.logger.info('JRADI03SI0003');
       } catch (error: any) {
         // Radikoのログイン失敗でプラグイン全体の処理を止めないようにするのでエラーを握りつぶす
-        if (error.statusCode === 401) {
+        if (error.response.statusCode === 401) {
           // パスワード/メールアドレス間違い
           this.logger.warn('JRADI03SW0001');
         } else {
@@ -82,6 +78,8 @@ export default class RadikoService {
         }
       }
     }
+
+    this.loginState = await this.authLogic.checkLogin();
 
     // 再生用のトークン取得・局情報取得
     if (forceGetStations === true || !this.myAreaId) {
