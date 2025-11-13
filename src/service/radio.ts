@@ -65,6 +65,8 @@ export default class JpRadio {
   private server: ReturnType<Application['listen']> | null = null;
   private readonly task1: ReturnType<typeof cron.schedule>;
   private readonly task2: ReturnType<typeof cron.schedule>;
+  // 番組表の再取得リトライ上限回数
+  private readonly geProgramsRetryLimit: number = 2;
 
   // LoggerEx はプロジェクト全体のグローバルから取得
   private readonly logger: LoggerEx = (globalThis as any).JP_RADIO_LOGGER;
@@ -440,11 +442,14 @@ export default class JpRadio {
       // タイムフリー：１回のみ
       if (state.status === 'play') {
         const stationName = this.radikoService?.getStationName(this.playing.stationId);
+        // 'yyyyMMddHHmm-yyyyMMddHHmm'形式の文字列を分割
         const [ftStr, toStr]: string[] = this.playing.timeFree.split('-');
 
+        // yyyyMMddHHmm形式のDateTimeオブジェクトに変換
         const ftDateTime: DateTime = broadcastTimeConverter.parseStringToDateTime(ftStr);
         const toDateTime: DateTime = broadcastTimeConverter.parseStringToDateTime(toStr);
 
+        // DBから番組情報を取得
         const progData = await this.rdkProg?.getProgramData(this.playing.stationId, ftDateTime, true);
 
         if (progData) {
@@ -555,6 +560,12 @@ export default class JpRadio {
     }
   }
 
+  /**
+   * Retrieves radio stations based on the specified play mode.
+   *
+   * @param playMode - The mode for playing stations (e.g., 'live', 'timefree').
+   * @returns A promise that resolves to a BrowseResult containing the list of stations.
+   */
   public async radioStations(playMode: string): Promise<BrowseResult> {
     this.logger.info('JRADI01SI0009', playMode);
     const defer = libQ.defer();
@@ -652,17 +663,22 @@ export default class JpRadio {
 
     const defer = libQ.defer();
 
-    if (!this.radikoService || !this.rdkProg) {
-      defer.resolve(this.createBrowseResult([]));
+    if (this.radikoService === undefined || this.radikoService === null || this.rdkProg === undefined || this.rdkProg === null) {
+      const result = this.createBrowseResult([]);
+      defer.resolve(result);
       return defer.promise;
     }
 
+    // 放送局情報を取得
     const stationInfo: StationInfo = this.radikoService.getStationInfo(stationId);
 
-    if (!stationInfo || !stationInfo.AreaId) {
-      defer.resolve(this.createBrowseResult([]));
+    if (stationInfo === undefined || stationInfo === null || stationInfo.AreaId === undefined || stationInfo.AreaId === null) {
+      const result = this.createBrowseResult([]);
+      defer.resolve(result);
       return defer.promise;
     }
+
+    this.logger.info('DEBUG0002', stationInfo.Name, stationInfo.AreaId);
 
     try {
       const browseListArray: BrowseList[] = [];
@@ -670,7 +686,7 @@ export default class JpRadio {
       const weekArray: DateOnly[] = [];
 
       // 指定された日付範囲の日付を配列に追加
-      for (let workDateOnly: DateOnly = fromDateOnly; workDateOnly > toDateOnly; workDateOnly = addDays(workDateOnly, 1) as DateOnly) {
+      for (let workDateOnly: DateOnly = fromDateOnly; toDateOnly >= workDateOnly; workDateOnly = addDays(workDateOnly, 1) as DateOnly) {
         weekArray.push(workDateOnly);
       }
 
@@ -679,10 +695,23 @@ export default class JpRadio {
       }
 
       for (let i = 0; i < weekArray.length; i++) {
-        // M月d日(E) 形式の文字列を生成
-        const kanji = broadcastTimeConverter.formatDateOnly(weekArray[i], 'M月d日(E)');
+        // 番組表データ取得の現在のリトライ回数
+        let retryCount = 0;
 
-        const radikoProgramDataArray: RadikoProgramData[] = await this.rdkProg!.getDbRadikoProgramData(stationId, weekArray[i]);
+        let radikoProgramDataArray: RadikoProgramData[] = [];
+
+        do {
+          radikoProgramDataArray = await this.rdkProg!.getDbRadikoProgramData(stationId, weekArray[i]);
+
+          // DBにデータが存在しない場合に新しく取得を試みる
+          if (radikoProgramDataArray.length === 0) {
+            this.logger.warn('JRADI01SW0002', stationId, format(weekArray[i], 'yyyy-MM-dd'));
+            // DBにデータが存在しない場合、外部ソースからデータを取得してDBに保存
+            await this.rdkProg!.getDailyStationPrograms(stationId, weekArray[i]);
+            // リトライ回数をインクリメント
+            retryCount++;
+          }
+        } while (radikoProgramDataArray.length === 0 && retryCount < this.geProgramsRetryLimit);
 
         const browseItemArray: BrowseItem[] = radikoProgramDataArray.map((radikoProgramData: RadikoProgramData) => {
           const browseItem: BrowseItem = this.createBrowseItemTimeTable(
@@ -700,17 +729,20 @@ export default class JpRadio {
           return browseItem;
         });
 
-        let title = `${this.messageHelper.get('PROGINFO_PROG_INFO')}${kanji}`;
+        // 表示の区切りで M月d日(E) を入れる
+        let sectionTitle: string = broadcastTimeConverter.formatDateOnly(weekArray[i], 'M月d日(E)');
         if (mode.startsWith('progtable') === false) {
-          if (i === 0) {
-            title += this.messageHelper.get('BROWSE_BUTTON_TODAY');
+          if (i === (weekArray.length - 1)) {
+            // 今日の場合は「（今日）」を追加
+            sectionTitle += this.messageHelper.get('BROWSE_BUTTON_TODAY');
           }
         }
 
+        // yyyyMMdd 形式の文字列を生成
         const dateStr: string = broadcastTimeConverter.formatDateOnly(weekArray[i], 'yyyyMMdd');
 
         const browseList: BrowseList = {
-          title: title,
+          title: sectionTitle,
           availableListViews: ['list'],
           items: browseItemArray,
           sortKey: dateStr
@@ -718,16 +750,6 @@ export default class JpRadio {
 
         browseListArray.push(browseList);
       }
-
-
-      browseListArray.push(...browseListArray);
-
-      // sortKey の Null チェックを追加
-      browseListArray.sort((a, b) => {
-        const aKey = a.sortKey ?? '';
-        const bKey = b.sortKey ?? '';
-        return aKey.localeCompare(bKey);
-      });
 
       // ナビゲーションボタンの追加
       const space = '　'.repeat(mode.startsWith('time') ? 9 : 6);
@@ -778,7 +800,7 @@ export default class JpRadio {
       );
 
       // progtable モードの場合、お気に入り局を追加
-      if (mode.startsWith('progtable')) {
+      if (mode.startsWith('progtable') === true) {
         const [items] = await this.commonRadioFavouriteStations('timefree', true);
         items.forEach((item) => {
           item.uri = item.uri.replace('timetable', 'progtable') + `/${format(fromDateOnly, 'yyyy-MM-dd')}~${format(toDateOnly, 'yyyy-MM-dd')}`;
@@ -793,7 +815,8 @@ export default class JpRadio {
         );
       }
 
-      defer.resolve(this.createBrowseResult(browseListArray));
+      const browseResult: BrowseResult = this.createBrowseResult(browseListArray);
+      defer.resolve(browseResult);
     } catch (error: any) {
       this.logger.error('JRADI01SE0007', error);
       defer.reject(error);
@@ -925,16 +948,19 @@ export default class JpRadio {
     return browseItem;
   }
 
-  private createBrowseItemTimeFree(mode: string, stationId: string, stationInfo: StationInfo | undefined): BrowseItem {
+  private createBrowseItemTimeFree(mode: string, stationId: string, stationInfo: StationInfo): BrowseItem {
     //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_TimeFree: stationId=${stationId}`);
 
     let areaName: string = '?';
     let stationName: string = stationId;
     let albumart: string = '';
 
-    if (stationInfo) {
+    if (stationInfo !== undefined && stationInfo !== null) {
+      // エリア名と局名を取得
       areaName = stationInfo.AreaKanji || stationInfo.AreaName;
+      // 放送局名を取得
       stationName = stationInfo.Name;
+      // アルバムアートを選択
       albumart = this.selectAlbumart(stationInfo.BannerURL, stationInfo.LogoURL, stationInfo.LogoURL);
     }
 
@@ -977,7 +1003,7 @@ export default class JpRadio {
           // タイムフリー（TODO: タイムフリー30はどうする？）
           browseItem.title = '▷';
         } else {
-          // 配信終了
+          // 配信が終了済みの場合は番組タイトルに「×」を追加
           browseItem.title = '×';
         }
       }
@@ -993,9 +1019,10 @@ export default class JpRadio {
       const ftDateTime: DateTime = progData.ft;
       const toDateTime: DateTime = progData.to;
       // フォーマット文字列取得
-      const format: string = this.jpRadioConfig.dateFmt;
+      //const format: string = this.jpRadioConfig.dateFmt;
 
-      time = broadcastTimeConverter.formatDateTimeRange(ftDateTime, toDateTime, format);
+      // HH:mm-HH:mm形式で追加
+      time = broadcastTimeConverter.formatDateTimeRange(ftDateTime, toDateTime, 'HH:mm', 'HH:mm');
     }
 
     let duration: number = 0;
@@ -1006,7 +1033,10 @@ export default class JpRadio {
     }
 
     // 日時 / 番組タイトル
-    browseItem.title += ` ${time} / ${progTitle}`;
+    //browseItem.title += ` ${time} / ${progTitle}`;
+
+    // 番組タイトルの前に日時(HH:mm-HH:mm)を追加
+    browseItem.title += `[${time}] ${progTitle}`;
 
     browseItem.time = '';
     if (progData !== undefined && progData !== null) {

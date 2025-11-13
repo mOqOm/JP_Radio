@@ -609,7 +609,7 @@ class JpRadioController {
         if (playMode === 'timetable' || playMode === 'timetable_today') {
           this.logger.info('TESTController0001', 'TimeTableモード');
 
-          if (option) {
+          if (option !== undefined && option !== null && option !== '') {
             // uri = radiko/timetable/TBS/20251109~20251110
             const [fromStr, toStr]: string[] = option.split('~');
 

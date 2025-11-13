@@ -91,26 +91,28 @@ export default class RdkProg {
    * DBから指定局の1日分の番組データ取得
    */
   public async getDbRadikoProgramData(stationId: string, dateOnly: DateOnly): Promise<RadikoProgramData[]> {
-    // 指定日の05:00:00に設定
+    // 日本時間の05:00:00に設定するため、UTCでは前日の20:00:00となる（JST = UTC+9）
     const startDateTime: DateTime = broadcastTimeConverter.parseDateOnlyToDateTime(dateOnly);
-    startDateTime.setHours(5, 0, 0, 0);
+    startDateTime.setUTCHours(20, 0, 0, 0);
 
-    // 指定日の翌日の05:00:00に設定
+    // 日本時間の翌日の05:00:00に設定するため、UTCでは当日の20:00:00となる（JST = UTC+9）
     const endDateTime: DateTime = broadcastTimeConverter.parseDateOnlyToDateTime(dateOnly);
-    endDateTime.setHours(5, 0, 0, 0);
-    // 翌日の05:00:00にするため1日加算
-    endDateTime.setDate(endDateTime.getDate() + 1);
+    endDateTime.setUTCHours(20, 0, 0, 0);
+    // 翌日の05:00:00(JST)にするため1日加算
+    endDateTime.setUTCDate(endDateTime.getUTCDate() + 1);
 
     /**
      * DB検索
-     * 放送開始 <= 指定日の05:00:00 かつ 放送終了 > 指定日の翌日の05:00:00
+     *
+     * 引数の検索日の朝5時から翌朝5時までの番組を取得する
+     * ※DBのDateTimeはUTCなので考慮する必要あり
      */
     let radikoProgramDataArray: RadikoProgramData[] = await this.dbUtil.find({
       stationId,
-      // 未満
-      ft: { $lte: startDateTime },
-      // 以上
-      to: { $gt: endDateTime },
+      // 放送開始が終了時刻より前
+      ft: { $lt: endDateTime },
+      // 放送終了が開始時刻より後
+      to: { $gt: startDateTime },
     });
 
     // 開始時刻 → 終了時刻でソート（localeCompareより明示的）
@@ -133,15 +135,25 @@ export default class RdkProg {
     return await this.getProgramData(stationId, radikoTime, retry);
   }
 
-  /** 指定局・時間の番組取得 */
+  /**
+   * 指定局・時間の番組取得
+   * @param stationId
+   * @param dateTime
+   * @param retry
+   * @returns
+   */
   public async getProgramData(stationId: string, dateTime: DateTime, retry: boolean): Promise<RadikoProgramData> {
-    // 指定局・時間の番組取得
+    // DB検索＋キャッシュから番組データ取得
     let radikoProgramData: RadikoProgramData = await this.findProgramData(stationId, dateTime);
 
-    if ((!radikoProgramData || Object.keys(radikoProgramData).length === 0) && retry === true) {
-      const stations: Set<string> = await this.getDailyStationPrograms(stationId, dateTime);
+    //　番組データが空の場合、1日分の番組データを取得して再検索（retry=trueの場合のみ）
+    if (Object.keys(radikoProgramData).length === 0 && retry === true) {
+      const dateOnly: DateOnly = broadcastTimeConverter.parseDateTimeToDateOnly(dateTime);
+      // 指定された放送局IDの1日分の番組データを取得
+      const stations: Set<string> = await this.getDailyStationPrograms(stationId, dateOnly);
 
       if (stations.has(stationId) === true) {
+        // 再度DB検索＋キャッシュから番組データ取得
         return await this.findProgramData(stationId, dateTime);
       }
     }
@@ -257,11 +269,13 @@ export default class RdkProg {
     return await this.getPrograms(utilFormat(PROG_TODAY_AREA_URL, areaId));
   }
 
-  /** 局ごと1日分 */
-  public async getDailyStationPrograms(stationId: string, dateTime: DateTime): Promise<Set<string>> {
+  /** 指定された放送局IDに基づくの1日分の番組表を取得してDBに登録する */
+  public async getDailyStationPrograms(stationId: string, dateOnly: DateOnly): Promise<Set<string>> {
     // 'yyyyMMdd'形式に変換
-    const date: string = broadcastTimeConverter.parseDateTimeToStringDate(dateTime);
-    return await this.getPrograms(utilFormat(PROG_DAILY_STATION_URL, date, stationId));
+    const dateStr: string = broadcastTimeConverter.parseDateOnlyToStringDate(dateOnly);
+    // Url生成
+    const url: string = utilFormat(PROG_DAILY_STATION_URL, dateStr, stationId);
+    return await this.getPrograms(url);
   }
 
   /** 局ごと1週間分 */

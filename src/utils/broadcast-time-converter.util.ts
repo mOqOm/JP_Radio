@@ -168,6 +168,10 @@ class BroadcastTimeConverter {
     return format(dateTime, 'yyyyMMdd');
   }
 
+  public parseDateOnlyToStringDate(dateOnly: DateOnly): string {
+    return format(dateOnly, 'yyyyMMdd');
+  }
+
   /**
    * DateTimeをyyyyMMddHHmmss形式の文字列に変換する
    *
@@ -177,6 +181,12 @@ class BroadcastTimeConverter {
   public parseDateTimeToStringDateTime(dateTime: DateTime): string {
     return format(dateTime, 'yyyyMMddHHmmss');
   }
+
+  public parseDateTimeToDateOnly(dateTime: DateTime): DateOnly {
+    const dateStr: string = this.parseDateTimeToStringDate(dateTime);
+    return this.parseDateToDateOnly(dateStr);
+  }
+
 
   /**
    * 番組時間内かチェックし、時間差を返す
