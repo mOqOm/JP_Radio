@@ -64,13 +64,15 @@ export default class RadikoService {
       this.logger.info('JRADI03SI0002');
 
       try {
-        let loginOK: LoginState | null = await this.authLogic.checkLogin();
+        let loginOK: LoginState = await this.authLogic.checkLogin();
         const cookieJar = await this.authLogic.login(loginAccount);
         this.authLogic.setCookieJar(cookieJar);
         this.loginState = loginOK;
-      } catch (error: any) {
         this.logger.info('JRADI03SI0003');
-        throw error;
+      } catch (error: any) {
+        // Radikoのログイン失敗でプラグイン全体の処理を止めないようにするのでエラーを握りつぶす
+        // TODO:ポップアップでログインできない旨を表示
+        this.logger.error('JRADI03SE0005', error);
       }
     }
 
