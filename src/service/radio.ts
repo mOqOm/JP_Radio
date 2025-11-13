@@ -1108,7 +1108,7 @@ export default class JpRadio {
         const areaName: string = getPrefKanji(this.radikoMyInfo.areaId);
 
         let areaFree: string = '';
-        if (this.radikoMyInfo.areafree !== undefined && this.radikoMyInfo.areafree !== null) {
+        if (this.radikoMyInfo.areafree !== undefined && this.radikoMyInfo.areafree !== null && this.radikoMyInfo.areafree === "1") {
           areaFree = ` / ${this.messageHelper.get('AREA_FREE')}`;
         }
 

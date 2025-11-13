@@ -13,6 +13,7 @@ import { RADIKO_AREA } from '@/constants/radiko-area.const'
 // Modelのインポート
 import type { LoginAccount } from '@/models/auth.model';
 import type { JpRadioConfig } from '@/models/jp-radio-config.model';
+import type { RadikoMyInfo } from '@/models/radiko-myinfo.model';
 
 // Utilsのインポート
 import { LoggerEx } from '@/utils/logger.util';
@@ -315,8 +316,9 @@ class JpRadioController {
 
       // エリアフリー設定
       sectionIdx++;
+      // TODO:RadikoMyInfoのmember_typeのtypeが'premium'の場合にエリア設定を表示すうように変更する必要あり
       if (radikoUser && radikoPass && uiconf.sections?.[sectionIdx]?.content && uiconf.sections?.[sectionIdx]?.hidden) {
-        const myInfo = this.appRadio!.getMyInfo();
+        const radikoMyInfo: RadikoMyInfo = this.appRadio!.getMyInfo();
         const section = uiconf.sections[sectionIdx];
         section.hidden = false;
 
@@ -339,7 +341,7 @@ class JpRadioController {
             contents.push({
               id: areaId,
               element: 'switch',
-              label: `- ${areaName}${myInfo.areaId === areaId ? messageHelper.get('UI_SETTINGS.RADIKO_MY_AREA') : ''
+              label: `- ${areaName}${radikoMyInfo.areaId === areaId ? this.commandRouter.getI18nString.get('UI_SETTINGS.RADIKO_MY_AREA') : ''
                 }`,
               value,
               description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),

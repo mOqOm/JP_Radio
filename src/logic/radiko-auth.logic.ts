@@ -41,15 +41,16 @@ export class RadikoAuthLogic {
   }
 
   /** 認証してCookieJarを取得 */
-  public async login(loginAccount: LoginAccount): Promise<CookieJar> {
+  public async login(loginAccount: LoginAccount): Promise<void> {
     const cookieJar: CookieJar = new tough.CookieJar();
 
     try {
       await got.post(LOGIN_URL, { cookieJar: cookieJar, form: loginAccount });
-      return cookieJar;
+      // CookieJarをLogic内の変数に設定
+      this.cookieJar = cookieJar;
     } catch (error: any) {
       if (error.statusCode === 302) {
-        return cookieJar;
+        return;
       }
 
       // HTTPステータスが302以外の場合

@@ -64,19 +64,26 @@ export default class RadikoService {
       this.logger.info('JRADI03SI0002');
 
       try {
-        let loginOK: LoginState = await this.authLogic.checkLogin();
-        const cookieJar = await this.authLogic.login(loginAccount);
-        this.authLogic.setCookieJar(cookieJar);
-        this.loginState = loginOK;
+        let loginState: LoginState = await this.authLogic.checkLogin();
+        if (loginState.status !== '200') {
+          throw new Error('Not logged in');
+        }
+        await this.authLogic.login(loginAccount);
+        this.loginState = loginState;
         this.logger.info('JRADI03SI0003');
       } catch (error: any) {
         // Radikoのログイン失敗でプラグイン全体の処理を止めないようにするのでエラーを握りつぶす
-        // TODO:ポップアップでログインできない旨を表示
-        this.logger.error('JRADI03SE0005', error);
+        if (error.statusCode === 401) {
+          // パスワード/メールアドレス間違い
+          this.logger.warn('JRADI03SW0001');
+        } else {
+          // TODO:ポップアップでログインできない旨を表示
+          this.logger.error('JRADI03SE0005', error);
+        }
       }
     }
 
-    // トークン取得・局情報取得
+    // 再生用のトークン取得・局情報取得
     if (forceGetStations === true || !this.myAreaId) {
       [this.token, this.myAreaId] = await this.authLogic.getToken();
       await this.getRadikoServerStationsInfo();
