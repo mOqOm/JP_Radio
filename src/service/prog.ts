@@ -31,6 +31,8 @@ export const EMPTY_PROGRAM: Readonly<RadikoProgramData> = Object.freeze({
   progId: '',
   ft: broadcastTimeConverter.parseStringToDateTime('19700101000000'),
   to: broadcastTimeConverter.parseStringToDateTime('19700101000000'),
+  /** 再生時間(秒) */
+  dur: 0,
   title: '',
   info: '',
   pfm: '',

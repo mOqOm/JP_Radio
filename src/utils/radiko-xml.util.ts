@@ -71,6 +71,8 @@ export class RadikoXmlUtil {
                 // DateTime からHHmm形式の時間文字列を取得
                 const time: string = broadcastTimeConverter.revConvertRadioTime(ftDateTime);
                 const progId: string = `${stationId}${radikoXMLProg['@id']}${time}`;
+                // 再生時間(秒)
+                const dur: number = Number(radikoXMLProg['@dur']);
 
                 const radikoProgramData: RadikoProgramData = {
                   // 番組情報
@@ -81,6 +83,8 @@ export class RadikoXmlUtil {
                   ft: ftDateTime,
                   // 終了日時
                   to: toDateTime,
+                  // 再生時間(秒)
+                  dur: dur,
                   // 番組タイトル
                   title: radikoXMLProg.title,
                   // 番組情報

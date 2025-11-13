@@ -279,6 +279,7 @@ export default class JpRadio {
           progId: string;
           ft: string;
           to: string;
+          dur: string;
           title: string;
           pfm: string;
           img: string | null;
@@ -289,13 +290,35 @@ export default class JpRadio {
         if (radikoProgramDataArray.length > 0) {
           for (const radikoProgramData of radikoProgramDataArray) {
 
-            const ftDateStr: string = radikoProgramData.ft.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-            const toDateStr: string = radikoProgramData.to.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+            // ft/to を HH:mm の時分だけの文字列に変換して格納
+            const ftTimeStr: string = broadcastTimeConverter.formatDateTime(radikoProgramData.ft, 'HH:mm');
+            const toTimeStr: string = broadcastTimeConverter.formatDateTime(radikoProgramData.to, 'HH:mm');
+            // 再生時間（秒）
+            const dur: number = radikoProgramData.dur;
+            // 表示用の再生時間文字列
+            let durationDescription: string = '';
+
+            if (dur <= 0) {
+              durationDescription = '0分';
+            } else {
+              // 分単位に変換
+              const durMinutes: number = Math.floor(dur / 60);
+              // 時間と分に分割
+              const hours: number = Math.floor(durMinutes / 60);
+              const minutes: number = durMinutes % 60;
+
+              if (hours > 0) {
+                durationDescription = minutes > 0 ? `${hours}時間${minutes}分` : `${hours}時間`;
+              } else {
+                durationDescription = `${minutes}分`;
+              }
+            }
 
             programs.push({
               progId: radikoProgramData.progId || '',
-              ft: ftDateStr,
-              to: toDateStr,
+              ft: ftTimeStr,
+              to: toTimeStr,
+              dur: durationDescription,
               title: radikoProgramData.title,
               pfm: radikoProgramData.pfm || '',
               img: radikoProgramData.img || null
@@ -484,8 +507,8 @@ export default class JpRadio {
     } else {
       // ライブ：番組の切り替わりで更新
       if (state.seek >= state.duration * 1000 || forceUpdate) {
-        const progData = await this.rdkProg?.getCurProgramData(this.playing.stationId, true);
-        if (progData) {
+        const progData: RadikoProgramData | undefined = await this.rdkProg?.getCurProgramData(this.playing.stationId, true);
+        if (progData !== undefined && progData !== null) {
           const stationName = this.radikoService?.getStationName(this.playing.stationId);
 
           const ftDateTime: DateTime = progData.ft;
@@ -874,11 +897,10 @@ export default class JpRadio {
               // 配信期間内だけリトライする
               const retry: boolean = (-7 * 86400 <= check1 && check2 < 0);
               const progData: RadikoProgramData = await this.rdkProg.getProgramData(stationId, ftDateTime, retry);
-              const item: BrowseItem = this.createBrowseItemTimeTable('play', stationId, stationInfo,
-                progData ? progData : {
-                  stationId, progId: '', ft: ftDateTime, to: toDateTime, title: data.title, info:
-                    '', pfm: '', img: data.albumart
-                });
+
+
+
+              const item: BrowseItem = this.createBrowseItemTimeTable('play', stationId, stationInfo, progData);
 
               item.favourite = true;
               items[1].push(item);
@@ -1197,7 +1219,7 @@ export default class JpRadio {
   }
 
   // アルバムアート
-  private selectAlbumart(banner: string | undefined, logo: string | undefined, prog: string | undefined): string {
+  private selectAlbumart(banner: string | undefined, logo: string | undefined, prog: string | undefined | null): string {
     let result;
     switch (this.jpRadioConfig.aaType) {
       case 'type1':

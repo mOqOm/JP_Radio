@@ -244,7 +244,6 @@ async function loadProgramsList() {
 
     // yyyy-MM-DD から yyyyMMdd に変換
     const dateParam = date.replace( /-/g, '' );
-    // yyyyMMdd で渡す
     const url = window.API_ENDPOINTS.programs.replace( ':stationId', stationId ) + `?date=${ dateParam }`;
 
     const response = await fetch( url );
@@ -286,7 +285,7 @@ function createProgramCard( station ) {
         <div class="program-info">
             <div class="program-title">${ escapeHtml( program.title ) }</div>
             ${ program.pfm ? `<div class="program-pfm">${ escapeHtml( program.pfm ) }</div>` : '' }
-            <div class="program-time">${ formatProgramTime( program.ft, program.to ) }</div>
+            <div class="program-time">${ program.ft } - ${ program.to }</div>
         </div>
     ` : `
         <div class="program-info">
@@ -315,14 +314,14 @@ function createProgramCard( station ) {
  */
 function createProgramItem( program ) {
   const status = getProgramStatus( program.ft, program.to );
-  const duration = calculateDuration( program.ft, program.to );
+  const duration = program.dur;
 
   return `
         <div class="program-item">
             <div class="program-item-header">
                 <div class="program-item-time">
                     ${ getStatusBadge( status ) }
-                    ${ formatProgramTime( program.ft, program.to ) }
+                    ${ program.ft } - ${ program.to }
                 </div>
                 <div class="program-item-title">${ escapeHtml( program.title ) }</div>
             </div>
@@ -334,22 +333,49 @@ function createProgramItem( program ) {
 
 /**
  * 番組のステータスを判定
- * @param {string} ft - 開始時刻 (YYYYMMDDHHmm)
- * @param {string} to - 終了時刻 (YYYYMMDDHHmm)
+ * @param {string} ftTimeStr - 開始時刻 (ISO 8601 または HH:mm)
+ * @param {string} toTimeStr - 終了時刻 (ISO 8601 または HH:mm)
  * @returns {string} ステータス ('live', 'upcoming', 'timefree', 'expired')
  */
-function getProgramStatus( ft, to ) {
+function getProgramStatus( ftTimeStr, toTimeStr ) {
   const now = new Date();
-  const startTime = parseProgramTime( ft );
-  const endTime = parseProgramTime( to );
+  // 検索した日付を取得
+  const dateInput = document.getElementById( 'dateInput' );
+  // yyyy-MM-DD から yyyyMMdd に変換
+  const dateParam = dateInput.value.split( '-' );
 
-  if ( now >= startTime && now < endTime ) {
+  const year = dateParam[ 0 ];
+  const month = dateParam[ 1 ];
+  const day = dateParam[ 2 ];
+
+  const ftDateTime = new Date( year, month - 1, day );
+  const ftTimeSplit = ftTimeStr.split( ':' );
+  const ftHour = parseInt( ftTimeSplit[ 0 ], 10 );
+  // 5時以降の場合は翌日に設定
+  if ( ftHour <= 5 ) {
+    ftDateTime.setDate( ftDateTime.getDate() + 1 );
+    ftDateTime.setHours( ftHour, parseInt( ftTimeSplit[ 1 ], 10 ), 0, 0 );
+  }
+  ftDateTime.setHours( ftHour, parseInt( ftTimeSplit[ 1 ], 10 ), 0, 0 );
+
+  const toDateTime = new Date( year, month - 1, day );
+  const toTimeSplit = toTimeStr.split( ':' );
+  const toHour = parseInt( toTimeSplit[ 0 ], 10 );
+  // 5時以降の場合は翌日に設定
+  if ( toHour <= 5 ) {
+    toDateTime.setDate( toDateTime.getDate() + 1 );
+    toDateTime.setHours( toHour, parseInt( toTimeSplit[ 1 ], 10 ), 0, 0 );
+  }
+  toDateTime.setHours( toHour, parseInt( toTimeSplit[ 1 ], 10 ), 0, 0 );
+
+
+  if ( now >= ftDateTime && now < toDateTime ) {
     return 'live';
-  } else if ( now < startTime ) {
+  } else if ( now < ftDateTime ) {
     return 'upcoming';
   } else {
     // 終了後7日以内ならタイムフリー
-    const diffDays = ( now - endTime ) / ( 1000 * 60 * 60 * 24 );
+    const diffDays = ( now - toDateTime ) / ( 1000 * 60 * 60 * 24 );
     return diffDays <= 7 ? 'timefree' : 'expired';
   }
 }
@@ -363,7 +389,7 @@ function getStatusBadge( status ) {
   const badges = {
     'live': '<span class="status-badge status-live">LIVE</span>',
     'upcoming': '<span class="status-badge status-upcoming">予定</span>',
-    'timefree': '<span class="status-badge status-timefree">TF</span>',
+    'timefree': '<span class="status-badge status-timefree">TimeFree</span>',
     'expired': '<span class="status-badge status-expired">終了</span>'
   };
   return badges[ status ] || '';
@@ -371,66 +397,61 @@ function getStatusBadge( status ) {
 
 /**
  * 番組時刻文字列を Date オブジェクトに変換
- * @param {string} timeStr - 時刻文字列 (YYYYMMDDHHmm)
+ * ISO 8601 形式 (YYYY-MM-DDTHH:mm:ss+09:00) または HH:mm 形式をサポート
+ * @param {string} timeStr - 時刻文字列
  * @returns {Date} Date オブジェクト
  */
 function parseProgramTime( timeStr ) {
-  if ( !timeStr || timeStr.length !== 12 ) return new Date();
+  if ( !timeStr ) return new Date();
 
-  const year = parseInt( timeStr.substring( 0, 4 ) );
-  const month = parseInt( timeStr.substring( 4, 6 ) ) - 1;
-  const day = parseInt( timeStr.substring( 6, 8 ) );
-  let hour = parseInt( timeStr.substring( 8, 10 ) );
-  const minute = parseInt( timeStr.substring( 10, 12 ) );
-
-  // 25時以降の処理（翌日として扱う）
-  if ( hour >= 24 ) {
-    hour -= 24;
-    return new Date( year, month, day + 1, hour, minute );
+  // ✅ ISO 8601 形式の場合 (例: "2025-11-13T03:00:00+09:00")
+  if ( timeStr.includes( 'T' ) || timeStr.includes( '-' ) ) {
+    const date = new Date( timeStr );
+    return isNaN( date.getTime() ) ? new Date() : date;
   }
 
-  return new Date( year, month, day, hour, minute );
-}
+  // ✅ HH:mm 形式の場合（後方互換性）
+  if ( timeStr.length === 5 && timeStr.includes( ':' ) ) {
+    let hour = parseInt( timeStr.substring( 0, 2 ), 10 );
+    const minute = parseInt( timeStr.substring( 3, 5 ), 10 );
 
-/**
- * 番組の長さを計算して文字列で返す
- * @param {string} ft - 開始時刻
- * @param {string} to - 終了時刻
- * @returns {string} 長さの文字列
- */
-function calculateDuration( ft, to ) {
-  const start = parseProgramTime( ft );
-  const end = parseProgramTime( to );
-  const diffMs = end - start;
-  const diffMins = Math.floor( diffMs / ( 1000 * 60 ) );
+    const now = new Date();
+    if ( hour >= 24 ) {
+      const nextDay = new Date( now );
+      nextDay.setDate( nextDay.getDate() + 1 );
+      nextDay.setHours( hour - 24, minute, 0, 0 );
+      return nextDay;
+    }
 
-  const hours = Math.floor( diffMins / 60 );
-  const minutes = diffMins % 60;
-
-  if ( hours > 0 ) {
-    return `${ hours }時間${ minutes }分`;
-  } else {
-    return `${ minutes }分`;
+    now.setHours( hour, minute, 0, 0 );
+    return now;
   }
+
+  return new Date();
 }
 
+
 /**
- * 番組時刻をフォーマット
- * @param {string} ft - 開始時刻 (YYYYMMDDHHmm)
- * @param {string} to - 終了時刻 (YYYYMMDDHHmm)
- * @returns {string} フォーマットされた時刻文字列
+ * 番組時刻を HH:mm 形式でフォーマット
+ * @param {string} ftDateTimeStr - 開始時刻 (yyyy/MM/dd HH:mm:ss)
+ * @param {string} toDateTimeStr - 終了時刻 (yyyy/MM/dd HH:mm:ss)
+ * @returns {string} フォーマットされた時刻文字列 "HH:mm - HH:mm"
  */
-function formatProgramTime( ft, to ) {
-  if ( !ft || !to ) return '';
+function formatProgramTime( ftDateTimeStr, toDateTimeStr ) {
+  if ( !ftDateTimeStr || !toDateTimeStr ) return '';
 
   const formatTime = ( timeStr ) => {
-    if ( timeStr.length !== 12 ) return timeStr;
-    const hour = timeStr.substring( 8, 10 );
-    const minute = timeStr.substring( 10, 12 );
+    const year = timeStr.split( '/' )[ 0 ];
+    const month = timeStr.split( '/' )[ 1 ];
+    const day = timeStr.split( '/' )[ 2 ].split( ' ' )[ 0 ];
+    const hour = timeStr.split( ' ' )[ 1 ].split( ':' )[ 0 ];
+    const minute = timeStr.split( ' ' )[ 1 ].split( ':' )[ 1 ];
+    const second = timeStr.split( ' ' )[ 1 ].split( ':' )[ 2 ];
+
     return `${ hour }:${ minute }`;
   };
 
-  return `${ formatTime( ft ) } - ${ formatTime( to ) }`;
+  return `${ formatTime( ftDateTimeStr ) } - ${ formatTime( toDateTimeStr ) }`;
 }
 
 /**
