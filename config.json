@@ -29,7 +29,7 @@
   },
   "timeFormat": {
     "type": "string",
-    "value": "$1/$2/$3 $4:$5-$7:$8"
+    "value": "yyyy/MM/dd HH:mm-HH:mm"
   },
   "radikoAreas": {
     "JP1": {

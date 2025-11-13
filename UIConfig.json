@@ -30,7 +30,7 @@
           "doc": "TRANSLATE.UI_SETTINGS.SERVICE_PORT_DOC",
           "attributes": [
             { "placeholder": "9000 (1024~65535)" },
-            { "min": 1024  },
+            { "min": 1024 },
             { "max": 65535 }
           ],
           "value": 9000
@@ -43,7 +43,7 @@
           "doc": "TRANSLATE.UI_SETTINGS.NETWORK_DELAY_DOC",
           "attributes": [
             { "placeholder": "20 (0~300)" },
-            { "min": 0  },
+            { "min": 0 },
             { "max": 300 }
           ],
           "value": 20
@@ -116,7 +116,7 @@
           "element": "select",
           "label": "TRANSLATE.UI_SETTINGS.ALBUMART_SELECT_LABEL",
           "doc": "TRANSLATE.UI_SETTINGS.ALBUMART_SELECT_DOC",
-          "value":  {
+          "value": {
             "value": "type3",
             "label": "TRANSLATE.UI_SETTINGS.ALBUMART_TYPE3"
           },
@@ -176,11 +176,11 @@
           "type": "number",
           "element": "input",
           "label": "TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_FROM_LABEL",
-          "doc":"TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_FROM_DOC",
+          "doc": "TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_FROM_DOC",
           "attributes": [
             { "placeholder": "7 (0~7)" },
-            { "maxlength": {} },
-            { "min": 0  },
+            { "maxlength": { } },
+            { "min": 0 },
             { "max": 30 }
           ],
           "value": 7
@@ -190,11 +190,11 @@
           "type": "number",
           "element": "input",
           "label": "TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_TO_LABEL",
-          "doc":"TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_TO_DOC",
+          "doc": "TRANSLATE.UI_SETTINGS.PROGRAM_PERIOD_TO_DOC",
           "attributes": [
             { "placeholder": "0 (0~6)" },
-            { "maxlength": {} },
-            { "min": 0  },
+            { "maxlength": { } },
+            { "min": 0 },
             { "max": 6 }
           ],
           "value": 0
@@ -203,27 +203,27 @@
           "id": "timeFormat",
           "element": "select",
           "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_LABEL",
-          "doc":"TRANSLATE.UI_SETTINGS.TIME_FORMAT_DOC",
+          "doc": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_DOC",
           "value": {
-            "value": "$1/$2/$3 $4:$5-$10:$11",
-            "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1"
+            "value": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1_VALUE",
+            "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1_LABEL"
           },
           "options": [
             {
-              "value": "$1/$2/$3 $4:$5-$10:$11",
-              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1"
+              "value": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1_VALUE",
+              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE1_LABEL"
             },
             {
-              "value": "$1/$2/$3 $4:$5",
-              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE2"
+              "value": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE2_VALUE",
+              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE2_LABEL"
             },
             {
-              "value": "$2/$3 $4:$5-$10:$11",
-              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE3"
+              "value": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE3_VALUE",
+              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE3_LABEL"
             },
             {
-              "value": "$2/$3 $4:$5",
-              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE4"
+              "value": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE4_VALUE",
+              "label": "TRANSLATE.UI_SETTINGS.TIME_FORMAT_TYPE4_LABEL"
             }
           ]
         }
@@ -243,9 +243,9 @@
       },
       "saveButton": {
         "label": "TRANSLATE.UI_SETTINGS.SAVE_BUTTON_LABEL",
-        "data": []
+        "data": [ ]
       },
-      "content": []
+      "content": [ ]
     }
   ]
 }

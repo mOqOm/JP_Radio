@@ -170,7 +170,7 @@ class JpRadioController {
       }
     }
 
-    const timeFormat = this.config.get('timeFormat') ?? '$1/$2/$3 $4:$5-$10:$11';
+    const timeFormat = this.config.get('timeFormat') ?? 'yyyy/MM/dd HH:mm-HH:mm';
 
     const jpRadioConfig: JpRadioConfig = {
       // 起動ポート
@@ -293,10 +293,11 @@ class JpRadioController {
       if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = programPeriodTo;
       if (uiconf.sections?.[sectionIdx]?.content?.[2]) {
 
-        const toDay: Date = broadcastTimeConverter.getCurrentDate();
+        // 日時フォーマット例の設定
+        const toDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
         // サンプルで12時と13時のDateオブジェクトを作成
-        const sample1DateTime: DateTime = createDateTime(toDay.getFullYear(), toDay.getMonth(), toDay.getDate(), 12, 0, 0);
-        const sample2DateTime: DateTime = createDateTime(toDay.getFullYear(), toDay.getMonth(), toDay.getDate(), 13, 0, 0);
+        const sample1DateTime: DateTime = createDateTime(toDateOnly.getFullYear(), toDateOnly.getMonth(), toDateOnly.getDate(), 12, 0, 0);
+        const sample2DateTime: DateTime = createDateTime(toDateOnly.getFullYear(), toDateOnly.getMonth(), toDateOnly.getDate(), 13, 0, 0);
 
         const content = uiconf.sections[sectionIdx].content[2];
         content.value.value = timeFormat;

@@ -488,7 +488,7 @@ export default class JpRadio {
           const currentTime: DateTime = broadcastTimeConverter.getCurrentRadioTime();
 
           // HH:mm-HH:mm
-          const time: string = broadcastTimeConverter.formatDateTimeRange(ftDateTime, toDateTime, '$1:$2-$4:$5');
+          const time: string = broadcastTimeConverter.formatTimeString(ftDateTime, toDateTime);
           const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
 
           queueItem.name = progData.title;
@@ -523,7 +523,7 @@ export default class JpRadio {
 
     for (const i in arrayQueue) {
       const queueItem = arrayQueue[i];
-      if (queueItem.uri.includes('?')) {
+      if (queueItem.uri.includes('?') === true) {
         continue;
       }
 
@@ -533,9 +533,9 @@ export default class JpRadio {
       if (progData !== undefined && progData !== null) {
         const stationAndTime = queueItem.artist;
         // HH:mm-HH:mm
-        const progTime: string = broadcastTimeConverter.formatDateTimeRange(progData.ft, progData.to, '$1:$2-$4:$5');
+        const progTime: string = broadcastTimeConverter.formatTimeString(progData.ft, progData.to);
 
-        if (!stationAndTime.endsWith(progTime)) {
+        if (stationAndTime.endsWith(progTime) === false) {
           queueItem.name = progData.title;
           queueItem.album = progData.pfm;
           queueItem.artist = stationAndTime.replace(/\d+:\d+-\d+:\d+\s?/, progTime);
@@ -895,7 +895,7 @@ export default class JpRadio {
 
     if (progData?.ft !== undefined && progData?.ft !== null && progData?.to !== undefined && progData?.to !== null) {
       // HH:mm-HH:mm
-      progTime = broadcastTimeConverter.formatDateTimeRange(progData.ft, progData.to, '$1:$2-$4:$5')
+      progTime = broadcastTimeConverter.formatTimeString(progData.ft, progData.to);
     }
 
     const albumart: string = this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img);
