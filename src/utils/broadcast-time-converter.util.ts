@@ -279,20 +279,6 @@ class BroadcastTimeConverter {
     return format(dateOnly, formatStr, { locale: ja });
   }
 
-
-  /**
-   * 開始・終了日時をHHmm-HHmm形式に整形する
-   *
-   * @param fromDateTime
-   * @param toDateTime
-   * @returns
-   */
-  public formatTimeString(fromDateTime: DateTime, toDateTime: DateTime): string {
-    const fromTimeStr: string = this.revConvertRadioTime(fromDateTime);
-    const toTimeStr: string = this.revConvertRadioTime(toDateTime);
-    return `${fromTimeStr}-${toTimeStr}`;
-  }
-
   /**
    * 開始・終了日時を指定フォーマットで整形する
    *

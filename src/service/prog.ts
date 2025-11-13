@@ -148,7 +148,7 @@ export default class RdkProg {
     // DB検索＋キャッシュから番組データ取得
     let radikoProgramData: RadikoProgramData = await this.findProgramData(stationId, dateTime);
 
-    //　番組データが空の場合、1日分の番組データを取得して再検索（retry=trueの場合のみ）
+    // 番組データが空の場合、1日分の番組データを取得して再検索（retry=trueの場合のみ）
     if (Object.keys(radikoProgramData).length === 0 && retry === true) {
       const dateOnly: DateOnly = broadcastTimeConverter.parseDateTimeToDateOnly(dateTime);
       // 指定された放送局IDの1日分の番組データを取得
