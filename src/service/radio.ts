@@ -63,7 +63,8 @@ import { getPrefKanji } from '@/utils/radiko-area.util';
 export default class JpRadio {
   private readonly app: Application;
   private server: ReturnType<Application['listen']> | null = null;
-  private readonly task1: ReturnType<typeof cron.schedule>;
+  // 番組表を更新するタスク
+  private readonly updateProgramsTask: ReturnType<typeof cron.schedule>;
   private readonly task2: ReturnType<typeof cron.schedule>;
   // 番組表の再取得リトライ上限回数
   private readonly geProgramsRetryLimit: number = 2;
@@ -90,7 +91,6 @@ export default class JpRadio {
     seek: ''
   };
   private readonly messageHelper: MessageHelper;
-  //private readonly baseDir: string = path.resolve(process.cwd(), 'assets', 'templates');
   private readonly baseDir: string = path.resolve(__dirname, '..', '..', 'assets', 'templates');
 
   constructor(loginAccount: LoginAccount | null, jpRadioConfig: JpRadioConfig, commandRouter: any, messageHelper: MessageHelper) {
@@ -108,10 +108,11 @@ export default class JpRadio {
     this.app.set('view engine', 'ejs');
 
     // 番組表データ更新（毎日04:59）
-    this.task1 = cron.schedule('59 4 * * *', this.#pgupdate.bind(this), {
+    this.updateProgramsTask = cron.schedule('59 4 * * *', this.#pgupdate.bind(this), {
       scheduled: false
     });
 
+    // TODO: 1分間隔で画面更新は処理上重たいのでは？
     // 再生画面更新（60s間隔; conf.delayに対して1sずらし）
     broadcastTimeConverter.setDelay(this.jpRadioConfig.delay);
     this.task2 = cron.schedule(`${(this.jpRadioConfig.delay + 1) % 60} * * * * *`, this.pushSongState.bind(this), { scheduled: false });
@@ -127,7 +128,7 @@ export default class JpRadio {
       this.logger.info('JRADI01SI0002', req.url);
       // url(Live)     = /radiko/play/TBS
       // url(TimeFree) = /radiko/play/TBS?ft=##&to=##&seek=##
-      // 局ID取得
+      // 放送局ID取得
       const stationId: string = req.params['stationID'];
 
       // radikoServiceの初期化されていない場合はエラー
@@ -154,7 +155,6 @@ export default class JpRadio {
         const ft = req.query['ft'] as string | undefined;
         const to = req.query['to'] as string | undefined;
         this.playing.timeFree = (ft && to) ? `${ft}-${to}` : '';
-        //this.playing.seek = req.query.seek ?? '';
         //this.playing.seek = req.query.seek ?? '';
       } catch (error: any) {
         const msg = `[JpRadio]Stream start error: ${error?.message || error}`;
@@ -475,14 +475,10 @@ export default class JpRadio {
         // DBから番組情報を取得
         const progData = await this.rdkProg?.getProgramData(this.playing.stationId, ftDateTime, true);
 
-        if (progData) {
-
-        }
-
         // HH:mm-HH:mmの形式で取得
         const timeStr: string = broadcastTimeConverter.formatDateTimeRange(ftDateTime, toDateTime, 'HH:mm', 'HH:mm');
 
-        // yyyyMMdd形式の形式で取得
+        // yyyyMMdd 形式の形式で取得
         //const date: string = broadcastTimeConverter.formatDateString(ftStr, this.jpRadioConfig.dateFmt);
         const dateStr: string = broadcastTimeConverter.parseDateTimeToStringDate(ftDateTime);
 
@@ -931,9 +927,8 @@ export default class JpRadio {
     const progTitle: string = progData ? progData.title : '?';
     const progPfm: string = progData ? progData.pfm! : '';
 
-    // ft と to が存在するかチェック
     let progTime: string = '';
-
+    // ft と to が存在するかチェック
     if (progData?.ft !== undefined && progData?.ft !== null && progData?.to !== undefined && progData?.to !== null) {
       // HH:mm-HH:mm 形式で取得
       progTime = broadcastTimeConverter.formatDateTimeRange(progData.ft, progData.to, 'HH:mm', 'HH:mm');
@@ -1040,8 +1035,8 @@ export default class JpRadio {
     let duration: number = 0;
 
     if (progData !== undefined && progData !== null) {
-      // secs
-      duration = broadcastTimeConverter.getTimeSpanByDateTime(progData.ft, progData.to);
+      // 放送時間(秒)を取得
+      duration = progData.dur;
     }
 
     // 番組タイトルの前に日時(HH:mm-HH:mm)を追加
@@ -1108,11 +1103,14 @@ export default class JpRadio {
       this.server = this.app.listen(this.jpRadioConfig.port, () => {
         this.logger.info('JRADI01SI0015', this.jpRadioConfig.port);
 
-        this.task1.start();
+        this.updateProgramsTask.start();
         // JPxxからエリア名(都道府県)を取得
         const areaName: string = getPrefKanji(this.radikoMyInfo.areaId);
 
-        const areaFree: string = this.radikoMyInfo.areafree ? ` / ${this.messageHelper.get('AREA_FREE')}` : '';
+        let areaFree: string = '';
+        if (this.radikoMyInfo.areafree !== undefined && this.radikoMyInfo.areafree !== null) {
+          areaFree = ` / ${this.messageHelper.get('AREA_FREE')}`;
+        }
 
         // TODO:改行する方法ないかなぁ・・・
         const msg1: string = this.messageHelper.get('BOOT_COMPLETED') + '　'.repeat(10);
@@ -1136,7 +1134,7 @@ export default class JpRadio {
     this.logger.info('JRADI01SI0016');
     // サーバーが起動中であれば以下の処理実施
     if (this.server !== null) {
-      this.task1.stop();
+      this.updateProgramsTask.stop();
       this.task2.stop();
       this.server.close();
       this.server = null;
