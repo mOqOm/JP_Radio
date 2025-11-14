@@ -20,3 +20,14 @@ export interface JpRadioConfig {
   /** 利用するエリアID一覧 */
   areaIdArray: string[];
 }
+
+export const DEFAULT_JP_RADIO_CONFIG: JpRadioConfig = {
+  port: 9000,
+  delay: 20,
+  aaType: 'type3',
+  ppFrom: 7,
+  ppTo: 7,
+  timeFmt: 'YYYY-MM-DD HH:mm',
+  dateFmt: 'YYYY-MM-DD',
+  areaIdArray: []
+};
