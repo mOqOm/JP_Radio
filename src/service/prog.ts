@@ -78,15 +78,44 @@ export default class RdkProg {
 
     /**
      * DB検索
-     * 放送開始 <= 指定日の05:00:00 かつ 放送終了 > 指定日の翌日の05:00:00
+     * 指定日時 >= 放送開始
+     * 指定日時 < 放送終了
      */
-    let radikoProgramData: RadikoProgramData | null = await this.dbUtil.findOne({
+    let radikoProgramData: RadikoProgramData = await this.dbUtil.findOne({
       stationId,
-      // 放送開始日時以下(現在日時 <= 放送開始)
+      // 放送開始日時以下(指定日時 >= 放送開始)
       ft: { $lte: searchDateTime },
+      // 放送終了日時より後(指定日時 < 放送終了)
+      to: { $gt: searchDateTime },
     });
 
     return radikoProgramData;
+  }
+
+  /**
+   * DBから放送局の放送開始日時と放送終了日時に一致する番組データ取得
+   * @param stationId
+   * @param ftDateTime
+   * @param toDateTime
+   * @returns
+   */
+  public async getDbProgramData(stationId: string, ftDateTime: DateTime, toDateTime: DateTime): Promise<RadikoProgramData> {
+    /**
+     * DB検索
+     *
+     * 引数の検索日の朝5時から翌朝5時までの番組を取得する
+     * ※DBのDateTimeはUTCなので考慮する必要あり
+     */
+    const radikoProgramData: RadikoProgramData = await this.dbUtil.findOne({
+      stationId,
+      // 放送開始が終了時刻より前
+      ft: { $lt: ftDateTime },
+      // 放送終了が開始時刻より後
+      to: { $gt: toDateTime },
+    });
+
+    return radikoProgramData;
+
   }
 
   /**

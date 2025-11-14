@@ -263,16 +263,13 @@ export default class RadikoService {
     //let aac: string = '';
 
     if (query.ft && query.to) {
-      let ftDateTime: DateTime = broadcastTimeConverter.parseStringToDateTime(query.ft);
-      let toDateTime: DateTime = broadcastTimeConverter.parseStringToDateTime(query.to);
-      let seekSeconds: number = query.seek ? parseInt(query.seek, 10) : 0;
+      //let ftDateTime: DateTime = broadcastTimeConverter.parseStringToDateTime(String(query.ft));
+      let ftDateTimeStr: string = String(query.ft);
+      let toDateTimeStr: string = String(query.to);
+      let seekSeconds: number = query.seek ? parseInt(String(query.seek), 10) : 0;
 
       // Seekが指定されている場合、開始時間を調整
-      const adjustedStartDateTime: DateTime = broadcastTimeConverter.addSecondsTime(ftDateTime, seekSeconds);
-
-      const ftDateTimeStr: string = format(adjustedStartDateTime, 'yyyyMMddhhmmss');
-      const toDateTimeStr: string = format(toDateTime, 'yyyyMMddhhmmss');
-
+      //const adjustedStartDateTime: DateTime = broadcastTimeConverter.addSecondsTime(ftDateTime, seekSeconds);
 
       url = format(PLAY_TIMEFREE_URL, stationId, ftDateTimeStr, toDateTimeStr);
     }
