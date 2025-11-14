@@ -211,7 +211,6 @@ export default class JpRadio {
               const ftDateStr: string = radikoProgramData.ft.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
               const toDateStr: string = radikoProgramData.to.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 
-
               return {
                 stationId: stationId,
                 name: info.Name,
@@ -241,8 +240,8 @@ export default class JpRadio {
         );
 
         res.json({ stations: rows });
-      } catch (e: any) {
-        res.status(500).json({ error: e?.message || 'Unknown error' });
+      } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Unknown error' });
       }
     });
 
@@ -326,8 +325,8 @@ export default class JpRadio {
           }
         }
         res.json({ stationId, date: dateOnly, programs });
-      } catch (e: any) {
-        res.status(500).json({ error: e?.message || 'Failed to read programs' });
+      } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Failed to read programs' });
       }
     });
 
@@ -392,21 +391,21 @@ export default class JpRadio {
       });
 
       // ffmpegプロセスでエラーが発生したときの処理
-      ffmpeg.on('error', (err: any) => {
-        this.logger.error('JRADI01SE0003', err);
+      ffmpeg.on('error', (error: any) => {
+        this.logger.error('JRADI01SE0003', error);
         if (res.writableEnded === false) {
           res.status(500).end();
         }
       });
 
       // レスポンスでエラーが発生したときの処理
-      res.on('error', (err: any) => {
-        this.logger.warn('JRADI01SW0001', err);
+      res.on('error', (error: any) => {
+        this.logger.warn('JRADI01SW0001', error);
       });
 
       // ffmpegの標準出力でエラーが発生したときの処理
-      ffmpeg.stdout.on('error', (err: any) => {
-        this.logger.error('JRADI01SE0003', err);
+      ffmpeg.stdout.on('error', (error: any) => {
+        this.logger.error('JRADI01SE0003', error);
         if (res.writableEnded === false) {
           res.status(500).end();
         }
@@ -580,7 +579,7 @@ export default class JpRadio {
   /**
    * 指定された再生モードに基づいてラジオ局を取得します。
    *
-   * @param playMode - ラジオ局の再生モード（例: 'live', 'timefree'）
+   * @param playMode - ラジオ局の再生モード（例: 'live', 'timefree', 'timefree_today'）
    * @returns ラジオ局のリストを含むBrowseResultを解決するPromise
    */
   public async radioStations(playMode: string): Promise<BrowseResult> {
@@ -605,7 +604,8 @@ export default class JpRadio {
             grouped[region] = [];
           }
 
-          if (playMode === 'timefree') {
+          if (playMode === 'timefree' || playMode === 'timefree_today') {
+            // freeをtableに置換
             const modeReplaceData: string = playMode.replace('free', 'table');
             // タイムフリー再生用BrowseItemを作成
             const browseItem: BrowseItem = this.createBrowseItemTimeFree(modeReplaceData, stationId, stationInfo);
@@ -614,7 +614,7 @@ export default class JpRadio {
           } else {
             if (this.rdkProg !== undefined && this.rdkProg !== null) {
               // ライブ番組情報を取得
-              const radikoProgramData: RadikoProgramData = await this.rdkProg.getCurProgramData(stationId, false);
+              const radikoProgramData: RadikoProgramData = await this.rdkProg.getDbCurProgramData(stationId);
               // ライブ再生用BrowseItemを作成
               const browseItem: BrowseItem = this.createBrowseItemLive('play', stationId, stationInfo, radikoProgramData);
               // グループに追加
@@ -698,6 +698,7 @@ export default class JpRadio {
     try {
       const browseListArray: BrowseList[] = [];
 
+      // 1週間分の日付を格納する配列
       const weekArray: DateOnly[] = [];
 
       // 指定された日付範囲の日付を配列に追加
@@ -705,6 +706,7 @@ export default class JpRadio {
         weekArray.push(workDateOnly);
       }
 
+      // TODO: DBにデータが存在しない場合のみ出力するように位置修正する？
       // 番組表データ取得開始メッセージ
       if (weekArray.length > 0) {
         this.commandRouter.pushToastMessage('info', 'JP Radio', this.messageHelper.get('PROGRAM_DATA_GETTING2', stationInfo.Name));
@@ -718,6 +720,7 @@ export default class JpRadio {
 
         // 番組表データをDBから取得、存在しない場合は外部ソースから取得を試みる
         do {
+          // 指定された放送局IDと指定日から番組表データをDBから取得
           radikoProgramDataArray = await this.rdkProg!.getDbRadikoProgramData(stationId, weekArray[i]);
 
           // DBにデータが存在しない場合に新しく取得を試みる

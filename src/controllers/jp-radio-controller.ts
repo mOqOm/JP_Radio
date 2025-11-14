@@ -636,7 +636,7 @@ class JpRadioController {
           let fromJstDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
           let toJstDateOnly: DateOnly = broadcastTimeConverter.getCurrentDate();
 
-          // 設定期間の場合
+          // 最後の文字列が '_today' でない場合は設定期間を適用
           if (playMode.endsWith('_today') === false) {
             fromJstDateOnly.setDate(fromJstDateOnly.getDate() - this.jpRadioConfig.ppFrom);
             toJstDateOnly.setDate(toJstDateOnly.getDate() + this.jpRadioConfig.ppTo);
@@ -672,8 +672,7 @@ class JpRadioController {
 
       } catch (error: any) {
         this.logger.error('JRADI01CE0006', error);
-        defer.reject(error);
-        return;
+        throw error;
       }
     })().then((result) => {
       defer.resolve(result);
@@ -684,7 +683,7 @@ class JpRadioController {
     return defer.promise;
   }
 
-  public clearAddPlayTrack(track: any): any {
+  public clearAddPlayTrack(track: any): void {
     this.logger.info('JRADI01CI0016', track.uri);
 
     let uri: string = track.uri;
@@ -813,7 +812,7 @@ class JpRadioController {
     return defer.promise;
   }
 
-  public addToFavourites(data: any): any {
+  public addToFavourites(data: any): Promise<any> {
     return this.explodeUri(data.uri).then((item) => {
       this.logger.info('JRADI01CI0018', item);
       const [liveUri, timefree]: string[] = item.uri.split('?');
@@ -830,7 +829,7 @@ class JpRadioController {
     });
   }
 
-  public removeFromFavourites(data: any): any {
+  public removeFromFavourites(data: any): Promise<any> {
     return this.explodeUri(data.uri).then((item) => {
 
       this.logger.info('JRADI01CI0019', item);

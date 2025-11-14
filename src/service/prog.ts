@@ -150,6 +150,7 @@ export default class RdkProg {
 
     // 番組データが空の場合、1日分の番組データを取得して再検索（retry=trueの場合のみ）
     if (Object.keys(radikoProgramData).length === 0 && retry === true) {
+      // DateTime型 を DateOnly型 に変換
       const dateOnly: DateOnly = broadcastTimeConverter.parseDateTimeToDateOnly(dateTime);
       // 指定された放送局IDの1日分の番組データを取得
       const stations: Set<string> = await this.getDailyStationPrograms(stationId, dateOnly);
@@ -164,18 +165,19 @@ export default class RdkProg {
   }
 
   /** DB検索＋キャッシュ */
-  private async findProgramData(stationId: string, dateTime: DateTime): Promise<RadikoProgramData> {
+  private async findProgramData(stationId: string, searchDateTime: DateTime): Promise<RadikoProgramData> {
     // キャッシュしている局・時間と異なる場合はDB検索
-    if (stationId !== this.lastStationId || dateTime !== this.lastTime) {
+    if (stationId !== this.lastStationId || searchDateTime !== this.lastTime) {
       try {
         /**
          * DB検索
-         * 放送開始 <= 指定時間 < 放送終了
+         * 指定日時 >= 放送開始
+         * 指定日時 < 放送終了
          */
         const result: RadikoProgramData = await this.dbUtil.findOne({
           stationId,
-          ft: { $lte: dateTime }, // DateTime型で比較可能
-          to: { $gt: dateTime }, // DateTime型で比較可能
+          ft: { $lte: searchDateTime },
+          to: { $gt: searchDateTime },
         });
 
         // 結果が存在する場合はキャッシュ更新
@@ -185,10 +187,10 @@ export default class RdkProg {
           // 局IDの更新
           this.lastStationId = stationId;
           // 時間の更新
-          this.lastTime = dateTime;
+          this.lastTime = searchDateTime;
         } else {
           // 番組データが見つからない場合はエラーログに局ID・日時(yyyyMMddHHmmss形式)を出力
-          this.logger.error('JRADI02SE0001', stationId, broadcastTimeConverter.parseDateTimeToStringDateTime(dateTime));
+          this.logger.error('JRADI02SE0001', stationId, broadcastTimeConverter.parseDateTimeToStringDateTime(searchDateTime));
           throw new Error('Program data not found');
         }
 
@@ -222,11 +224,14 @@ export default class RdkProg {
   /** 古い番組削除 */
   public async clearOldProgram(): Promise<void> {
     try {
-      this.dbUtil.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true })
-        .then(n => this.logger.info('JRADI02SI0001', n));
+      // 現在時刻より前の番組データを削除
+      const result: number = await this.dbUtil.remove({ to: { $lt: broadcastTimeConverter.getCurrentRadioTime() } }, { multi: true });
+      // 削除件数ログ出力
+      this.logger.info('JRADI02SI0001', result);
     } catch (error: any) {
       this.logger.error('JRADI02SE0004', error);
     }
+    // 現在持っているDB件数のログ出力
     await this.dbCount();
   }
 
@@ -335,17 +340,5 @@ export default class RdkProg {
   private initDBIndexes(): void {
     // progIdはユニーク
     this.dbUtil.ensureIndex({ fieldName: 'progId', unique: true });
-
-    /**
-     * 他のフィールドはインデックス不要なのでは？
-     * → DB検索時に複合インデックスを使うため、単一フィールドのインデックスは不要
-    */
-
-    // 局ID
-    //this.dbUtil.ensureIndex({ fieldName: 'stationId' });
-    // 放送開始(yyyyMMddHHmmss形式)
-    //this.dbUtil.ensureIndex({ fieldName: 'ft' });
-    // 放送終了(yyyyMMddHHmmss形式)
-    //this.dbUtil.ensureIndex({ fieldName: 'to' });
   }
 }

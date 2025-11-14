@@ -4,6 +4,7 @@ import { spawn, execFile, ChildProcess } from 'child_process';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
+import type { ParsedQs } from 'qs';
 
 // 定数のインポート
 import {
@@ -73,7 +74,7 @@ export default class RadikoService {
           // パスワード/メールアドレス間違い
           this.logger.warn('JRADI03SW0001');
         } else {
-          // TODO:ポップアップでログインできない旨を表示
+          // TODO:ポップアップでログインできない旨を表示予定
           this.logger.error('JRADI03SE0005', error);
         }
       }
@@ -81,7 +82,7 @@ export default class RadikoService {
 
     this.loginState = await this.authLogic.checkLogin();
 
-    // 再生用のトークン取得・局情報取得
+    // 再生用のトークン取得・放送局情報取得
     if (forceGetStations === true || !this.myAreaId) {
       [this.token, this.myAreaId] = await this.authLogic.getToken();
       await this.getRadikoServerStationsInfo();
@@ -144,7 +145,6 @@ export default class RadikoService {
     if (this.myAreaId !== undefined && this.myAreaId !== null) {
       currentAreaId = this.myAreaId;
     }
-
 
     let allowedStations: string[] = areaData.get(currentAreaId)?.stations.map(String) ?? [];
 
@@ -215,8 +215,8 @@ export default class RadikoService {
       execFile('ffmpeg', ['-n', '-i', logoUrl, fullPath,
         '-filter_complex',
         'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1'
-      ], (err: any) => {
-        if (err) {
+      ], (error: any) => {
+        if (error) {
           return logoUrl;
         }
       });
@@ -251,7 +251,7 @@ export default class RadikoService {
   }
 
   // --- Play ---
-  public async play(stationId: string, query: any): Promise<ChildProcess> {
+  public async play(stationId: string, query: ParsedQs): Promise<ChildProcess> {
     // this.stationsに再生時のStationIdが含まれているか確認
     if (!this.stations?.has(stationId)) {
       // StationIdが含まれていなければLogにWarnとして書き込む
