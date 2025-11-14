@@ -736,12 +736,10 @@ class JpRadioController {
           }
         } else {
           // タイムフリーがない場合はライブを再生
-          this.logger.info('TESTController0001', 'ライブ-タイムフリー無し');
 
           // 現在の再生位置を取得
           const currentPosition = this.commandRouter.stateMachine.currentPosition;
           if (currentPosition > 0) {
-            this.logger.info('TESTController0001', 'ライブ-キュー並べ替え');
             // 再生キューを並べ替えて対象局を先頭に
             let arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue; // 現在の再生キューを取得
             const arrayCurrentQueue = arrayQueue.splice(currentPosition); // 現在の位置以降のキューを取得
@@ -751,8 +749,6 @@ class JpRadioController {
             this.commandRouter.volumioPushQueue(arrayQueue); // 新しいキューをプッシュ
           }
         }
-
-        this.logger.info('TESTController0001', 'ライブ-不明');
 
         // 新しいURIをキューに追加
         await this.mpdPlugin.sendMpdCommand(`add "${uri}"`, []);
@@ -906,7 +902,7 @@ class JpRadioController {
     (async () => {
       try {
         // uri = http://localhost:9000/radiko/play/TBS?ft=##&to=##
-        if (!data.uri.includes('/radiko/play/')) {
+        if (data.uri.includes('/radiko/play/') === false) {
           return new Error('Invalid URI');
         }
 
@@ -964,7 +960,7 @@ class JpRadioController {
     const [liveUri, timefree]: string = data.uri.split('?');
     const stationId = liveUri.split('/').pop();
 
-    if ((liveUri.includes('/radiko/play/') || liveUri.includes('/radiko/proginfo/')) && (stationId !== undefined && stationId !== null)) {
+    if ((liveUri.includes('/radiko/play/') === true || liveUri.includes('/radiko/proginfo/') === true) && (stationId !== undefined && stationId !== null)) {
       let ftDateTime: DateTime = broadcastTimeConverter.getCurrentRadioTime();
       let toDateTime: DateTime = ftDateTime;
 
