@@ -148,8 +148,8 @@ class clsRadioTime {
   // yyyyMMddHHmmss'形式に経過秒を足す
   public addTime(src: string, elapsedSec: number | string): string {
     if (elapsedSec) {
-      src += (src.length < 14) ? '0'.repeat(14 - src.length) : '';
-      return src.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, (match, year, month, date, hour, min, sec) => {
+      const src2 = this.revConvertRadioTime(src);
+      return src2.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d).*$/, (match, year, month, date, hour, min, sec) => {
         var time = new Date(year, month-1, date, hour, min, sec); // 月は0-11で指定
         time.setTime(time.getTime() + Number(elapsedSec) * 1000);
         return format(time, 'yyyyMMddHHmmss');

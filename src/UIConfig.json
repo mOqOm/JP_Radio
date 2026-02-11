@@ -153,6 +153,68 @@
       ]
     },
     {
+      "id": "browseMode",
+      "element": "section",
+      "hidden": true,
+      "label": "TRANSLATE.UI_SETTINGS.BROWSE_SETTING_LABEL",
+      "description": "TRANSLATE.UI_SETTINGS.BROWSE_SETTING_DESC",
+      "icon": "fa-list-ol",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveBrowseModeSetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.UI_SETTINGS.SAVE_BUTTON_LABEL",
+        "data": [
+          "browseMode1",
+          "browseMode2"
+        ]
+      },
+      "content": [
+        {
+          "id": "browseMode1",
+          "element": "select",
+          "label": "TRANSLATE.UI_SETTINGS.BROWSE_LIVE_LABEL",
+          "doc": "TRANSLATE.UI_SETTINGS.BROWSE_LIVE_DOC",
+          "value":  {
+            "value": "type1",
+            "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE1"
+          },
+          "options": [
+            {
+              "value": "type1",
+              "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE1"
+            },
+            {
+              "value": "type2",
+              "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE2"
+            }
+          ]
+        },
+        {
+          "id": "browseMode2",
+          "element": "select",
+          "label": "TRANSLATE.UI_SETTINGS.BROWSE_TIMEFREE_LABEL",
+          "doc": "TRANSLATE.UI_SETTINGS.BROWSE_TIMEFREE_DOC",
+          "value":  {
+            "value": "type2",
+            "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE2"
+          },
+          "options": [
+            {
+              "value": "type1",
+              "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE1"
+            },
+            {
+              "value": "type2",
+              "label": "TRANSLATE.UI_SETTINGS.BROWSE_TYPE2"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "timefree",
       "element": "section",
       "label": "TRANSLATE.UI_SETTINGS.TIMEFREE_SETTING_LABEL",

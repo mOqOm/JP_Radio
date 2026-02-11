@@ -13,7 +13,8 @@ import type { StationInfo, RegionData } from './models/StationModel';
 import type { LoginAccount, LoginState } from './models/AuthModel';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
-  STATION_AREA_URL, STATION_FULL_URL, PLAY_LIVE_URL, PLAY_TIMEFREE_URL,
+  STATION_AREA_URL, STATION_FULL_URL,
+  PLAY_LIVE_URL, STATION_STREAM_XML_URL, PLAY_URL_QUERY,
   AUTH_KEY, MAX_RETRY_COUNT
 } from './consts/radikoUrls';
 
@@ -33,6 +34,7 @@ export default class Radiko {
   private myAreaId: string = '';
   private cookieJar: CookieJar = new tough.CookieJar();
   private loginState: LoginState | null = null;
+  private lsid: string = this.RandomHex32();  // PLAY時に指定する16進32桁（今のところ何でもいいらしい。起動時に乱数で決めた値を使うことにする）
 
   public stations: Map<string, StationInfo> = new Map();
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
@@ -272,31 +274,47 @@ export default class Radiko {
 //-----------------------------------------------------------------------
 
   public async play(stationId: string, query: any): Promise<ChildProcess | null> {
+    this.logger.info(`JP_Radio::play: stationId=${stationId}, query=[${Object.entries(query)}]`);
     if (!this.stations?.has(stationId)) {
       this.logger.warn(`JP_Radio::Station not found: ${stationId}`);
       return null;
     }
-    var url = format(PLAY_LIVE_URL, stationId);
     var aac = '';
-    if (query.ft && query.to) {
-      const ft = RadioTime.addTime(RadioTime.revConvertRadioTime(query.ft), query.seek);
-      const to = RadioTime.revConvertRadioTime(query.to);
-      url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
-      //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
-    }
-    this.logger.info(`JP_Radio::Radiko.play: url=${url}`);
-
     let m3u8: string | null = null;
-    for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.myAreaId] = await this.getToken();
-      m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-      if (m3u8) break;
-      this.logger.info('JP_Radio::Retrying stream fetch with new token');
-      this.token = '';
+    if (query.ft && query.to) {
+      // TimeFree
+      //const ft = RadioTime.addTime(RadioTime.revConvertRadioTime(query.ft), query.seek);
+      const ft = RadioTime.revConvertRadioTime(query.ft);
+      const to = RadioTime.revConvertRadioTime(query.to);
+      //url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
+      //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
+
+      // Radiko仕様変更(2026/01)に対応
+      const url = format(STATION_STREAM_XML_URL, stationId);
+      const hls_urls = await this.getHlsURLs(url, '1');
+      if(hls_urls) {
+        m3u8 = hls_urls[0]; // 0番がメインサーバー、1番がサブと思われる
+        m3u8 += format(PLAY_URL_QUERY, stationId, ft, ft, to, to, this.lsid);
+        if (query.seek) {
+          m3u8 += `&seek=${RadioTime.addTime(ft, query.seek)}`;
+        }
+      }
+
+    } else {
+      // Live
+      const url = format(PLAY_LIVE_URL, stationId);
+      for (let i = 0; i < MAX_RETRY_COUNT; i++) {
+        if (!this.token) [this.token, this.myAreaId] = await this.getToken();
+        m3u8 = await this.genTempChunkM3u8URL(url, this.token);
+        if (m3u8) break;
+        this.logger.info('JP_Radio::Retrying stream fetch with new token');
+        this.token = '';
+      }
     }
     
     if (m3u8) {
-      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8, //'-ss', `${query.seek ?? 0}`,
+      this.logger.info(`JP_Radio::play: m3u8=${m3u8}`);
+      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8,
         '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
       if (aac) args.push(aac);
       //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
@@ -325,4 +343,35 @@ export default class Radiko {
       return null;
     }
   }
+
+  private async getHlsURLs(url: string, timefree: string): Promise<string[] | null> {
+    this.logger.info(`JP_Radio::getHlsURLs url=${url}`);
+    try {
+      var hls_urls: string[] = [] ;
+      const res = await got(url);
+      const xml = xmlParser.parse(res.body);
+      for(var data of xml.urls.url) {
+        const hls_url = data['playlist_create_url'];
+        const areafree = this.loginState ? this.loginState.areafree : '0';
+        if(areafree == data['@areafree'] && timefree == data['@timefree']) {
+          this.logger.info(`JP_Radio::getHlsURLs hls_url=${hls_url}`);
+          hls_urls.push(hls_url);
+        }
+      }
+      return hls_urls;
+    } catch (err) {
+      this.logger.error('JP_Radio::getHlsURLs error', err);
+      return null;
+    }
+  }
+
+  private RandomHex32(): string {
+    var sb = '';
+    for(var i = 0; i < 32; i++) {
+      var b = Math.floor(Math.random() * 0x10);
+      sb += b.toString(0x10);
+    }
+    return sb;
+  }
+
 }
