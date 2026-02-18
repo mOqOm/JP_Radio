@@ -314,7 +314,8 @@ export default class Radiko {
     
     if (m3u8) {
       this.logger.info(`JP_Radio::play: m3u8=${m3u8}`);
-      const args = ['-y', '-headers', `X-Radiko-Authtoken:${this.token}`, '-i', m3u8,
+      const headers = `X-Radiko-Authtoken:${this.token}\r\nX-Radiko-AreaId:${this.myAreaId}`;
+      const args = ['-y', '-headers', headers,'-i', m3u8,
         '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
       if (aac) args.push(aac);
       //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
