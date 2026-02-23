@@ -9,7 +9,9 @@ export const MAX_RETRY_COUNT = 2;
 
 // 再生系
 export const PLAY_LIVE_URL = 'https://f-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8';
-export const PLAY_TIMEFREE_URL = 'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id=%s&l=15&ft=%s&to=%s';
+//export const PLAY_TIMEFREE_URL = 'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id=%s&l=15&ft=%s&to=%s';  // Radiko仕様変更(2026/01)で廃止
+export const STATION_STREAM_XML_URL = 'https://radiko.jp/v3/station/stream/pc_html5/%s.xml';   // TBS.xml
+export const PLAY_URL_QUERY = '?station_id=%s&start_at=%s&ft=%s&end_at=%s&to=%s&preroll=0&l=15&lsid=%s&type=c';
 
 // ステーションリスト
 export const STATION_AREA_URL = 'http://radiko.jp/v3/station/list/%s.xml';  // JP13.xml

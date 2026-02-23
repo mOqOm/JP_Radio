@@ -366,6 +366,9 @@ export default class JpRadio {
             const progData = await this.prg?.getProgramData(stationId, ft, retry);
             const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo,
               progData ? progData : { stationId, progId:'', ft, to, title:data.title, info:'', pfm:'', img:data.albumart } );
+            if (item.title.startsWith('×')) {
+              item.uri = item.uri.replace('proginfo', 'progreg');
+            }
             item.favourite = true;
             items[1].push(item);
           }
@@ -431,14 +434,20 @@ export default class JpRadio {
     if (progData?.ft && progData?.to) {
       const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioTime());
       if (check == 0)
-              item.title = '★';  // ライブ
-      else if (check > 0)
-              item.title = '⬜︎';  // 配信前
-      else {
+        item.title = '★';  // ライブ
+      else if (check > 0) {
+        item.title = '⬜︎';  // 配信前
+        item.type = 'radio-category'; // このタイプはhandleBrowseUriを呼び出す
+        item.uri = item.uri.replace('play', 'proginfo');
+      } else {
         const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioDate() + '050000');
         if (check >= -7 * 86400)
-              item.title = '▷';   // タイムフリー（TODO: タイムフリー30はどうする？）
-        else  item.title = '×';   // 配信終了
+          item.title = '▷';   // タイムフリー（TODO: タイムフリー30はどうする？）
+        else {
+          item.title = '×';   // 配信終了
+          item.type = 'radio-category'; // このタイプはhandleBrowseUriを呼び出す
+          item.uri = item.uri.replace('play', 'proginfo');
+        }
       }
       item.uri += `&${progData.ft}&${progData.to}`;
     } else  item.title = '？';
@@ -498,7 +507,7 @@ export default class JpRadio {
           this.task1.start();
           const areaName = getI18nString(`RADIKO_AREA.${this.myInfo.areaId}`)
           const areaFree = this.myInfo.areafree ? ` / ${getI18nString('MESSAGE.AREA_FREE')}` : '';
-          const msg1 = getI18nString('MESSAGE.BOOT_COMPLETED');
+          const msg1 = getI18nString('MESSAGE.BOOT_COMPLETED') + '　'.repeat(10);
           const msg2 = getI18nStringFormat('MESSAGE.AREA_INFO', areaName + areaFree, this.myInfo.cntStations);
           this.commandRouter.pushToastMessage('success', 'JP Radio', msg1 + msg2);
           resolve();
