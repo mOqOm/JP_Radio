@@ -5,13 +5,20 @@ Japanese radio relay server for Volumio3
 
 ## Change log
 
+### version 3.1.3 (2026/06/24)
+- Addresses an issue where Live playback became unavailable due to a Radiko specification change (June 2026).
+- Variable-speed playback (0.5x–2.0x) for Time-Free.
+- If you press the play button again after stopping the time-free playback, playback will resume from where it left off.
+- Configure the action taken when selecting a program on the browse screen (playback or opening program information).
+- This version was provided by [**@hirokun0413**](https://github.com/hirokun0413).
+
 ### version 3.1.2 (2026/02/18)
 - Added 'X-Radiko-AreaId' to the ffmpeg header.
 - Changed the main README to Japanese.
 - This version was provided by [**@hirokun0413**](https://github.com/hirokun0413).
 
 ### version 3.1.1 (2026/02/05)
-- Addresses an issue where Time Free playback became unavailable due to a Radiko specification change (January 2026), among other issues.
+- Addresses an issue where Time-Free playback became unavailable due to a Radiko specification change (January 2026), among other issues.
 - This version was provided by [**@hirokun0413**](https://github.com/hirokun0413).
 
 ### version 3.1.0 (2025/09/15)

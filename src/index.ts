@@ -10,7 +10,7 @@ import { loadI18nStrings, getI18nString, getI18nStringFormat } from './lib/i18nS
 import { AreaNames } from './lib/consts/areaName';
 import { RadioTime } from './lib/radioTime';
 import type { BrowseResult } from './lib/models/BrowseResultModel';
-
+import type { JpRadioConfig } from './lib/models/ConfigModel';
 
 export = ControllerJpRadio;
 
@@ -20,7 +20,7 @@ class ControllerJpRadio {
   private readonly logger: Console;
   private readonly configManager: any;
   private config: InstanceType<typeof VConf> | null = null;
-  private confParam: { port: number, delay: number, aaType: string, brwsMd1: string, brwsMd2: string, ppFrom: number, ppTo: number, timeFmt: string, dateFmt: string, areaIds: string[] };
+  private confParam: JpRadioConfig;
   private readonly serviceName = 'jp_radio';
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
@@ -97,6 +97,7 @@ class ControllerJpRadio {
       ppTo   : this.config.get('programPeriodTo') ?? 0,
       timeFmt: timeFormat,
       dateFmt: timeFormat.replace(/\s.+$/, ''),
+      tempo  : this.config.get('tempo') ?? 1.0,
       areaIds: areaIds
     };
 
@@ -155,102 +156,120 @@ class ControllerJpRadio {
       `${__dirname}/UIConfig.json`
     )
     .then((uiconf: any) => {
-      // ネットワーク設定
-      var sectionIdx = 0;
-      const servicePort = this.config.get('servicePort');
-      const networkDelay= this.config.get('networkDelay');
-      if (uiconf.sections?.[sectionIdx]?.content?.[0]) uiconf.sections[sectionIdx].content[0].value = servicePort;
-      if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = networkDelay;
-
-      // ラジコプレミアムアカウント設定
-      sectionIdx++;
-      const radikoUser = this.config.get('radikoUser');
-      const radikoPass = this.config.get('radikoPass');
-      if (uiconf.sections?.[sectionIdx]?.content?.[0]) uiconf.sections[sectionIdx].content[0].value = radikoUser;
-      if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = radikoPass;
-
-      // アルバムアート設定
-      sectionIdx++;
-      const albumartType= this.config.get('albumartType');
-      if (uiconf.sections?.[sectionIdx]?.content?.[0]) {
-        const content = uiconf.sections[sectionIdx].content[0];
-        content.value.value = albumartType;
-        for (const opt of content.options) {
-          if (opt.value === albumartType) {
-            content.value.label = opt.label;
-            break;
-          }
+      if (uiconf.sections) {
+        // ネットワーク設定
+        var sectionIdx = 0;
+        var section = uiconf.sections[sectionIdx];
+        if (section?.content?.[0]) {
+          section.content[0].value = this.config.get('servicePort');
         }
-      }
+        if (section?.content?.[1]) {
+          section.content[1].value = this.config.get('networkDelay');
+        }
 
-      // ブラウズ設定
-      sectionIdx++;
-      const arrBrowseMode = [this.config.get('browseMode1'), this.config.get('browseMode2')];
-      for (const i in arrBrowseMode) {
-        if (uiconf.sections?.[sectionIdx]?.content?.[0]) {
-          const content = uiconf.sections[sectionIdx].content[0];
-          content.value.value = arrBrowseMode[i];
+        // ラジコプレミアムアカウント設定
+        section = uiconf.sections[++sectionIdx];
+        const radikoUser = this.config.get('radikoUser');
+        const radikoPass = this.config.get('radikoPass');
+        if (section?.content?.[0]) {
+          section.content[0].value = radikoUser;
+        }
+        if (section?.content?.[1]) {
+          section.content[1].value = radikoPass;
+        }
+
+        // アルバムアート設定
+        section = uiconf.sections[++sectionIdx];
+        if (section?.content?.[0]) {
+          const content = section.content[0];
+          content.value.value = this.config.get('albumartType');
           for (const opt of content.options) {
-            if (opt.value === arrBrowseMode[i]) {
+            if (opt.value === content.value.value) {
               content.value.label = opt.label;
               break;
             }
           }
         }
-      }
 
-      // タイムフリー設定
-      sectionIdx++;
-      const programPeriodFrom = this.config.get('programPeriodFrom');
-      const programPeriodTo   = this.config.get('programPeriodTo');
-      const timeFormat        = this.config.get('timeFormat');
-      if (uiconf.sections?.[sectionIdx]?.content?.[0]) uiconf.sections[sectionIdx].content[0].value = programPeriodFrom;
-      if (uiconf.sections?.[sectionIdx]?.content?.[1]) uiconf.sections[sectionIdx].content[1].value = programPeriodTo;
-      if (uiconf.sections?.[sectionIdx]?.content?.[2]) {
-        const today = RadioTime.getCurrentDate();
-        const content = uiconf.sections[sectionIdx].content[2];
-        content.value.value = timeFormat;
-        for (const opt of content.options) {
-          opt.label = format(opt.label, RadioTime.formatFullString2([today+'120000', today+'130000'], opt.value));
-          if (opt.value === timeFormat)
-            content.value.label = opt.label;
+        // ブラウズ設定
+        section = uiconf.sections[++sectionIdx];
+        if (section?.content?.[0]) {
+          const arrBrowseMode = [this.config.get('browseMode1'), this.config.get('browseMode2')];
+          for (const i in arrBrowseMode) {
+            const content = section.content[i];
+            content.value.value = arrBrowseMode[i];
+            for (const opt of content.options) {
+              if (opt.value === content.value.value) {
+                content.value.label = opt.label;
+                break;
+              }
+            }
+          }
         }
-      }
 
-      // エリアフリー設定
-      sectionIdx++;
-      if (radikoUser && radikoPass && uiconf.sections?.[sectionIdx]?.content && uiconf.sections?.[sectionIdx]?.hidden) {
-        const myInfo = this.appRadio!.getMyInfo();
-        const section = uiconf.sections[sectionIdx];
-        section.hidden = false;
-        AreaNames.forEach((item) => {
-          const contents = new Array();
-        //const onAreas = new Array();
-          const regionId = item.region.split('.').pop();  // 'RADIKO_AREA.REGION2'
-          contents.push({
-            id   : regionId,  // 'REGION2'
-            label: getI18nString(item.region), // '関東'
-          }); // contents[0]
-          item.areas.forEach((radikoArea) => {
-            const areaId = radikoArea.split('.').pop(); // 'RADIKO_AREA.JP13'
-            const areaName = getI18nString(radikoArea); // '≪ 関東 ≫'
-            const areaStations = this.appRadio?.getAreaStations(areaId!); // TBS,QRR,LFR,INT,FMT,...,JOAK
-            const value = this.config.get(`radikoAreas.${areaId}`);
+        // タイムフリー設定
+        section = uiconf.sections[++sectionIdx];
+        if (section?.content?.[0]) {
+          section.content[0].value = this.config.get('programPeriodFrom');
+        }
+        if (section?.content?.[1]) {
+          section.content[1].value = this.config.get('programPeriodTo');
+        }
+        if (section?.content?.[2]) {
+          const today = RadioTime.getCurrentDate();
+          const content = section.content[2];
+          content.value.value = this.config.get('timeFormat');
+          for (const opt of content.options) {
+            opt.label = format(opt.label, RadioTime.formatFullString2([today+'120000', today+'130000'], opt.value));
+            if (opt.value === content.value.value)
+              content.value.label = opt.label;
+          }
+        }
+        if (section?.content?.[3]) {
+          const content = section.content[3];
+          content.value.value = this.config.get('tempo');
+          for (const opt of content.options) {
+            if (opt.value === content.value.value) {
+              content.value.label = opt.label;
+              break;
+            }
+          }
+        }
+
+        // エリアフリー設定
+        section = uiconf.sections[++sectionIdx];
+        if (radikoUser && radikoPass && section?.content && section?.hidden) {
+          const myInfo = this.appRadio!.getMyInfo();
+          section.hidden = false;
+          AreaNames.forEach((item) => {
+            const contents = new Array();
+          //const onAreas = new Array();
+            const regionId = item.region.split('.').pop();  // 'RADIKO_AREA.REGION2'
             contents.push({
-              id         : areaId,  // 'JP13'
-              element    : 'switch',
-              label      : `- ${areaName}${(myInfo.areaId == areaId) ? getI18nString('UI_SETTINGS.RADIKO_MY_AREA') : ''}`,
-              value      : value,
-              description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),
-            }); // contents[1-]
-            section.saveButton.data.push(areaId);
-          }); // item.areas.forEach
-          contents.push({ label: '' });  // separator
-          contents.forEach((item: any) => { section.content.push(item) });
-        }); // AreaNames.forEach
-      }
-      defer.resolve(uiconf);
+              id   : regionId,  // 'REGION2'
+              label: getI18nString(item.region), // '関東'
+            }); // contents[0]
+            item.areas.forEach((radikoArea) => {
+              const areaId = radikoArea.split('.').pop(); // 'RADIKO_AREA.JP13'
+              const areaName = getI18nString(radikoArea); // '≪ 関東 ≫'
+              const areaStations = this.appRadio?.getAreaStations(areaId!); // TBS,QRR,LFR,INT,FMT,...,JOAK
+              const value = this.config.get(`radikoAreas.${areaId}`);
+              contents.push({
+                id         : areaId,  // 'JP13'
+                element    : 'switch',
+                label      : `- ${areaName}${(myInfo.areaId == areaId) ? getI18nString('UI_SETTINGS.RADIKO_MY_AREA') : ''}`,
+                value      : value,
+                description: `${areaStations} / ${areaStations?.length}`.replace(/,/g, ', '),
+              }); // contents[1-]
+              section.saveButton.data.push(areaId);
+            }); // item.areas.forEach
+            contents.push({ label: '' });  // separator
+            contents.forEach((item: any) => { section.content.push(item) });
+          }); // AreaNames.forEach
+        }
+        defer.resolve(uiconf);
 
+      }
     })
     .fail((error: any) => {
       this.logger.error('getUIConfig failed:', error);
@@ -264,7 +283,7 @@ class ControllerJpRadio {
     return ['config.json'];
   }
 
-  public saveNetworkSetting(data: { servicePort: string; networkDelay: string }): void {
+  public saveNetworkSetting(data: { servicePort: string, networkDelay: string }): void {
     this.logger.info(`JP_Radio::saveNetworkSetting`);
     if (this.config) {
       const newPort = Number(data.servicePort || 9000);
@@ -278,7 +297,7 @@ class ControllerJpRadio {
     }
   }
 
-  public saveRadikoAccountSetting(data: { radikoUser: string; radikoPass: string }): void {
+  public saveRadikoAccountSetting(data: { radikoUser: string, radikoPass: string }): void {
     this.logger.info(`JP_Radio::saveRadikoAccount`);
     if (this.config) {
       const updated = ['radikoUser', 'radikoPass'].some(
@@ -292,7 +311,7 @@ class ControllerJpRadio {
     }
   }
 
-  public saveAlbumartSetting(data: { albumartType: { value: string; label: string } }): void {
+  public saveAlbumartSetting(data: { albumartType: { value: string, label: string } }): void {
     this.logger.info(`JP_Radio::saveAlbumartSetting`);
     if (this.config) {
       if (this.config.get('albumartType') !== data.albumartType.value) {
@@ -324,17 +343,20 @@ class ControllerJpRadio {
     }
   }
 
-  public saveTimeFreeSetting(data: { programPeriodFrom: string; programPeriodTo: string; timeFormat: { value: string; label: string }}): void {
+  public saveTimeFreeSetting(data: { programPeriodFrom: string, programPeriodTo: string,
+      timeFormat: { value: string, label: string }, tempo: { value: string, label: string } } ): void {
     this.logger.info('JP_Radio::saveTimeFreeSetting');
     if (this.config) {
       const newProgramPeriodFrom = Number(data.programPeriodFrom || 7);
       const newProgramPeriodTo = Number(data.programPeriodTo || 0);
       if (!isNaN(newProgramPeriodFrom) && this.config.get('programPeriodFrom') !== newProgramPeriodFrom
       || !isNaN(newProgramPeriodTo) && this.config.get('programPeriodTo') !== newProgramPeriodTo
-      || this.config.get('timeFormat') !== data.timeFormat.value) {
+      || this.config.get('timeFormat') !== data.timeFormat.value
+      || this.config.get('tempo') !== data.tempo.value) {
         this.config.set('programPeriodFrom', data.programPeriodFrom);
         this.config.set('programPeriodTo', data.programPeriodTo);
         this.config.set('timeFormat', data.timeFormat.value);
+        this.config.set('tempo', data.tempo.value);
         this.showRestartModal();
       }
     }
@@ -574,9 +596,9 @@ class ControllerJpRadio {
               uri = liveUri;
               this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.WARNING_SWITCH_LIVE1'));
             } else if (check == 0) {
-              // 追っかけ再生はうまくいかないのでライブ放送に切り替え（追っかけ再生は途中で切れる）
-              uri = liveUri;
-              this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.WARNING_SWITCH_LIVE2'));
+              // 追っかけ再生(サーバーが変わったからか(?)、追っかけ再生できるようになったっぽい)
+              //uri = liveUri;
+              //this.commandRouter.pushToastMessage('info', 'JP Radio', getI18nString('MESSAGE.WARNING_SWITCH_LIVE2'));
             }
           } else {
             // ライブ
@@ -679,20 +701,34 @@ class ControllerJpRadio {
             return this.mpdPlugin.sendMpdCommand('delete 0', []);
           });
         } else {
-          // ライブ：無視，タイムバーを元に戻す
-          this.appRadio!.pushSongState(true);
-          defer.reject();
+          // ライブ
+          const playing = this.appRadio!.getPlaying();
+          if(timepos < playing.lastpos) {
+            // 過去：追っかけ再生に切り替え
+            const prg = this.appRadio!.getPrg();
+            prg!.getCurProgramData(playing.stationId, false).then((prgData: any) => {
+              uri += `?ft=${ prgData.ft}&to=${prgData.to}&seek=${Math.round(timepos/1000)}`;
+              return this.mpdPlugin.sendMpdCommand(`add "${uri}"`, [])
+              .then(() => {
+                return this.mpdPlugin.sendMpdCommand('delete 0', []);
+              });
+            });
+          } else {
+            // 未来：無視，タイムバーを元に戻す
+            this.appRadio!.pushSongState(true);
+            defer.reject();
+          }
         }
       } else {
         defer.reject();
       }
     });
     return defer.promise;
-    //return this.mpdPlugin.seek(timepos);
   }
 
   public stop(): void {
-    this.logger.info(`JP_Radio::stop`);
+    const playing = this.appRadio!.getPlaying();
+    this.logger.info(`JP_Radio::stop: playing=${Object.entries(playing)}`);
     return this.mpdPlugin.sendMpdCommand('stop', []);
   }
 
@@ -817,7 +853,7 @@ class ControllerJpRadio {
       };
       if (RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioDate() + '050000') < -7 * 86400)
         modalMessage.buttons.splice(0, 3); //「再生/キューに追加/お気に入りに追加」ボタンを消す
-      else if (RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime()) >= 0)
+      else if (RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime()) > 0)
         modalMessage.buttons.splice(0, 1); //「再生」ボタンを消す
       this.commandRouter.broadcastMessage('openModal', modalMessage);
     }

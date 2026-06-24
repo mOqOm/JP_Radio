@@ -14,7 +14,8 @@ import type { LoginAccount, LoginState } from './models/AuthModel';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
-  PLAY_LIVE_URL, STATION_STREAM_XML_URL, PLAY_URL_QUERY,
+  //PLAY_LIVE_URL, 
+  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIMEFREE_QUERY,
   AUTH_KEY, MAX_RETRY_COUNT
 } from './consts/radikoUrls';
 
@@ -96,8 +97,8 @@ export default class Radiko {
       // TODO: エリアフリー・タイムフリー30・ダブルプランはここで判別できるのか？？？
       const response: Response<any> = await got(CHECK_URL, options);
       const body = response.body as LoginState;
-      //this.logger.info(`JP_Radio::checkLogin: Login status=${Object.entries(body)}`);
-      //this.logger.info(`JP_Radio::checkLogin: member_type=${Object.entries(body.member_type)}`);
+      //this.logger.info(`JP_Radio::Radiko.checkLogin: Login status=${Object.entries(body)}`);
+      //this.logger.info(`JP_Radio::Radiko.checkLogin: member_type=${Object.entries(body.member_type)}`);
       return body;
 
     } catch (err: any) {
@@ -273,60 +274,59 @@ export default class Radiko {
 
 //-----------------------------------------------------------------------
 
-  public async play(stationId: string, query: any): Promise<ChildProcess | null> {
-    this.logger.info(`JP_Radio::play: stationId=${stationId}, query=[${Object.entries(query)}]`);
+  public async play(stationId: string, query: any, tempo: number): Promise<ChildProcess | null> {
+    this.logger.info(`JP_Radio::Radiko.play: stationId=${stationId}, query=[${Object.entries(query)}], tempo=${tempo}`);
     if (!this.stations?.has(stationId)) {
       this.logger.warn(`JP_Radio::Station not found: ${stationId}`);
       return null;
     }
-    var aac = '';
-    let m3u8: string | null = null;
-    if (query.ft && query.to) {
-      // TimeFree
-      //const ft = RadioTime.addTime(RadioTime.revConvertRadioTime(query.ft), query.seek);
-      const ft = RadioTime.revConvertRadioTime(query.ft);
-      const to = RadioTime.revConvertRadioTime(query.to);
-      //url = format(PLAY_TIMEFREE_URL, stationId, ft, to);
-      //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : '';
 
-      // Radiko仕様変更(2026/01)に対応
-      const url = format(STATION_STREAM_XML_URL, stationId);
-      const hls_urls = await this.getHlsURLs(url, '1');
-      if(hls_urls) {
-        m3u8 = hls_urls[0]; // 0番がメインサーバー、1番がサブと思われる
-        m3u8 += format(PLAY_URL_QUERY, stationId, ft, ft, to, to, this.lsid);
-        if (query.seek) {
-          m3u8 += `&seek=${RadioTime.addTime(ft, query.seek)}`;
-        }
-      }
-
-    } else {
-      // Live
-      const url = format(PLAY_LIVE_URL, stationId);
-      for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-        if (!this.token) [this.token, this.myAreaId] = await this.getToken();
-        m3u8 = await this.genTempChunkM3u8URL(url, this.token);
-        if (m3u8) break;
-        this.logger.info('JP_Radio::Retrying stream fetch with new token');
-        this.token = '';
-      }
-    }
-    
-    if (m3u8) {
-      this.logger.info(`JP_Radio::play: m3u8=${m3u8}`);
-      const headers = `X-Radiko-Authtoken:${this.token}\r\nX-Radiko-AreaId:${this.myAreaId}`;
-      const args = ['-y', '-headers', headers,'-i', m3u8,
-        '-acodec', 'copy', '-f', 'adts', '-loglevel', 'error', 'pipe:1'];
-      if (aac) args.push(aac);
-      //this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
-      return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
-    } else {
+    // Radiko仕様変更(2026/01,2026/06)に対応
+    const xml_url  = format(STATION_STREAM_XML_URL, stationId);
+    const areafree = this.loginState ? this.loginState.areafree : '0';
+    const timefree = (query.ft && query.to) ? '1' : '0';
+    const hls_urls = await this.getHlsURLs(xml_url, areafree, timefree);
+    if(!hls_urls) {
       this.logger.error('JP_Radio::Failed to get playlist URL');
       return null;
     }
+
+    let m3u8 = hls_urls[hls_urls.length-1]; // 0番がメインサーバー、1番がサブと思われる
+    let aac: string | null = null;
+    let atempo: string | null = null;
+    if (timefree == '1') {
+      // TimeFree
+      const ft = RadioTime.revConvertRadioTime(query.ft);
+      const to = RadioTime.revConvertRadioTime(query.to);
+      m3u8 += format(PLAY_TIMEFREE_QUERY, stationId, ft, ft, to, to, this.lsid);
+      if (query.seek) {
+        m3u8 += `&seek=${RadioTime.addTime(ft, query.seek)}`;
+      }
+      //aac = !query.seek ? `/data/INTERNAL/${stationId}_${query.ft}-${query.to}.aac` : null;
+      atempo = (tempo != 1.0) ? `atempo=${tempo}` : null;
+    } else {
+      // Live
+      m3u8 += format(PLAY_LIVE_QUERY, stationId, this.lsid);
+    }
+
+    [this.token, this.myAreaId] = await this.getToken();
+    const args = [
+      '-y', 
+      '-headers', `X-Radiko-Authtoken:${this.token}\r\nX-Radiko-AreaId:${this.myAreaId}`,
+      '-i', m3u8,
+      (!atempo) ? '-acodec' : '-af',  // '-acodec copy'と'-af atempo=x'は排他
+      (!atempo) ?  'copy' : atempo,
+      '-f', 'adts',
+      '-loglevel', 'error',
+      'pipe:1'];
+    if (aac)  args.push(aac);
+    this.logger.info(`JP_Radio::Radiko.play: args=${args}`);
+    return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore', 'ipc'], detached: true });
   }
 
+  /* Radiko仕様変更(2026/06)で廃止
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
+    this.logger.info(`JP_Radio::Radiko.genTempChunkM3u8URL: url=${url}, token=${token}`);
     try {
       const res = await got(url, {
         headers: {
@@ -343,25 +343,28 @@ export default class Radiko {
       this.logger.error('JP_Radio::genTempChunkM3u8URL error', err);
       return null;
     }
-  }
+  }*/
 
-  private async getHlsURLs(url: string, timefree: string): Promise<string[] | null> {
-    this.logger.info(`JP_Radio::getHlsURLs url=${url}`);
+  private async getHlsURLs(xml_url: string, areafree: string, timefree: string): Promise<string[] | null> {
+    this.logger.info(`JP_Radio::Radiko.getHlsURLs xml_url=${xml_url}, areafree=${areafree}, timefree=${timefree}`);
     try {
       var hls_urls: string[] = [] ;
-      const res = await got(url);
+      const res = await got(xml_url);
       const xml = xmlParser.parse(res.body);
       for(var data of xml.urls.url) {
         const hls_url = data['playlist_create_url'];
-        const areafree = this.loginState ? this.loginState.areafree : '0';
-        if(areafree == data['@areafree'] && timefree == data['@timefree']) {
-          this.logger.info(`JP_Radio::getHlsURLs hls_url=${hls_url}`);
+        const hls_areafree = data['@areafree'];
+        const hls_timefree = data['@timefree'];
+        if(areafree == hls_areafree && timefree == hls_timefree) {
+          this.logger.info(`JP_Radio::Radiko.getHlsURLs: data=[${Object.entries(data)}`);
           hls_urls.push(hls_url);
         }
       }
+      if(hls_urls.length == 0)  return null;
       return hls_urls;
+
     } catch (err) {
-      this.logger.error('JP_Radio::getHlsURLs error', err);
+      this.logger.error('JP_Radio::Radiko.getHlsURLs error:', err);
       return null;
     }
   }

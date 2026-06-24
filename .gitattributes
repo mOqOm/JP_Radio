@@ -1,2 +1,9 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# 全テキストファイルを LF に統一
+* text=auto eol=lf
+
+# 拡張子ごとに明示的に指定
+*.ts   text eol=lf
+*.js   text eol=lf
+*.json text eol=lf
+*.sh   text eol=lf
+*.ini  text eol=lf

@@ -90,6 +90,8 @@
     "TIME_FORMAT_TYPE2": "yyyy/MM/dd HH:mm 　　　　（例．%s）",
     "TIME_FORMAT_TYPE3": "MM/dd HH:mm-HH:mm 　　　（例．%s）",
     "TIME_FORMAT_TYPE4": "MM/dd HH:mm　　　　　　　（例．%s）",
+    "TEMPO_LABEL": "再生速度",
+    "TEMPO_DOC": "タイムフリー時の再生速度を設定します。早聞き設定では音飛びすることがあります。<br/>　デフォルト値：1.0x",
     "RADIKO_AREAS_LABEL": "エリアフリー設定",
     "RADIKO_AREAS_DESC": "聴取エリアを選択できます。エリアを絞ると番組データの取得が早くなります。",
     "RADIKO_MY_AREA": "【マイエリア】",
