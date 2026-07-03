@@ -31,6 +31,18 @@
     "type": "string",
     "value": "$1/$2/$3 $4:$5-$7:$8"
   },
+  "browseMode1": {
+    "type": "string",
+    "value": "type1"
+  },
+  "browseMode2": {
+    "type": "string",
+    "value": "type1"
+  },
+  "tempo": {
+    "type": "string",
+    "value": "1.0"
+  },
   "radikoAreas":
   {
     "JP1": {
