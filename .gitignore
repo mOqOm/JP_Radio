@@ -41,6 +41,9 @@ build/Release
 # Build output
 dist/
 
+# Local diagnostic/test scripts (not part of the plugin)
+scripts/
+
 # Dependency directories
 node_modules/
 jspm_packages/
