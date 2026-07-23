@@ -1,8 +1,7 @@
 import libQ from 'kew';
 import VConf from 'v-conf';
 import JpRadio from './lib/radio';
-import { BrowseResult } from './lib/models/BrowseResultModel';
-//import { getCurrentRadioTime, formatTimeString, getTimeSpan } from './lib/radioTime';
+import { BrowseResult } from './lib/models/browse-result-model';
 
 export = ControllerJpRadio;
 
@@ -69,8 +68,8 @@ class ControllerJpRadio {
 
   async saveRadikoAccount(data: { radikoUser: string; radikoPass: string }): Promise<void> {
     if (!this.config) return;
-    const updated = ['radikoUser', 'radikoPass'].some(
-      (key) => this.config!.get(key) !== (data as any)[key]
+    const updated = (Object.keys(data) as Array<keyof typeof data>).some(
+      (key) => this.config!.get(key) !== data[key]
     );
     if (updated) {
       this.config.set('radikoUser', data.radikoUser);
@@ -117,17 +116,15 @@ class ControllerJpRadio {
         defer.resolve();
         this.logger.info(`JP_Radio::onStart: ## COMPLETE ##`);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         this.logger.error('JP_Radio::Failed to start appRadio', err);
         if (err.code === 'EADDRINUSE') {
           const message = `ポート ${servicePort} はすでに使用中です。JP Radio を開始できません。`;
           this.logger.error(`JP_Radio::ポート使用中エラー: ${message}`);
           this.commandRouter.pushToastMessage('error', 'JP Radio 起動エラー', message);
         } else {
-          this.logger.error('JP_Radio::Failed to start appRadio', err);
           this.commandRouter.pushToastMessage('error', 'JP Radio 起動エラー', err.message || '不明なエラー');
         }
-
         defer.reject(err);
       });
     this.logger.info(`JP_Radio::onStart: ## EXIT ##`);
@@ -147,6 +144,14 @@ class ControllerJpRadio {
   getUIConfig(): Promise<any> {
     this.logger.info(`JP_Radio::getUIConfig:`);
     const defer = libQ.defer();
+
+    if (!this.config) {
+      const error = new Error('Config not initialized');
+      this.logger.error('getUIConfig failed:', error);
+      defer.reject(error);
+      return defer.promise;
+    }
+
     const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
     this.commandRouter.i18nJson(
@@ -155,9 +160,9 @@ class ControllerJpRadio {
       `${__dirname}/UIConfig.json`
     )
       .then((uiconf: any) => {
-        const servicePort = this.config.get('servicePort');
-        const radikoUser = this.config.get('radikoUser');
-        const radikoPass = this.config.get('radikoPass');
+        const servicePort = this.config!.get('servicePort');
+        const radikoUser = this.config!.get('radikoUser');
+        const radikoPass = this.config!.get('radikoPass');
 
         if (uiconf.sections?.[0]?.content?.[0]) uiconf.sections[0].content[0].value = servicePort;
         if (uiconf.sections?.[1]?.content?.[0]) uiconf.sections[1].content[0].value = radikoUser;
@@ -188,7 +193,7 @@ class ControllerJpRadio {
     });
   }
 
-  handleBrowseUri(curUri: string): Promise<any> {
+  handleBrowseUri(curUri: string): Promise<BrowseResult | Record<string, never>> {
     const defer = libQ.defer();
     const [baseUri] = curUri.split('?');
 
@@ -232,16 +237,14 @@ class ControllerJpRadio {
   seek(timepos: number): Promise<any> {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::seek to ${timepos}`);
     return libQ.reject();
-    //return this.mpdPlugin.seek(timepos);
-    //return libQ.resolve();
   }
 
-  stop(): void {
+  stop(): Promise<any> {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::stop`);
     return this.mpdPlugin.sendMpdCommand('stop', []);
   }
 
-  pause(): void {
+  pause(): Promise<any> {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::pause`);
     return this.mpdPlugin.sendMpdCommand('pause', []);
   }
@@ -250,7 +253,7 @@ class ControllerJpRadio {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::getState`);
   }
 
-  parseState(sState: any): void {
+  parseState(_sState: any): void {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::parseState`);
   }
 
@@ -261,7 +264,7 @@ class ControllerJpRadio {
 
   explodeUri(uri: string): Promise<any> {
     this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
-    var defer = libQ.defer();
+    const defer = libQ.defer();
 
     // uri=http://localhost:9000/radiko/play/FMT/tt/sn/aa
     //      0   1        2         3     4    5  6  7  8
@@ -275,30 +278,28 @@ class ControllerJpRadio {
       aa: decodeURIComponent(uris[8]), // albumart
     };
 
-    if (param.id == 'radiko') {
-      const response = {
-        service: this.serviceName,  // clearAddPlayTrackを呼び出す先のサービス名
-        type: 'song',
-        title: param.tt,
-        name: param.tt,
-        artist: param.sn,
-        albumart: param.aa,
-        uri: `http://${param.hp}/${param.id}/play/${param.st}`,
-      };
-      defer.resolve(response);
-
-    } else {
+    if (param.id !== 'radiko') {
       defer.resolve();
+      return defer.promise;
     }
 
+    defer.resolve({
+      service: this.serviceName,  // clearAddPlayTrackを呼び出す先のサービス名
+      type: 'song',
+      title: param.tt,
+      name: param.tt,
+      artist: param.sn,
+      albumart: param.aa,
+      uri: `http://${param.hp}/${param.id}/play/${param.st}`,
+    });
     return defer.promise;
   }
 
-  search(query: any): Promise<any> {
+  search(_query: any): Promise<any> {
     return libQ.resolve();
   }
 
-  goto(data: any): Promise<any> {
+  goto(_data: any): Promise<any> {
     return libQ.resolve();
   }
 }

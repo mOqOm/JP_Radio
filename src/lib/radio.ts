@@ -1,13 +1,14 @@
 import express, { Application, Request, Response } from 'express';
 import cron from 'node-cron';
-import { capitalize } from 'lodash';
+import got from 'got';
+import type { ChildProcess } from 'child_process';
 import RdkProg from './prog';
 import Radiko from './radiko';
-import libQ from 'kew';
-import type { BrowseItem, BrowseList, BrowseResult } from './models/BrowseResultModel';
-import type { StationInfo } from './models/StationModel';
+import type { BrowseItem, BrowseList, BrowseResult } from './models/browse-result-model';
+import type { StationInfo } from './models/station-model';
+import type { LoginAccount } from './models/auth-model';
 
-import { DELAY_sec, getCurrentRadioTime, formatTimeString, getTimeSpan } from './radioTime';
+import { DELAY_sec, getCurrentRadioTime, formatTimeString, getTimeSpan } from './radio-time';
 
 
 export default class JpRadio {
@@ -17,16 +18,16 @@ export default class JpRadio {
   private readonly task2: ReturnType<typeof cron.schedule>;
   private readonly port: number;
   private readonly logger: Console;
-  private readonly acct: any;
+  private readonly acct: LoginAccount | null;
   private readonly commandRouter: any;
   private prg: RdkProg | null = null;
   private rdk: Radiko | null = null;
   private station: string = '';
   private task2Cnt: number = 0;
 
-  private readonly serviceName: any;
+  private readonly serviceName: string;
 
-  constructor(port = 0, logger: Console, acct: any = null, commandRouter: any, serviceName: any) {
+  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string) {
     this.app = express();
     this.port = port;
     this.logger = logger;
@@ -59,6 +60,38 @@ export default class JpRadio {
     });
 
 
+    // ffmpegのHLSデマルチプレクサはプレイリストのreload時に-headersを引き継がないため、
+    // プレイリスト取得はここを経由させ、毎回正しいRadikoヘッダーを付けて中継する
+    this.app.get('/radiko/medialist-proxy', async (req: Request, res: Response): Promise<void> => {
+      const upstreamUrl = String(req.query['url'] || '');
+      const token = String(req.query['token'] || '');
+      const startedAt = Date.now();
+      try {
+        const upstreamRes = await got(upstreamUrl, {
+          headers: {
+            'X-Radiko-AuthToken': token,
+            'X-Radiko-App': 'pc_html5',
+            'X-Radiko-App-Version': '0.0.1',
+            'X-Radiko-User': 'dummy_user',
+            'X-Radiko-Device': 'pc',
+          },
+          responseType: 'buffer',
+        });
+        // ローカルプロキシは応答が速すぎてffmpegのリロード間隔計算を狂わせるため、最低待機時間を設ける
+        // (5sだと体感の遅延が大きいため2sに短縮)
+        const minDurationMs = 2000;
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < minDurationMs) {
+          await new Promise(resolve => setTimeout(resolve, minDurationMs - elapsed));
+        }
+        res.set('Content-Type', String(upstreamRes.headers['content-type'] || 'application/vnd.apple.mpegurl'));
+        res.send(upstreamRes.body);
+      } catch (err: any) {
+        this.logger.error(`JP_Radio::medialist-proxy error: ${err?.message || err}`);
+        res.status(502).send('proxy error');
+      }
+    });
+
     this.app.get('/radiko/play/:stationID', async (req: Request, res: Response): Promise<void> => {
       this.station = String(req.params['stationID']);   // FM802対策
       this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.originalUrl=${req.originalUrl}`);
@@ -82,47 +115,72 @@ export default class JpRadio {
 
   async #startStream(res: Response): Promise<void> {
     this.logger.info('JP_Radio::JpRadio.#startStream');
-    if (this.rdk) {
+    if (!this.rdk) return;
+
+    let stopped = false;
+    let currentFfmpeg: ChildProcess | null = null;
+    let firstAttempt = true;
+
+    res.on('close', () => {
+      stopped = true;
+      this.task2.stop();
+      this.logger.info('JP_Radio::JpRadio.#startStream: res.on(close)');
+      if (currentFfmpeg?.pid) {
+        try {
+          process.kill(-currentFfmpeg.pid, 'SIGTERM');
+          this.logger.info(`JP_Radio::JpRadio.#startStream: SIGTERM sent to ffmpeg group ${currentFfmpeg.pid}`);
+        } catch (e: any) {
+          this.logger.warn(`JP_Radio::JpRadio.#startStream: Kill ffmpeg failed: ${e.code === 'ESRCH' ? 'Already exited' : e.message}`);
+        }
+      }
+    });
+    res.on('error', (err) => {
+      this.logger.error(`JP_Radio::JpRadio.#startStream: res error: ${err.message}`);
+    });
+
+    // Radiko側のライブHLSプレイリスト更新の都合でffmpegが数十秒おきに正常終了(code=0)してしまうことがあるため、
+    // クライアント(MPD)が接続を切っていない限り同じ局へ自動的に繋ぎ直す
+    const spawnFfmpeg = async (): Promise<void> => {
+      if (stopped || !this.rdk) return;
+
       try {
-        //const icyMetadata = new IcyMetadata();
         const ffmpeg = await this.rdk.play(this.station);
 
         if (!ffmpeg || !ffmpeg.stdout) {
           this.logger.error('JP_Radio::JpRadio.#startStream: ffmpeg start failed or stdout is null');
-          res.status(500).send('Stream start error');
+          if (firstAttempt && !res.headersSent) res.status(500).send('Stream start error');
           return;
         }
 
-        let ffmpegExited = false;
-        ffmpeg.on('exit', () => {
-          ffmpegExited = true;
-          this.logger.debug(`JP_Radio::JpRadio.#startStream: ffmpeg process ${ffmpeg.pid} exited.`);
-        });
-        ffmpeg.stdout.pipe(res);
-        this.logger.info(`JP_Radio::JpRadio.#startStream: ffmpeg=${ffmpeg.pid}`);
-        // max60sも待ちたくないのですぐ呼ぶ
-        setTimeout(this.#pushSongState.bind(this), 3000);
-        this.task2.start();
+        currentFfmpeg = ffmpeg;
 
-        res.on('close', () => {
-          this.task2.stop();
-          this.logger.info('JP_Radio::JpRadio.#startStream: res.on(close)');
-          if (ffmpeg.pid && !ffmpegExited) {
-            try {
-              process.kill(-ffmpeg.pid, 'SIGTERM');
-              this.logger.info(`JP_Radio::JpRadio.#startStream: SIGTERM sent to ffmpeg group ${ffmpeg.pid}`);
-            } catch (e: any) {
-              this.logger.warn(`JP_Radio::JpRadio.#startStream: Kill ffmpeg failed: ${e.code === 'ESRCH' ? 'Already exited' : e.message}`);
-            }
+        ffmpeg.on('exit', (code, signal) => {
+          this.logger.info(`JP_Radio::JpRadio.#startStream: ffmpeg process ${ffmpeg.pid} exited. code=${code} signal=${signal}`);
+          if (!stopped) {
+            this.logger.info('JP_Radio::JpRadio.#startStream: stream still connected, restarting ffmpeg');
+            setTimeout(spawnFfmpeg, 500);
           }
         });
-        this.logger.info('JP_Radio::JpRadio.#startStream: Streaming started');
+        ffmpeg.stderr?.on('data', (chunk: Buffer) => {
+          this.logger.error(`JP_Radio::JpRadio.#startStream: ffmpeg stderr: ${chunk.toString().trim()}`);
+        });
+        ffmpeg.stdout.pipe(res, { end: false });
+        this.logger.info(`JP_Radio::JpRadio.#startStream: ffmpeg=${ffmpeg.pid}`);
 
+        if (firstAttempt) {
+          firstAttempt = false;
+          // max60sも待ちたくないのですぐ呼ぶ
+          setTimeout(this.#pushSongState.bind(this), 3000);
+          this.task2.start();
+          this.logger.info('JP_Radio::JpRadio.#startStream: Streaming started');
+        }
       } catch (err) {
         this.logger.error('JP_Radio::JpRadio.#startStream: Stream error', err);
-        res.status(500).send('Internal server error');
+        if (firstAttempt && !res.headersSent) res.status(500).send('Internal server error');
       }
-    }
+    };
+
+    await spawnFfmpeg();
   }
 
 
@@ -134,7 +192,6 @@ export default class JpRadio {
       const progData = await this.prg?.getCurProgram(this.station);
       if (progData) {
         const stationName = await this.rdk?.getStationName(this.station);
-        const performer = progData.pfm ? ` - ${progData.pfm}` : '';
         const t0 = formatTimeString(progData.ft);
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
@@ -142,7 +199,7 @@ export default class JpRadio {
         this.logger.info(`JP_Radio::JpRadio.#pushSongState: ${t0}-${t1}`);
         this.logger.info(`JP_Radio::JpRadio.#pushSongState: "${artist}", now=${now}`);
 
-        state.title = progData.title;// + performer;
+        state.title = progData.title;
         state.artist = artist;
         state.albumart = progData.img || state.albumart;
         state.duration = getTimeSpan(t0, t1);      // sec
@@ -169,10 +226,9 @@ export default class JpRadio {
 
   async radioStations(): Promise<BrowseResult> {
     this.logger.info('JP_Radio::JpRadio.radioStations');
-    const defer = libQ.defer();
 
     if (!this.rdk?.stations) {
-      defer.resolve({
+      return {
         navigation: {
           lists: [{
             title: 'LIVE',
@@ -181,8 +237,7 @@ export default class JpRadio {
           }]
         },
         uri: 'radiko'
-      });
-      return defer.promise;
+      };
     }
 
     const entries = Array.from(this.rdk.stations.entries());
@@ -194,7 +249,6 @@ export default class JpRadio {
         const progData = await this.prg?.getCurProgram(stationId);
         const progTitle = progData ? progData.title : '';
         const progPfm   = progData ? progData.pfm : '';
-      //  const title     = progTitle + (progPfm ? ` - ${progPfm}` : '');
         const areaName  = stationInfo.AreaKanji || stationInfo.AreaName;
         const progImg   = progData ? progData.img : '';
         const albumart  = progImg || stationInfo.BannerURL || '';
@@ -228,29 +282,6 @@ export default class JpRadio {
           // チャンネル数（未使用）
           channels  : 0
         };
-/*
-        const item: BrowseItem = {
-          // explodeUriを呼び出す先のサービス名
-          service: this.serviceName,
-          type: 'song',
-          // 番組タイトル
-          title: progData ? `${progData.title || ''}` : '',
-          // 地域名 / 局名
-          album: `${capitalize(stationInfo.AreaName)} / ${stationInfo.Name}`,
-          // パーソナリティ名
-          artist: progData?.pfm || ' ',
-          // 番組画像URL
-          albumart: progData?.img || '',
-          // 再生URI
-          uri: `http://localhost:${this.port}/radiko/play/${stationId}`,
-          // サンプルレート（未使用）
-          samplerate: '',
-          // ビット深度（未使用）
-          bitdepth: 0,
-          // チャンネル数（未使用）
-          channels: 0
-        };
-*/
         const region = stationInfo.RegionName || 'その他';
         if (!grouped[region]) {
           grouped[region] = [];
@@ -261,27 +292,20 @@ export default class JpRadio {
       }
     });
 
-    libQ.all(stationPromises)
-      .then(() => {
-        const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
-          title: regionName,
-          availableListViews: ['grid', 'list'],
-          items
-        }));
+    await Promise.all(stationPromises);
 
-        defer.resolve({
-          navigation: {
-            lists
-          },
-          uri: 'radiko'
-        });
-      })
-      .fail((err: any) => {
-        this.logger.error('[JP_Radio] radioStations error: ' + err);
-        defer.reject(err);
-      });
+    const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
+      title: regionName,
+      availableListViews: ['grid', 'list'],
+      items
+    }));
 
-    return defer.promise;
+    return {
+      navigation: {
+        lists
+      },
+      uri: 'radiko'
+    };
   }
 
   async start(): Promise<void> {
@@ -293,7 +317,7 @@ export default class JpRadio {
     }
 
     this.prg = new RdkProg(this.logger);
-    this.rdk = new Radiko(this.port, this.logger, this.acct);
+    this.rdk = new Radiko(this.logger, this.port);
     // ここで時間かかり過ぎて，
     //   Plugin music_service jp_radio failed to complete 'onStart' in a timely fashion
     // って怒られるので，awaitを外してみた。
@@ -354,12 +378,15 @@ export default class JpRadio {
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
       const myAreaId = await this.rdk?.getMyAreaId();  // JP**/AreaFree
       const ids = myAreaId ? myAreaId.split('/') : [];
-      const areaIdArray = (ids[1] == 'AreaFree')
-                        ? Array.from({ length: 47 }, (_, i) => `JP${i + 1}`)
-                        : [ ids[0], 'JP13' ];
-      //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
-
       const stationsMap = this.rdk?.stations ?? new Map<string, StationInfo>();
+
+      // エリアフリーでない場合も、局一覧(関東圏の他エリア局など)に実際に含まれる全エリアの番組表を取得する
+      // (自分のエリアだけだとBAYFM78/NACK5/YFMのような他エリアの局の番組情報が取れないため)
+      const stationAreaIds = Array.from(new Set(Array.from(stationsMap.values()).map((s) => s.AreaId)));
+      const areaIdArray = (ids[1] === 'AreaFree')
+                        ? Array.from({ length: 47 }, (_, i) => `JP${i + 1}`)
+                        : (stationAreaIds.length > 0 ? stationAreaIds : [ids[0], 'JP13']);
+      //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
 
       const updateStartTime = new Date();
       await this.prg.updatePrograms(areaIdArray, stationsMap, whenBoot);

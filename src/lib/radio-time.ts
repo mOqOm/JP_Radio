@@ -4,18 +4,14 @@ export const DELAY_sec = 20;   // 約20s遅延（実測）
 const DELAY_msec = DELAY_sec * 1000;
 const OFFSET_msec = 5 * 3600 * 1000 + DELAY_msec; // 5hオフセット
 
-export function getCurrentTime(): string {
-  return format(new Date(), 'yyyyMMddHHmmss');
-}
-
 export function getCurrentDate(): string {
   return format(new Date(), 'yyyyMMdd');
 }
 
 // ラジオの一日は「05:00～29:00」
 export function getCurrentRadioTime(): string {
-  var date = new Date();
-  var time = date.getTime();
+  const date = new Date();
+  const time = date.getTime();
   const src = format(date.setTime(time - DELAY_msec), 'yyyyMMddHHmmss');
   const today = format(date.setTime(time - OFFSET_msec), 'yyyyMMdd');
   return cnvRadioTime(src, today);
@@ -23,18 +19,18 @@ export function getCurrentRadioTime(): string {
 
 // 深夜0:00～5:00は前日
 export function getCurrentRadioDate(): string {
-  var date = new Date();
+  const date = new Date();
   const time = date.getTime() - OFFSET_msec;
   return format(date.setTime(time), 'yyyyMMdd');
 }
 
 // 深夜0:00～5:00は日付を変えずに24:00～29:00
 export function cnvRadioTime(src: string, today: string): string {
-  var d  = src.substring(0, 8);   // yyyyMMdd
-  var h  = src.substring(8, 10);  // HH
-  var ms = src.substring(10, 14); // mmss
+  let d  = src.substring(0, 8);   // yyyyMMdd
+  let h  = src.substring(8, 10);  // HH
+  const ms = src.substring(10, 14); // mmss
   const d0 = today.substring(0, 8);
-  if(d != d0) {
+  if(d !== d0) {
     h = String(parseInt(h) + 24);
     d = d0;
   }

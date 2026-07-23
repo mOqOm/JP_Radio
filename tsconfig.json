@@ -2,7 +2,7 @@
   "include": ["src/**/*.ts"],
   "compilerOptions": {
     "rootDir": "src",
-    "target": "es2020",
+    "target": "es2022",
     "module": "commonjs",
     "outDir": "dist",
     "declaration": true,

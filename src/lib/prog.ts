@@ -3,15 +3,13 @@ import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
-import { formatInTimeZone } from 'date-fns-tz';
-import { subHours } from 'date-fns';
 
-import { PROG_URL } from './consts/radikoUrls';
-import type { RadikoProgramData } from './models/RadikoProgramModel';
-import type { RadikoXMLData } from './models/RadikoXMLStationModel';
-import type { StationInfo } from './models/StationModel';
+import { PROG_DATE_AREA_URL } from './consts/radiko-urls';
+import type { RadikoProgramData } from './models/radiko-program-model';
+import type { RadikoXMLData } from './models/radiko-xml-station-model';
+import type { StationInfo } from './models/station-model';
 
-import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radioTime';
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime } from './radio-time';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   station: '',
@@ -100,11 +98,11 @@ export default class RdkProg {
     });
 
     const limit = pLimit(5);
-    var doneAreaFree = new Set();
+    const doneAreaFree = new Set<string>();
 
     const tasks = areaIdArray.map((areaId) =>
       limit(async () => {
-        const url = utilFormat(PROG_URL, currentDate, areaId);
+        const url = utilFormat(PROG_DATE_AREA_URL, currentDate, areaId);
         try {
           const response = await got(url);
           const xmlData: RadikoXMLData = parser.parse(response.body);
@@ -120,13 +118,13 @@ export default class RdkProg {
             }
 
             // 一般局，全国広域(RN1,RN2,JOAK-FM)
-            if(station.AreaId != areaId && station.AreaFree != '0'
-              || station.RegionName == '全国' && areaId != 'JP13'){
+            if(station.AreaId !== areaId && station.AreaFree !== '0'
+              || station.RegionName === '全国' && areaId !== 'JP13'){
               continue;
             }
 
-             // NHK地方局(JO**)
-            if(station.AreaFree == '0' && doneAreaFree.has(stationId)) {
+            // NHK地方局(JO**)
+            if(station.AreaFree === '0' && doneAreaFree.has(stationId)) {
               continue;
             } else {
               doneAreaFree.add(stationId);
@@ -175,25 +173,4 @@ export default class RdkProg {
     this.db.ensureIndex({ fieldName: 'tt' });
   }
 
-  private getCurrentTime(): string {
-    return formatInTimeZone(new Date(), 'Asia/Tokyo', 'yyyyMMddHHmm');
-  }
-
-  private getCurrentDate(): string {
-    const now = new Date();
-    // 現在時刻から5時間引いた日時を取得
-    const dateForSwitch = subHours(now, 5);
-    return formatInTimeZone(dateForSwitch, 'Asia/Tokyo', 'yyyyMMdd');
-  }
-}
-
-function isRadikoProgramData(data: any): data is RadikoProgramData {
-  return (
-    typeof data?.station === 'string' &&
-    typeof data?.id === 'string' &&
-    typeof data?.ft === 'string' &&
-    typeof data?.tt === 'string' &&
-    typeof data?.title === 'string' &&
-    typeof data?.pfm === 'string'
-  );
 }
