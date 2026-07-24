@@ -1,0 +1,224 @@
+import got from 'got';
+import Datastore from 'nedb-promises';
+import { XMLParser } from 'fast-xml-parser';
+import { format as utilFormat } from 'util';
+import pLimit from 'p-limit';
+
+import { PROG_DATE_AREA_URL } from '@/consts/radiko-urls';
+import type { RadikoProgramData } from '@/models/radiko-program-model';
+import type { RadikoXMLData } from '@/models/radiko-xml-station-model';
+import type { StationInfo } from '@/models/station-model';
+
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, toMinutePrecision } from '@/utils/radio-time';
+import { toArray } from '@/utils/xml';
+import { isStationRelevantForArea, isDuplicateAreaFreeStation } from '@/logic/station-filter';
+
+const EMPTY_PROGRAM: RadikoProgramData = {
+  station: '',
+  id: '',
+  ft: '',
+  tt: '',
+  title: '',
+  pfm: '',
+  img: '',
+};
+
+/**
+ * 番組表データを管理するModel層。取得したXMLをパースし、nedbのインメモリDBに保存・検索する。
+ * 現在放送中の番組を高速に引けるよう、直近の検索結果を`cachedProgram`にキャッシュする。
+ */
+export default class RdkProg {
+  private readonly logger: Console;
+  private readonly db = Datastore.create({ inMemoryOnly: true });
+
+  private lastStation = '';
+  private lastTime = '';
+  private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
+
+  constructor(logger: Console) {
+    this.logger = logger;
+    this.initDBIndexes();
+  }
+
+  /**
+   * 指定局の現在放送中の番組を返す。直前と同じ局・同じ分であればキャッシュを返す。
+   */
+  async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
+    const currentTime = toMinutePrecision(getCurrentRadioTime());
+
+    if (station !== this.lastStation || currentTime !== this.lastTime) {
+      try {
+        // TODO: TBS,YFM,MBS,NORTHWAVE,etcでヒットしない問題
+        //       (常にってわけじゃなく時々なのが非常に厄介)
+        const result: RadikoProgramData | null = await this.db.findOne({
+          station,
+          ft: { $lt: currentTime + '01' },
+          tt: { $gt: currentTime + '01' },
+        });
+
+        if (result !== null) {
+          this.cachedProgram = result;
+        } else {
+          this.logger.error(`JP_Radio::RdkProg.getCurProgram: ## ${station}:${currentTime} cannot find. ##`);
+          this.cachedProgram = { ...EMPTY_PROGRAM };
+        }
+
+        this.lastStation = station;
+        this.lastTime = currentTime;
+      } catch (error: any) {
+        this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
+      }
+    }
+
+    if (this.cachedProgram.id !== '') {
+      return this.cachedProgram;
+    }
+    return undefined;
+  }
+
+  /**
+   * 番組データを1件DBへ挿入する。重複挿入(`uniqueViolated`)はエラーログを出さず無視する。
+   */
+  async putProgram(prog: RadikoProgramData): Promise<void> {
+    try {
+      await this.db.insert(prog);
+    } catch (error: any) {
+      if (error?.errorType !== 'uniqueViolated') {
+        this.logger.error('JP_Radio::DB insert error', error);
+      }
+    }
+  }
+
+  /**
+   * 終了時刻が現在時刻より前の古い番組データをDBから削除する。
+   */
+  async clearOldProgram(): Promise<void> {
+    try {
+      // TODO: TBS,MBS消しすぎてない??
+      const currentTime = toMinutePrecision(getCurrentRadioTime());
+      await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
+    } catch (error: any) {
+      this.logger.error('JP_Radio::DB delete error', error);
+    }
+  }
+
+  /**
+   * 指定エリア群の番組表XML(`PROG_DATE_AREA_URL`)を並列(最大5並列)で取得し、DBへ格納する。
+   * 全国広域局(RN1/RN2/JOAK-FM)は`JP13`のみで処理し、NHK地方局(JO**)はエリアフリー局と
+   * 重複しないよう1度だけ処理することで、同一番組の多重登録を防いでいる。
+   * @param areaIdArray 取得対象のエリアID一覧(例: `['JP13', 'JP14']`)。
+   * @param stationsMap 局IDから{@link StationInfo}を引くためのマップ(所属エリア判定に使用)。
+   * @param whenBoot trueの場合は起動時取得としてラジオ時間(`getCurrentRadioDate`)基準の日付を使う。
+   */
+  async updatePrograms(areaIdArray: Array<string>, stationsMap: Map<string, StationInfo> , whenBoot: boolean): Promise<void> {
+    // boot時はラジオ時間で，cron時は実時間で取得
+    let currentDate: string;
+    let bootOrCron: string;
+    if (whenBoot === true) {
+      currentDate = getCurrentRadioDate();
+      bootOrCron = 'boot';
+    } else {
+      currentDate = getCurrentDate();
+      bootOrCron = 'cron';
+    }
+    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${bootOrCron}] ${currentDate}`);
+
+    const parser = new XMLParser({
+      attributeNamePrefix: '@',
+      ignoreAttributes: false,
+      allowBooleanAttributes: true,
+    });
+
+    const limit = pLimit(5);
+    const doneAreaFree = new Set<string>();
+
+    const tasks = areaIdArray.map((areaId) =>
+      limit(async () => {
+        const url = utilFormat(PROG_DATE_AREA_URL, currentDate, areaId);
+        try {
+          const response = await got(url);
+          const xmlData: RadikoXMLData = parser.parse(response.body);
+          const stations = toArray(xmlData?.radiko?.stations?.station);
+
+          for (const stationData of stations) {
+            // FM802対策
+            const stationId = String(stationData['@id']);
+            // 広域局の多重処理をスキップ
+            const station = stationsMap?.get(stationId);
+
+            if (station === undefined) {
+              // 情報がなければスキップ(nonAreaFreeでエリア外)
+              continue;
+            }
+
+            if (isStationRelevantForArea(station, areaId) === false) {
+              continue;
+            }
+
+            // NHK地方局(JO**)
+            if (isDuplicateAreaFreeStation(station, stationId, doneAreaFree) === true) {
+              continue;
+            } else {
+              doneAreaFree.add(stationId);
+            }
+
+            const progRaw = stationData.progs?.prog;
+            if (progRaw === undefined) {
+              continue;
+            }
+
+            const progs = toArray(progRaw);
+            const today = parseRadioTime(progs[0]['@ft']).date;
+            for (const prog of progs) {
+              let pfm = prog['pfm'];
+              if (pfm === undefined) {
+                pfm = '';
+              }
+              const program: RadikoProgramData = {
+                // FM802対策
+                station: String(stationId),
+                id: stationId + prog['@id'],
+                ft: cnvRadioTime(prog['@ft'], today),
+                tt: cnvRadioTime(prog['@to'], today),
+                title: prog['title'],
+                pfm,
+                img: prog['img'],
+              };
+              await this.putProgram(program);
+            }
+          }
+        } catch (error: any) {
+          this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
+        }
+      })
+    );
+
+    await Promise.all(tasks);
+  }
+
+  /**
+   * DBファイルをコンパクションして終了する(プラグイン停止時に呼ばれる)。
+   */
+  async dbClose(): Promise<void> {
+    this.logger.info('JP_Radio::DB compacting');
+    await this.db.persistence.compactDatafile();
+  }
+
+  /**
+   * DB内の全番組データを返す(デバッグ/確認用エンドポイント`/radiko/all/stations`向け)。
+   */
+  async allData(): Promise<any[]> {
+    return await this.db.find({});
+  }
+
+  /**
+   * 検索頻度の高いフィールド(id/station/ft/tt)にインデックスを張る。idはユニーク制約。
+   */
+  private initDBIndexes(): void {
+    this.db.ensureIndex({ fieldName: 'id', unique: true });
+    this.db.ensureIndex({ fieldName: 'station' });
+    this.db.ensureIndex({ fieldName: 'ft' });
+    this.db.ensureIndex({ fieldName: 'tt' });
+  }
+
+}

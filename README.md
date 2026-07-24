@@ -1,9 +1,18 @@
 # JP RADIO Volumio4 plugin
-Japanese radio relay server for Volumio3
+Japanese radio relay server for Volumio4
 
 > **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
 
 ## Change log
+### version 4.0.1(2026/07/24)
++ 2026/07/24 Adapted to Radiko's 2026 streaming API changes, fixing live playback.
++ 2026/07/24 Fixed missing program guide data for neighboring-area stations (BAYFM78/NACK5/YFM/IBS, etc.) on non-AreaFree accounts.
++ 2026/07/24 Fixed a crash on plugin restart.
++ 2026/07/24 Fixed the album art (icon) not displaying.
++ 2026/07/24 Fixed the settings screen (UIConfig) not displaying.
++ 2026/07/24 Fixed time handling to always use JST, regardless of the device's system timezone.
++ 2026/07/24 Verified compatibility with Node.js v20.5.1 / Volumio (bookworm).
++ 2026/07/24 Reorganized internal structure into controllers/services/logic/utils, and added ESLint and Jest-based tests.
 ### version 4.0.0(2025/06/01)
 + 2025/06/01 Fixed to support Volumio4.
 ### version 0.1.3(2025/05/30)
@@ -19,16 +28,16 @@ Japanese radio relay server for Volumio3
 ### version 0.0.5(2025/05/17)
 + 2025/05/17 Emergency response to bug that prevents listening to Radiko
 ### version 0.0.4(2025/02/13)
-* Bug fix for not being able to play FM802.
++ Bug fix for not being able to play FM802.
 ### version 0.0.3(2024/03/16)
-* Change to display a popup for prompting restart.
-* Change to allow the user to specify the startup port.
++ Change to display a popup for prompting restart.
++ Change to allow the user to specify the startup port.
 ### version 0.0.2(2023/11/04)
-* Bug fix for not starting correctly on plugin restart
++ Bug fix for not starting correctly on plugin restart
 ### version 0.0.1(2023/11/02)
-* Initial Version
++ Initial Version
 
 ## Acknowledgments
-* [NanoPi NEOにインストールしたMPDでradikoを聞く](http://burro.hatenablog.com/entry/2019/02/16/175836)
-* [Github for Streaming server for relaying "radiko" radio stream to Music Player Daemon (MPD)](https://github.com/burrocargado/RadioRelayServer)
-* [Trunkene/volumio_jpradio: Japanese radio relay server for Volumio](https://github.com/Trunkene/volumio_jpradio)
++ [NanoPi NEOにインストールしたMPDでradikoを聞く](http://burro.hatenablog.com/entry/2019/02/16/175836)
++ [Github for Streaming server for relaying "radiko" radio stream to Music Player Daemon (MPD)](https://github.com/burrocargado/RadioRelayServer)
++ [Trunkene/volumio_jpradio: Japanese radio relay server for Volumio](https://github.com/Trunkene/volumio_jpradio)
