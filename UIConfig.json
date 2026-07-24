@@ -135,6 +135,44 @@
       ]
     },
     {
+      "id": "timefree_playback",
+      "element": "section",
+      "label": "TRANSLATE.TEMPO_LABEL",
+      "description": "TRANSLATE.TEMPO_DESC",
+      "icon": "fa-forward",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveTempoSetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SAVE",
+        "data": [
+          "tempo"
+        ]
+      },
+      "content": [
+        {
+          "id": "tempo",
+          "element": "select",
+          "label": "TRANSLATE.TEMPO_LABEL",
+          "doc": "TRANSLATE.TEMPO_DOC",
+          "value": {
+            "value": "1.0",
+            "label": "1.0x"
+          },
+          "options": [
+            { "value": "0.5", "label": "0.5x" },
+            { "value": "0.75", "label": "0.75x" },
+            { "value": "1.0", "label": "1.0x" },
+            { "value": "1.25", "label": "1.25x" },
+            { "value": "1.5", "label": "1.5x" },
+            { "value": "2.0", "label": "2.0x" }
+          ]
+        }
+      ]
+    },
+    {
       "id": "radiko_areas",
       "element": "section",
       "hidden": true,

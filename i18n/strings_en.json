@@ -18,5 +18,8 @@
   "BROWSE_MODE_TYPE1": "Play",
   "BROWSE_MODE_TYPE2": "Show program info",
   "RADIKO_AREAS_LABEL": "Area Selection",
-  "RADIKO_AREAS_DESC": "For AreaFree members. Choose which areas to fetch program listings for. If none are selected, all 47 areas nationwide are fetched."
+  "RADIKO_AREAS_DESC": "For AreaFree members. Choose which areas to fetch program listings for. If none are selected, all 47 areas nationwide are fetched.",
+  "TEMPO_LABEL": "Playback Speed",
+  "TEMPO_DOC": "Sets the playback speed for Time-Free programs. Does not affect live playback.",
+  "TEMPO_DESC": "Sets the playback speed for Time-Free programs. Does not affect live playback."
 }

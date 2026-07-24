@@ -209,6 +209,19 @@ class ControllerJpRadio {
   }
 
   /**
+   * UI設定画面で選択されたタイムフリー再生速度を保存し、変更があれば再起動を促す。
+   */
+  async saveTempoSetting(data: { tempo: { value: string } }): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
+    if (this.config.get('tempo') !== data.tempo.value) {
+      this.config.set('tempo', data.tempo.value);
+      this.showRestartModal();
+    }
+  }
+
+  /**
    * UI設定画面で選択されたエリア選択(`radikoAreas.<areaId>`)を保存し、変更があれば再起動を促す。
    * `data`のキーはエリアID(例: 'JP13')、値はそのエリアを取得対象にするかどうかの真偽値。
    */
@@ -267,9 +280,10 @@ class ControllerJpRadio {
     const browseMode1 = this.config.get('browseMode1');
     const browseMode2 = this.config.get('browseMode2');
     const radikoAreaIdArray = this.getRadikoAreaIdArray();
+    const tempo = Number(this.config.get('tempo'));
     const account = createLoginAccount(radikoUser, radikoPass);
 
-    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2, radikoAreaIdArray);
+    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2, radikoAreaIdArray, tempo);
 
     this.appRadio.start()
       .then(() => {
@@ -352,8 +366,11 @@ class ControllerJpRadio {
         if (uiconf.sections?.[2]?.content?.[1] !== undefined) {
           this.populateSelectValue(uiconf.sections[2].content[1], this.config!.get('browseMode2'));
         }
-        if (uiconf.sections?.[3] !== undefined && radikoUser !== '' && radikoPass !== '') {
-          await this.populateRadikoAreasSection(uiconf.sections[3]);
+        if (uiconf.sections?.[3]?.content?.[0] !== undefined) {
+          this.populateSelectValue(uiconf.sections[3].content[0], this.config!.get('tempo'));
+        }
+        if (uiconf.sections?.[4] !== undefined && radikoUser !== '' && radikoPass !== '') {
+          await this.populateRadikoAreasSection(uiconf.sections[4]);
         }
 
         defer.resolve(uiconf);

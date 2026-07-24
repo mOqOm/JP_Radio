@@ -22,6 +22,8 @@ export default class StreamSession {
     private readonly onFirstStreamStarted: () => void,
     private readonly onStopped: () => void,
     private readonly timefreeQuery?: TimefreeQuery,
+    private readonly tempo?: number,
+    private readonly resumeSeek?: string,
   ) { }
 
   /**
@@ -69,7 +71,7 @@ export default class StreamSession {
     }
 
     try {
-      const ffmpeg = await this.rdk.play(this.station, this.timefreeQuery);
+      const ffmpeg = await this.rdk.play(this.station, this.timefreeQuery, this.tempo, this.resumeSeek);
 
       if (ffmpeg === null || ffmpeg.stdout === null) {
         this.logger.error('JP_Radio::StreamSession: ffmpeg start failed or stdout is null');

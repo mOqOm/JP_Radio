@@ -1,5 +1,5 @@
 import { format } from 'date-fns-tz';
-import { parse, addDays, format as formatDate } from 'date-fns';
+import { parse, addDays, addSeconds, format as formatDate } from 'date-fns';
 
 /** Radikoの番組表・配信はJST基準のため、サーバのシステムタイムゾーンによらずJSTで統一する。 */
 const TIME_ZONE = 'Asia/Tokyo';
@@ -104,6 +104,15 @@ export function revCnvRadioTime(src: string): string {
   const nextDate = formatDate(addDays(baseDate, 1), 'yyyyMMdd');
   const hour = String(hourNum - 24).padStart(2, '0');
   return nextDate + hour + parts.minute + parts.second;
+}
+
+/**
+ * `'yyyyMMddHHmmss'`形式の実時刻文字列にN秒を加算する。タイムフリー再生の途中再開位置
+ * (`revCnvRadioTime`で実時刻に戻した`ft` + 経過秒)を計算するために使う。
+ */
+export function addSecondsToTimeString(src: string, seconds: number): string {
+  const date = parse(src, 'yyyyMMddHHmmss', new Date());
+  return formatDate(addSeconds(date, seconds), 'yyyyMMddHHmmss');
 }
 
 /**

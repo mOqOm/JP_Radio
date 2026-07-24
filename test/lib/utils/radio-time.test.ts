@@ -10,6 +10,7 @@ import {
   getTimeSpan,
   isWithinTimefreeWindow,
   revCnvRadioTime,
+  addSecondsToTimeString,
 } from '@/utils/radio-time';
 
 describe('parseRadioTime', () => {
@@ -47,6 +48,16 @@ describe('revCnvRadioTime', () => {
     const original = '20250901023000';
     const radioTime = cnvRadioTime(original, '20250831');
     expect(revCnvRadioTime(radioTime)).toBe(original);
+  });
+});
+
+describe('addSecondsToTimeString', () => {
+  it('同日内の加算', () => {
+    expect(addSecondsToTimeString('20250831050000', 90)).toBe('20250831050130');
+  });
+
+  it('日付をまたぐ加算', () => {
+    expect(addSecondsToTimeString('20250831235000', 900)).toBe('20250901000500');
   });
 });
 

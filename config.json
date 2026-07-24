@@ -19,6 +19,10 @@
     "type": "string",
     "value": "type1"
   },
+  "tempo": {
+    "type": "string",
+    "value": "1.0"
+  },
   "radikoAreas": {
     "JP1": {
       "type": "boolean",

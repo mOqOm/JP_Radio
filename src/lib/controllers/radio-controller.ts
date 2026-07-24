@@ -10,7 +10,7 @@ import type { TrackMeta } from '@/models/track-meta-model';
 import type { TimefreeQuery } from '@/models/timefree-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 
-import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimefreeWindow } from '@/utils/radio-time';
+import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimefreeWindow, revCnvRadioTime, addSecondsToTimeString } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
 
@@ -38,8 +38,13 @@ export default class JpRadio {
   private readonly browseMode1: string;
   private readonly browseMode2: string;
   private readonly radikoAreaIdArray: string[];
+  private readonly tempo: number;
 
-  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = []) {
+  /** タイムフリー再生の途中再開用の進捗(局・番組・再生位置)。同じ番組を選び直した時だけ使う。 */
+  private timefreeProgress: { station: string; ft: string; to: string; positionSec: number } | null = null;
+  private timefreeProgressTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = [], tempo = 1) {
     this.app = express();
     this.port = port;
     this.logger = logger;
@@ -49,6 +54,7 @@ export default class JpRadio {
     this.browseMode1 = browseMode1;
     this.browseMode2 = browseMode2;
     this.radikoAreaIdArray = radikoAreaIdArray;
+    this.tempo = tempo;
 
     // 番組表データ更新（6h間隔）
     this.task1 = cron.schedule('0 5,11,17,23 * * *', this.#pgupdate.bind(this), {
@@ -132,6 +138,14 @@ export default class JpRadio {
         timefreeQuery = undefined;
       }
 
+      let resumeSeek: string | undefined;
+      let resumePositionSec = 0;
+      if (timefreeQuery !== undefined) {
+        const resume = this.#resolveResume(this.station, timefreeQuery);
+        resumeSeek = resume.seek;
+        resumePositionSec = resume.positionSec;
+      }
+
       const session = new StreamSession(
         this.rdk,
         this.station,
@@ -141,14 +155,21 @@ export default class JpRadio {
             // max60sも待ちたくないのですぐ呼ぶ
             setTimeout(this.#pushSongState.bind(this), 3000);
             this.task2.start();
+          } else {
+            setTimeout(() => this.#pushTimefreeState(timefreeQuery, resumePositionSec), 3000);
+            this.#startTimefreeProgressTracking();
           }
         },
         () => {
           if (timefreeQuery === undefined) {
             this.task2.stop();
+          } else {
+            this.#stopTimefreeProgressTracking();
           }
         },
         timefreeQuery,
+        this.tempo,
+        resumeSeek,
       );
       session.start(res);
     });
@@ -201,6 +222,73 @@ export default class JpRadio {
         return;
 
       }
+    }
+  }
+
+  /**
+   * タイムフリー再生の途中再開位置を解決する。直前に再生していたのと同じ局・同じ番組(`ft`/`to`が一致)を
+   * 選び直した場合のみ、前回の再生位置(`positionSec`)からの再開に必要な`seek`(実時刻)を返す。
+   * それ以外(別の局・別の番組を選んだ場合)は進捗を0にリセットし、先頭から再生する。
+   */
+  #resolveResume(station: string, query: TimefreeQuery): { seek?: string; positionSec: number } {
+    const progress = this.timefreeProgress;
+    if (
+      progress !== null &&
+      progress.station === station &&
+      progress.ft === query.ft &&
+      progress.to === query.to &&
+      progress.positionSec > 0
+    ) {
+      const seek = addSecondsToTimeString(revCnvRadioTime(query.ft), progress.positionSec);
+      return { seek, positionSec: progress.positionSec };
+    }
+    this.timefreeProgress = { station, ft: query.ft, to: query.to, positionSec: 0 };
+    return { seek: undefined, positionSec: 0 };
+  }
+
+  /**
+   * タイムフリー再生開始直後に1回だけ、番組の長さと再生位置(途中再開時のみ0以外)をVolumioへ反映する。
+   * ライブと異なり、以降は自然に増えていくmpd側の再生位置をそのまま使うため、継続的な上書きは行わない。
+   */
+  #pushTimefreeState(query: TimefreeQuery, resumePositionSec: number): void {
+    const state = this.commandRouter.stateMachine.getState();
+    const t0 = formatTimeString(query.ft);
+    const t1 = formatTimeString(query.to);
+    state.duration = getTimeSpan(t0, t1);
+    state.seek = resumePositionSec * 1000;
+
+    const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
+    queueItem.duration = state.duration;
+
+    this.commandRouter.stateMachine.currentSeek = state.seek;
+    this.commandRouter.stateMachine.currentSongDuration = state.duration;
+    this.commandRouter.servicePushState(state, 'mpd');
+  }
+
+  /**
+   * タイムフリー再生中、`this.timefreeProgress.positionSec`を定期的に更新する。
+   * ストリームが停止した後も最後の値が残るため、次に同じ番組を選んだ時の途中再開に使える。
+   */
+  #startTimefreeProgressTracking(): void {
+    this.#stopTimefreeProgressTracking();
+    this.timefreeProgressTimer = setInterval(() => {
+      if (this.timefreeProgress === null) {
+        return;
+      }
+      const state = this.commandRouter.stateMachine.getState();
+      if (typeof state.seek === 'number') {
+        this.timefreeProgress.positionSec = Math.floor(state.seek / 1000);
+      }
+    }, 5000);
+  }
+
+  /**
+   * タイムフリー再生の進捗更新タイマーを止める(進捗の値自体は次回の途中再開のために残す)。
+   */
+  #stopTimefreeProgressTracking(): void {
+    if (this.timefreeProgressTimer !== null) {
+      clearInterval(this.timefreeProgressTimer);
+      this.timefreeProgressTimer = null;
     }
   }
 
@@ -613,6 +701,7 @@ export default class JpRadio {
     if (this.server !== null) {
       this.task1.stop();
       this.task2.stop();
+      this.#stopTimefreeProgressTracking();
       this.server.close();
       this.server = null;
 
