@@ -105,6 +105,18 @@ class ControllerJpRadio {
   }
 
   /**
+   * config.jsonから数値設定を取得する。旧バージョンからのアップグレードで永続化済み設定ファイルに
+   * まだキーが存在しない場合、`config.get()`は`undefined`を返し`Number(undefined)`は`NaN`になってしまう
+   * (例: node-cronのパターン文字列に混入してクラッシュする)ため、`NaN`ならデフォルト値にフォールバックする。
+   * @param key 設定キー。
+   * @param defaultValue キーが未設定または不正な場合に使うデフォルト値。
+   */
+  private getConfigNumber(key: string, defaultValue: number): number {
+    const num = Number(this.config?.get(key));
+    return isNaN(num) ? defaultValue : num;
+  }
+
+  /**
    * 設定画面(`radikoAreas.JP1`~`radikoAreas.JP47`)で選択済みのエリアIDの一覧を返す。
    * 何も選択されていなければ空配列(→全国47エリアを取得するデフォルト動作)。
    */
@@ -350,12 +362,12 @@ class ControllerJpRadio {
     const browseMode1 = this.config.get('browseMode1');
     const browseMode2 = this.config.get('browseMode2');
     const radikoAreaIdArray = this.getRadikoAreaIdArray();
-    const tempo = Number(this.config.get('tempo'));
-    const programPeriodFrom = Number(this.config.get('programPeriodFrom'));
-    const programPeriodTo = Number(this.config.get('programPeriodTo'));
-    const timeFormat = this.config.get('timeFormat');
-    const albumartType = this.config.get('albumartType');
-    const networkDelay = Number(this.config.get('networkDelay'));
+    const tempo = this.getConfigNumber('tempo', 1);
+    const programPeriodFrom = this.getConfigNumber('programPeriodFrom', 7);
+    const programPeriodTo = this.getConfigNumber('programPeriodTo', 0);
+    const timeFormat = this.config.get('timeFormat') || 'yyyy/MM/dd HH:mm-HH:mm';
+    const albumartType = this.config.get('albumartType') || 'type3';
+    const networkDelay = this.getConfigNumber('networkDelay', 20);
     const account = createLoginAccount(radikoUser, radikoPass);
 
     setRadioDelay(networkDelay);
@@ -429,7 +441,7 @@ class ControllerJpRadio {
     )
       .then(async (uiconf: any) => {
         const servicePort = this.config!.get('servicePort');
-        const networkDelay = this.config!.get('networkDelay');
+        const networkDelay = this.getConfigNumber('networkDelay', 20);
         const radikoUser = this.config!.get('radikoUser');
         const radikoPass = this.config!.get('radikoPass');
 
@@ -455,16 +467,16 @@ class ControllerJpRadio {
           this.populateSelectValue(uiconf.sections[3].content[0], this.config!.get('tempo'));
         }
         if (uiconf.sections?.[4]?.content?.[0] !== undefined) {
-          this.populateSelectValue(uiconf.sections[4].content[0], this.config!.get('albumartType'));
+          this.populateSelectValue(uiconf.sections[4].content[0], this.config!.get('albumartType') || 'type3');
         }
         if (uiconf.sections?.[5]?.content?.[0] !== undefined) {
-          uiconf.sections[5].content[0].value = this.config!.get('programPeriodFrom');
+          uiconf.sections[5].content[0].value = this.getConfigNumber('programPeriodFrom', 7);
         }
         if (uiconf.sections?.[5]?.content?.[1] !== undefined) {
-          uiconf.sections[5].content[1].value = this.config!.get('programPeriodTo');
+          uiconf.sections[5].content[1].value = this.getConfigNumber('programPeriodTo', 0);
         }
         if (uiconf.sections?.[5]?.content?.[2] !== undefined) {
-          this.populateSelectValue(uiconf.sections[5].content[2], this.config!.get('timeFormat'));
+          this.populateSelectValue(uiconf.sections[5].content[2], this.config!.get('timeFormat') || 'yyyy/MM/dd HH:mm-HH:mm');
         }
         if (uiconf.sections?.[6] !== undefined && radikoUser !== '' && radikoPass !== '') {
           await this.populateRadikoAreasSection(uiconf.sections[6]);
