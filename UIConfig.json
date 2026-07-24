@@ -72,6 +72,67 @@
           "value": ""
         }
       ]
+    },
+    {
+      "id": "browse_mode",
+      "element": "section",
+      "label": "TRANSLATE.BROWSE_MODE_LABEL",
+      "description": "TRANSLATE.BROWSE_MODE_DESC",
+      "icon": "fa-list-ol",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveBrowseModeSetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SAVE",
+        "data": [
+          "browseMode1",
+          "browseMode2"
+        ]
+      },
+      "content": [
+        {
+          "id": "browseMode1",
+          "element": "select",
+          "label": "TRANSLATE.BROWSE_MODE_LIVE_LABEL",
+          "doc": "TRANSLATE.BROWSE_MODE_LIVE_DOC",
+          "value": {
+            "value": "type1",
+            "label": "TRANSLATE.BROWSE_MODE_TYPE1"
+          },
+          "options": [
+            {
+              "value": "type1",
+              "label": "TRANSLATE.BROWSE_MODE_TYPE1"
+            },
+            {
+              "value": "type2",
+              "label": "TRANSLATE.BROWSE_MODE_TYPE2"
+            }
+          ]
+        },
+        {
+          "id": "browseMode2",
+          "element": "select",
+          "label": "TRANSLATE.BROWSE_MODE_TIMEFREE_LABEL",
+          "doc": "TRANSLATE.BROWSE_MODE_TIMEFREE_DOC",
+          "value": {
+            "value": "type1",
+            "label": "TRANSLATE.BROWSE_MODE_TYPE1"
+          },
+          "options": [
+            {
+              "value": "type1",
+              "label": "TRANSLATE.BROWSE_MODE_TYPE1"
+            },
+            {
+              "value": "type2",
+              "label": "TRANSLATE.BROWSE_MODE_TYPE2"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -10,5 +10,13 @@
   "radikoPass": {
     "type": "string",
     "value": ""
+  },
+  "browseMode1": {
+    "type": "string",
+    "value": "type1"
+  },
+  "browseMode2": {
+    "type": "string",
+    "value": "type1"
   }
 }

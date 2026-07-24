@@ -8,5 +8,13 @@
   "RADIKO_ACCOUNT_PASS_LABEL": "パスワード",
   "RADIKO_ACCOUNT_PASS_DESC": "Radikoアカウントのパスワード",
   "SERVICE_PORT_LABEL": "サービスポート",
-  "SERVICE_PORT_DESC": "サービスポート番号(1024～65535)を入力します。デフォルト値は:9000"
+  "SERVICE_PORT_DESC": "サービスポート番号(1024～65535)を入力します。デフォルト値は:9000",
+  "BROWSE_MODE_LABEL": "ブラウズ設定",
+  "BROWSE_MODE_DESC": "ブラウズ画面で局・番組を選択したときの動作を設定します。",
+  "BROWSE_MODE_LIVE_LABEL": "ライブ",
+  "BROWSE_MODE_LIVE_DOC": "ライブ局選択時の動作を設定します。<br/>　デフォルト値：再生",
+  "BROWSE_MODE_TIMEFREE_LABEL": "タイムフリー",
+  "BROWSE_MODE_TIMEFREE_DOC": "タイムフリー番組選択時の動作を設定します。<br/>　デフォルト値：再生",
+  "BROWSE_MODE_TYPE1": "再生",
+  "BROWSE_MODE_TYPE2": "番組情報を表示"
 }

@@ -8,6 +8,7 @@ import type { StationInfo } from '@/models/station-model';
 import type { LoginAccount } from '@/models/auth-model';
 import type { TrackMeta } from '@/models/track-meta-model';
 import type { TimefreeQuery } from '@/models/timefree-query-model';
+import type { ProgInfoData } from '@/models/prog-info-model';
 
 import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimefreeWindow } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
@@ -34,14 +35,18 @@ export default class JpRadio {
   private task2Cnt: number = 0;
 
   private readonly serviceName: string;
+  private readonly browseMode1: string;
+  private readonly browseMode2: string;
 
-  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string) {
+  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1') {
     this.app = express();
     this.port = port;
     this.logger = logger;
     this.acct = acct;
     this.commandRouter = commandRouter;
     this.serviceName = serviceName;
+    this.browseMode1 = browseMode1;
+    this.browseMode2 = browseMode2;
 
     // 番組表データ更新（6h間隔）
     this.task1 = cron.schedule('0 5,11,17,23 * * *', this.#pgupdate.bind(this), {
@@ -278,6 +283,11 @@ export default class JpRadio {
           // チャンネル数（未使用）
           channels  : 0
         };
+        if (this.browseMode1 === 'type2') {
+          // 直接再生ではなく番組情報モーダルを経由させる
+          item.type = 'radio-category';
+          item.uri = `radiko/proginfo/${stationId}`;
+        }
         const region = stationInfo.regionName || 'その他';
         if (grouped[region] === undefined) {
           grouped[region] = [];
@@ -413,6 +423,11 @@ export default class JpRadio {
           bitdepth: 0,
           channels: 0
         };
+        if (this.browseMode2 === 'type2') {
+          // 直接再生ではなく番組情報モーダルを経由させる
+          item.type = 'radio-category';
+          item.uri = `radiko/proginfo/${stationId}?ft=${program.ft}&to=${program.tt}`;
+        }
         return item;
       });
 
@@ -444,6 +459,34 @@ export default class JpRadio {
       return this.#buildTimefreeTrackMeta(stationId, stationInfo, timefreeQuery);
     }
     return this.#buildTrackMeta(stationId, stationInfo);
+  }
+
+  /**
+   * 番組情報モーダル表示用のデータを組み立てる(`handleBrowseUri`の`radiko/proginfo/<stationId>`から呼ばれる)。
+   * `explodeUri`の返却値と同じ形にして返すことで、モーダルの「再生」「キューに追加」ボタンから
+   * このデータをそのままVolumioの再生キューへ渡せるようにする。
+   * @returns 局が存在しない場合はnull。
+   */
+  async progInfo(stationId: string, timefreeQuery?: TimefreeQuery): Promise<ProgInfoData | null> {
+    const meta = await this.getTrackMeta(stationId, timefreeQuery);
+    if (meta === null) {
+      return null;
+    }
+    const playUrl = new URL(`http://localhost:${this.port}/radiko/play/${stationId}`);
+    if (timefreeQuery !== undefined) {
+      playUrl.searchParams.set('ft', timefreeQuery.ft);
+      playUrl.searchParams.set('to', timefreeQuery.to);
+    }
+    return {
+      service: this.serviceName,
+      type: 'song',
+      title: meta.title,
+      name: meta.title,
+      album: meta.album,
+      artist: meta.artist,
+      albumart: meta.albumart,
+      uri: playUrl.toString(),
+    };
   }
 
   /**

@@ -8,5 +8,13 @@
   "RADIKO_ACCOUNT_PASS_LABEL": "Password",
   "RADIKO_ACCOUNT_PASS_DESC": "This is the password of your Radiko account",
   "SERVICE_PORT_LABEL": "Service Port",
-  "SERVICE_PORT_DESC": "Enter the service port number (1024-65535). The default value is 9000."
+  "SERVICE_PORT_DESC": "Enter the service port number (1024-65535). The default value is 9000.",
+  "BROWSE_MODE_LABEL": "Browse Settings",
+  "BROWSE_MODE_DESC": "Configure what happens when you select a station or program in the browse screen.",
+  "BROWSE_MODE_LIVE_LABEL": "Live",
+  "BROWSE_MODE_LIVE_DOC": "Configure the action when selecting a live station.<br/>　Default: Play",
+  "BROWSE_MODE_TIMEFREE_LABEL": "Time-Free",
+  "BROWSE_MODE_TIMEFREE_DOC": "Configure the action when selecting a Time-Free program.<br/>　Default: Play",
+  "BROWSE_MODE_TYPE1": "Play",
+  "BROWSE_MODE_TYPE2": "Show program info"
 }

@@ -7,6 +7,7 @@ import { createLoginAccount } from '@/logic/auth';
 import { messageCatalog } from '@/utils/message-catalog';
 import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
 import type { TimefreeQuery } from '@/models/timefree-query-model';
+import type { ProgInfoData } from '@/models/prog-info-model';
 
 export = ControllerJpRadio;
 
@@ -82,6 +83,20 @@ class ControllerJpRadio {
   }
 
   /**
+   * UIConfig.jsonのselect要素(`content.value`/`content.options`)に現在値を反映する。
+   * `content.options[].label`はこの時点で既に`i18nJson`によって翻訳済みの文字列になっている。
+   */
+  private populateSelectValue(content: any, currentValue: string): void {
+    content.value.value = currentValue;
+    for (const option of content.options) {
+      if (option.value === currentValue) {
+        content.value.label = option.label;
+        break;
+      }
+    }
+  }
+
+  /**
    * UI設定画面で入力されたサービスポート番号を保存し、変更があれば再起動を促す。
    */
   async saveServicePort(data: { servicePort: string }): Promise<void> {
@@ -105,6 +120,28 @@ class ControllerJpRadio {
     if (updated === true) {
       this.config.set('radikoUser', data.radikoUser);
       this.config.set('radikoPass', data.radikoPass);
+      this.showRestartModal();
+    }
+  }
+
+  /**
+   * UI設定画面で選択されたブラウズ動作(ライブ/タイムフリー選択時に直接再生するか、
+   * 番組情報モーダルを表示するか)を保存し、変更があれば再起動を促す。
+   */
+  async saveBrowseModeSetting(data: { browseMode1: { value: string }; browseMode2: { value: string } }): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
+    let updated = false;
+    if (this.config.get('browseMode1') !== data.browseMode1.value) {
+      updated = true;
+    }
+    if (this.config.get('browseMode2') !== data.browseMode2.value) {
+      updated = true;
+    }
+    if (updated === true) {
+      this.config.set('browseMode1', data.browseMode1.value);
+      this.config.set('browseMode2', data.browseMode2.value);
       this.showRestartModal();
     }
   }
@@ -144,9 +181,11 @@ class ControllerJpRadio {
     const radikoUser = this.config.get('radikoUser');
     const radikoPass = this.config.get('radikoPass');
     const servicePort = this.config.get('servicePort');
+    const browseMode1 = this.config.get('browseMode1');
+    const browseMode2 = this.config.get('browseMode2');
     const account = createLoginAccount(radikoUser, radikoPass);
 
-    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName);
+    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2);
 
     this.appRadio.start()
       .then(() => {
@@ -223,6 +262,12 @@ class ControllerJpRadio {
         if (uiconf.sections?.[1]?.content?.[1] !== undefined) {
           uiconf.sections[1].content[1].value = radikoPass;
         }
+        if (uiconf.sections?.[2]?.content?.[0] !== undefined) {
+          this.populateSelectValue(uiconf.sections[2].content[0], this.config!.get('browseMode1'));
+        }
+        if (uiconf.sections?.[2]?.content?.[1] !== undefined) {
+          this.populateSelectValue(uiconf.sections[2].content[1], this.config!.get('browseMode2'));
+        }
 
         defer.resolve(uiconf);
       })
@@ -259,11 +304,12 @@ class ControllerJpRadio {
    * BrowseメニューでURIが選択された際に呼ばれ、対応するブラウズ結果を返す。
    * `radiko` → ルートメニュー(ライブ/タイムフリー)、`radiko/live` → {@link JpRadio.radioStations}、
    * `radiko/timefree` → {@link JpRadio.timefreeStations}、
-   * `radiko/timetable/<stationId>` → {@link JpRadio.stationTimetable}。
+   * `radiko/timetable/<stationId>` → {@link JpRadio.stationTimetable}、
+   * `radiko/proginfo/<stationId>[?ft=&to=]` → 番組情報モーダルを表示(ブラウズ結果は返さず空を返す)。
    */
   handleBrowseUri(curUri: string): Promise<BrowseResult | Record<string, never>> {
     const defer = libQ.defer();
-    const [baseUri] = curUri.split('?');
+    const [baseUri, queryString] = curUri.split('?');
 
     const appRadio = this.appRadio;
     if (appRadio === null) {
@@ -273,6 +319,35 @@ class ControllerJpRadio {
     }
 
     const segments = baseUri.split('/');
+
+    if (segments[0] === 'radiko' && segments[1] === 'proginfo' && segments[2] !== undefined) {
+      const stationId = segments[2];
+      let timefreeQuery: TimefreeQuery | undefined;
+      if (queryString !== undefined) {
+        const params = new URLSearchParams(queryString);
+        const ft = params.get('ft');
+        const to = params.get('to');
+        if (ft !== null && to !== null) {
+          timefreeQuery = { ft, to };
+        }
+      }
+
+      libQ.resolve()
+        .then(() => appRadio.progInfo(stationId, timefreeQuery))
+        .then((data: ProgInfoData | null) => {
+          if (data !== null) {
+            this.showProgInfoModal(data);
+          }
+          defer.resolve({});
+        })
+        .fail((error: any) => {
+          this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+          defer.reject(error);
+        });
+
+      return defer.promise;
+    }
+
     let task: Promise<BrowseResult> | null;
     if (baseUri === 'radiko') {
       task = appRadio.rootMenu();
@@ -301,6 +376,75 @@ class ControllerJpRadio {
       });
 
     return defer.promise;
+  }
+
+  /**
+   * 番組情報モーダルを表示する。「再生」「キューに追加」ボタンは{@link playFromProgInfoModal}/
+   * {@link addQueueFromProgInfoModal}を`callMethod`で呼び出し、`data`(explodeUriと同形式)をそのまま渡す。
+   */
+  private showProgInfoModal(data: ProgInfoData): void {
+    let message = `<div>${data.artist}</div>`;
+    if (data.album !== '') {
+      message += `<div>${messageCatalog.get('PROGINFO_PERFORMER')}${data.album}</div>`;
+    }
+    const modalMessage = {
+      title: messageCatalog.get('PROGINFO_PROG_INFO') + data.title,
+      message,
+      size: 'lg',
+      buttons: [
+        {
+          name: messageCatalog.get('PROGINFO_PLAY'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'playFromProgInfoModal',
+            data
+          }
+        },
+        {
+          name: messageCatalog.get('PROGINFO_ADD_TO_QUEUE'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'addQueueFromProgInfoModal',
+            data
+          }
+        },
+        {
+          name: this.commandRouter.getI18nString('COMMON.CLOSE'),
+          class: 'btn btn-warning',
+          emit: 'closeModals',
+          payload: ''
+        }
+      ]
+    };
+    this.commandRouter.broadcastMessage('openModal', modalMessage);
+  }
+
+  /**
+   * 番組情報モーダルの「再生」ボタンから呼ばれる。対象トラックを再生キューの先頭に追加して即再生する。
+   */
+  playFromProgInfoModal(data: any): void {
+    this.logger.info(`JP_Radio::playFromProgInfoModal: uri=${data.uri}`);
+    const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+    arrayQueue.unshift(data);
+    this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
+    this.commandRouter.volumioPushQueue(arrayQueue);
+    this.commandRouter.volumioPlay(0);
+  }
+
+  /**
+   * 番組情報モーダルの「キューに追加」ボタンから呼ばれる。対象トラックを再生キューの末尾に追加する。
+   */
+  addQueueFromProgInfoModal(data: any): void {
+    this.logger.info(`JP_Radio::addQueueFromProgInfoModal: uri=${data.uri}`);
+    const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+    arrayQueue.push(data);
+    this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
+    this.commandRouter.stateMachine.playQueue.saveQueue();
+    this.commandRouter.volumioPushQueue(arrayQueue);
   }
 
   /**
