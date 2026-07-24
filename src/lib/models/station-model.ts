@@ -1,27 +1,76 @@
-/** getStations()などで使う、XMLパース後の地域データ */
+/**
+ * getStations()などで使う、XMLパース後の地域データ
+ */
 export interface RegionData {
+  /**
+   * 地域名（例: '関東'）
+   */
   region_name: string;
   region_id: string;
   ascii_name: string;
   stations: Array<{
+    /**
+     * 局ID（例: 'TBS'）
+     */
     id: string;
+    /**
+     * 局名（例: 'TBSラジオ'）
+     */
     name: string;
+    /**
+     * アスキー名（例: 'TBS RADIO'）
+     */
     ascii_name: string;
+    /**
+     * エリアフリー対応可否（例: '1'）
+     */
     areafree: string;
     timefree: string;
+    /**
+     * バナー画像URL
+     */
     banner: string;
+    /**
+     * 所属エリアID（例: 'JP13'）
+     */
     area_id: string;
   }>;
 }
 
-/** stations Map に格納する局データ */
+/**
+ * stations Map に格納する局データ
+ */
 export interface StationInfo {
-  RegionName: string;
-  BannerURL: string;
-  AreaId: string;
-  AreaName: string;
-  AreaKanji : string;
-  Name: string;
-  AsciiName: string;
-  AreaFree  : string;
+  /**
+   * 地域名（例: '関東'）
+   */
+  regionName: string;
+  /**
+   * バナー画像URL
+   */
+  bannerUrl: string;
+  /**
+   * 所属エリアID（例: 'JP13'）
+   */
+  areaId: string;
+  /**
+   * エリア名（英語、例: 'TOKYO'）
+   */
+  areaName: string;
+  /**
+   * エリア名（漢字、例: '東京'）
+   */
+  areaKanji: string;
+  /**
+   * 局名（例: 'TBSラジオ'）
+   */
+  name: string;
+  /**
+   * アスキー名（例: 'TBS RADIO'）
+   */
+  asciiName: string;
+  /**
+   * エリアフリー対応可否（例: '1'）
+   */
+  areaFree: string;
 }

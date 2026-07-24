@@ -8,16 +8,18 @@ import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 
-import type { StationInfo, RegionData } from './models/station-model';
-import type { LoginAccount, LoginState } from './models/auth-model';
+import type { StationInfo, RegionData } from '../models/station-model';
+import type { LoginAccount, LoginState } from '../models/auth-model';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
   STATION_STREAM_XML_URL, PLAY_LIVE_QUERY,
-  AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL
-} from './consts/radiko-urls';
+  AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL,
+  RADIKO_APP_HEADERS
+} from '../consts/radiko-urls';
 
-import { AreaKanji } from './consts/area-name';
+import { AREA_KANJI } from '../consts/area-name';
+import { selectLiveEntry } from '../logic/live-entry-selector';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -26,6 +28,10 @@ const xmlParser = new XMLParser({
   allowBooleanAttributes: true,
 });
 
+/**
+ * Radiko APIとのやり取りを担うModel層。
+ * 認証(auth1/auth2)・局一覧取得・ライブ配信プレイリスト解決・ffmpegによるストリーム起動を提供する。
+ */
 export default class Radiko {
   private token: string | null = null;
   private areaId: string | null = null;
@@ -38,18 +44,23 @@ export default class Radiko {
 
   constructor(private logger: Console, private port: number) { }
 
+  /**
+   * プレミアム会員としてのログイン(指定時)と、エリア判定トークンの取得・局一覧の取得を行う。
+   * @param acct 指定するとRadikoプレミアム会員としてログインを試みる。
+   * @param forceGetStations trueの場合、エリアIDが既に取得済みでも局一覧を再取得する。
+   */
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
-    if (acct) {
+    if (acct !== null) {
       this.logger.info('JP_Radio::Attempting login');
       let loginOK = await this.checkLogin();
-      if (!loginOK) {
+      if (loginOK === null) {
         this.cookieJar = await this.login(acct);
         loginOK = await this.checkLogin();
       }
       this.loginState = loginOK;
     }
 
-    if (forceGetStations || !this.areaId) {
+    if (forceGetStations === true || this.areaId === null) {
       const [token, areaId] = await this.getToken();
       this.token = token;
       this.areaId = areaId;
@@ -57,10 +68,22 @@ export default class Radiko {
     }
   }
 
+  /**
+   * 自身のエリアID(例: `JP13`)と会員種別(`AreaFree`など)を`/`区切りで返す。
+   */
   async getMyAreaId(): Promise<string> {
-    return this.areaId + '/' + (this.loginState ? this.loginState.member_type.type : '');
+    let memberType: string;
+    if (this.loginState !== null) {
+      memberType = this.loginState.member_type.type;
+    } else {
+      memberType = '';
+    }
+    return this.areaId + '/' + memberType;
   }
 
+  /**
+   * メールアドレス/パスワードでRadikoにログインし、認証済みCookieJarを返す。
+   */
   private async login(acct: LoginAccount): Promise<CookieJar> {
     this.logger.info('JP_Radio::Radiko.login');
     const jar = new tough.CookieJar();
@@ -70,20 +93,20 @@ export default class Radiko {
         form: { mail: acct.mail, pass: acct.pass },
       });
       return jar;
-    } catch (err: any) {
-      if (err.statusCode === 302) return jar;
-      this.logger.error('JP_Radio::Login failed', err);
-      throw err;
+    } catch (error: any) {
+      if (error.statusCode === 302) {
+        return jar;
+      }
+      this.logger.error('JP_Radio::Login failed', error);
+      throw error;
     }
   }
 
+  /**
+   * 現在のCookieJarでログイン状態(会員種別)を確認する。未ログイン/失敗時はnullを返す。
+   */
   private async checkLogin(): Promise<LoginState | null> {
     this.logger.info('JP_Radio::Radiko.checkLogin');
-    if (!this.cookieJar) {
-      this.logger.info('JP_Radio::premium account not set');
-      return null;
-    }
-
     try {
       const options: OptionsOfJSONResponseBody = {
         cookieJar: this.cookieJar,
@@ -97,19 +120,22 @@ export default class Radiko {
       this.logger.info(`JP_Radio::Login status: ${body.member_type.type}`);
       return body;
 
-    } catch (err: any) {
-      const statusCode = err?.response?.statusCode;
+    } catch (error: any) {
+      const statusCode = error?.response?.statusCode;
 
       if (statusCode === 400) {
         this.logger.info('JP_Radio::premium not logged in (HTTP 400)');
         return null;
       }
 
-      this.logger.error(`JP_Radio::premium account login check error: ${err.message}`, err);
+      this.logger.error(`JP_Radio::premium account login check error: ${error.message}`, error);
       return null;
     }
   }
 
+  /**
+   * auth1/auth2の一連の認証フローを実行し、`[token, areaId]`を返す。
+   */
   private async getToken(): Promise<[string, string]> {
     this.logger.info('JP_Radio::Radiko.getToken');
     const auth1Headers = await this.auth1();
@@ -120,20 +146,21 @@ export default class Radiko {
     return [token, areaId];
   }
 
+  /**
+   * 認証第1段階。レスポンスヘッダーにトークンとパーシャルキー算出用のオフセット/長さが含まれる。
+   */
   private async auth1(): Promise<Record<string, string>> {
     this.logger.info('JP_Radio::Radiko.auth1');
     const res = await got.get(AUTH1_URL, {
       cookieJar: this.cookieJar,
-      headers: {
-        'X-Radiko-App': 'pc_html5',
-        'X-Radiko-App-Version': '0.0.1',
-        'X-Radiko-User': 'dummy_user',
-        'X-Radiko-Device': 'pc',
-      },
+      headers: RADIKO_APP_HEADERS,
     });
     return res.headers as Record<string, string>;
   }
 
+  /**
+   * auth1のレスポンスヘッダーから、auth2に必要なパーシャルキー(base64)とトークンを算出する。
+   */
   private getPartialKey(headers: Record<string, string>): [string, string] {
     this.logger.info('JP_Radio::Radiko.getPartialKey');
     const token = headers['x-radiko-authtoken'];
@@ -143,6 +170,9 @@ export default class Radiko {
     return [partialKey, token];
   }
 
+  /**
+   * 認証第2段階。成功するとレスポンスボディに`areaId,areaName,...`形式の文字列が返る。
+   */
   private async auth2(token: string, partialKey: string): Promise<string> {
     this.logger.info('JP_Radio::Radiko.auth2');
     const res = await got.get(AUTH2_URL, {
@@ -157,6 +187,10 @@ export default class Radiko {
     return res.body;
   }
 
+  /**
+   * 全国局データ(`STATION_FULL_URL`)と全47エリアの局リスト(`STATION_AREA_URL`)を取得・突合し、
+   * ログイン中またはエリア内から視聴可能な局のみを{@link Radiko.stations}へ格納する。
+   */
   private async getStations(): Promise<void> {
     this.logger.info('JP_Radio::Radiko.getStations');
     this.stations = new Map();
@@ -171,7 +205,8 @@ export default class Radiko {
       region_id: region['@region_id'],
       ascii_name: region['@ascii_name'],
       stations: region.station.map((s: any) => ({
-        id: String(s.id),   // FM802対策
+        // FM802対策
+        id: String(s.id),
         name: s.name,
         ascii_name: s.ascii_name,
         areafree: s.areafree,
@@ -200,26 +235,47 @@ export default class Radiko {
     );
 
     const areaData = this.areaData;
-    const currentAreaID = this.areaId ?? '';
-    const allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
+    let currentAreaID = this.areaId;
+    if (currentAreaID === null) {
+      currentAreaID = '';
+    }
+    let allowedStations = areaData.get(currentAreaID)?.stations.map(String);
+    if (allowedStations === undefined) {
+      allowedStations = [];
+    }
 
     // 3. regionData をもとに stations を構成
     for (const region of regionData) {
       for (const station of region.stations) {
         const id = station.id;
-        const areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '') ?? '';
-        const areaKanji = AreaKanji.get(station.area_id) ?? areaName;
+        let areaName = areaData.get(station.area_id)?.areaName?.replace(' JAPAN', '');
+        if (areaName === undefined) {
+          areaName = '';
+        }
+        let areaKanji = AREA_KANJI.get(station.area_id);
+        if (areaKanji === undefined) {
+          areaKanji = areaName;
+        }
 
-        if (this.loginState || allowedStations.includes(id)) {
-          this.stations.set(id, {          // 'TBS'
-            RegionName: region.region_name,// '関東'
-            BannerURL: station.banner,     // 'http://radiko.jp/res/banner/radiko_banner.png'
-            AreaId: station.area_id,       // 'JP13'
-            AreaName: areaName,            // 'TOKYO'
-            AreaKanji: areaKanji,          // '東京'
-            Name: station.name,            // 'TBSラジオ'
-            AsciiName: station.ascii_name, // 'TBS RADIO'
-            AreaFree: station.areafree,    // '1'
+        if (this.loginState !== null || allowedStations.includes(id)) {
+          // 'TBS'
+          this.stations.set(id, {
+            // '関東'
+            regionName: region.region_name,
+            // 'http://radiko.jp/res/banner/radiko_banner.png'
+            bannerUrl: station.banner,
+            // 'JP13'
+            areaId: station.area_id,
+            // 'TOKYO'
+            areaName: areaName,
+            // '東京'
+            areaKanji: areaKanji,
+            // 'TBSラジオ'
+            name: station.name,
+            // 'TBS RADIO'
+            asciiName: station.ascii_name,
+            // '1'
+            areaFree: station.areafree,
           });
         }
       }
@@ -228,34 +284,57 @@ export default class Radiko {
     this.stationData = regionData;
   }
 
+  /**
+   * 局IDから表示用の局名(日本語)を取得する。
+   */
   async getStationName(stationId: string): Promise<string> {
-    return this.stations?.get(stationId)?.Name ?? '';
+    let name = this.stations?.get(stationId)?.name;
+    if (name === undefined) {
+      name = '';
+    }
+    return name;
   }
 
+  /**
+   * 局IDからアスキー名(英語表記)を取得する。
+   */
   async getStationAsciiName(stationId: string): Promise<string> {
-    return this.stations?.get(stationId)?.AsciiName ?? '';
+    let asciiName = this.stations?.get(stationId)?.asciiName;
+    if (asciiName === undefined) {
+      asciiName = '';
+    }
+    return asciiName;
   }
 
+  /**
+   * 指定局のライブストリームURLを解決し、ffmpegでAAC(ADTS)に変換しながらstdoutへ流すプロセスを起動する。
+   * トークン取得・プレイリスト解決に失敗した場合は`MAX_RETRY_COUNT`回までトークンを取り直して再試行する。
+   * @returns 起動したffmpegの{@link ChildProcess}。局が存在しない/解決失敗の場合はnull。
+   */
   async play(station: string): Promise<ChildProcess | null> {
     this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
-    if (!this.stations?.has(station)) {
+    if (this.stations?.has(station) === false) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
       return null;
     }
 
     let m3u8: string | null = null;
     for (let i = 0; i < MAX_RETRY_COUNT; i++) {
-      if (!this.token) [this.token, this.areaId] = await this.getToken();
+      if (this.token === null) {
+        [this.token, this.areaId] = await this.getToken();
+      }
       const playlistUrl = await this.getLivePlaylistUrl(station);
-      if (playlistUrl) {
+      if (playlistUrl !== null) {
         m3u8 = await this.genTempChunkM3u8URL(playlistUrl, this.token);
       }
-      if (m3u8) break;
+      if (m3u8 !== null) {
+        break;
+      }
       this.logger.info('JP_Radio::Retrying stream fetch with new token');
       [this.token, this.areaId] = await this.getToken();
     }
 
-    if (!m3u8) {
+    if (m3u8 === null) {
       this.logger.error('JP_Radio::Failed to get playlist URL');
       return null;
     }
@@ -263,10 +342,7 @@ export default class Radiko {
     // medialist/m3u8の取得にはAuthTokenだけでなくRadikoアプリ識別ヘッダー一式が必要
     const streamHeaders = [
       `X-Radiko-Authtoken:${this.token}`,
-      'X-Radiko-App:pc_html5',
-      'X-Radiko-App-Version:0.0.1',
-      'X-Radiko-User:dummy_user',
-      'X-Radiko-Device:pc',
+      ...Object.entries(RADIKO_APP_HEADERS).map(([key, value]) => `${key}:${value}`),
     ].join('\r\n') + '\r\n';
 
     // ffmpegのHLSデマルチプレクサはプレイリストのreload時に-headersを引き継がずRadikoに拒否されるため、
@@ -290,42 +366,50 @@ export default class Radiko {
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], detached: true });
   }
 
-  // ライブ配信のplaylist_create_urlをlocal局ごとのstream XMLから取得し、lsidを付与したURLを組み立てる
+  // ffmpegのHLSデマルチプレクサはプレイリストのreload時に-headersを引き継がないため、
+  // ローカルプロキシ経由でこのメソッドを都度呼び出し、正しいRadikoヘッダーを付けて中継する
+  async fetchMedialist(upstreamUrl: string, token: string): Promise<{ contentType: string; body: Buffer }> {
+    const res = await got(upstreamUrl, {
+      headers: { 'X-Radiko-AuthToken': token, ...RADIKO_APP_HEADERS },
+      responseType: 'buffer',
+    });
+    return {
+      contentType: String(res.headers['content-type'] || 'application/vnd.apple.mpegurl'),
+      body: res.body,
+    };
+  }
+
+  /**
+   * 局ごとのstream XML(`STATION_STREAM_XML_URL`)からライブ配信用`playlist_create_url`を選び、lsidを付与したURLを組み立てる。
+   */
   private async getLivePlaylistUrl(station: string): Promise<string | null> {
     try {
       const res = await got(format(STATION_STREAM_XML_URL, station));
       const parsed = xmlParser.parse(res.body);
       const rawEntries = parsed?.urls?.url;
-      const entries: any[] = Array.isArray(rawEntries) ? rawEntries : rawEntries ? [rawEntries] : [];
-
-      const liveEntries = entries.filter((entry) => String(entry['@timefree']) === '0');
-      const preferAreaFree = this.loginState ? '1' : '0';
-      const chosen = liveEntries.find((entry) => String(entry['@areafree']) === preferAreaFree) ?? liveEntries[0];
+      const chosen = selectLiveEntry(rawEntries, this.loginState !== null);
 
       const createUrl = chosen?.playlist_create_url;
-      if (!createUrl) {
+      if (createUrl === undefined) {
         this.logger.error(`JP_Radio::getLivePlaylistUrl: no playlist_create_url found for ${station}`);
         return null;
       }
 
       const lsid = randomBytes(16).toString('hex');
       return createUrl + format(PLAY_LIVE_QUERY, station, lsid);
-    } catch (err) {
-      this.logger.error('JP_Radio::getLivePlaylistUrl error', err);
+    } catch (error: any) {
+      this.logger.error('JP_Radio::getLivePlaylistUrl error', error);
       return null;
     }
   }
 
+  /**
+   * マスタープレイリスト(m3u8)を取得し、ffmpegに渡すメディアプレイリストURIを1行目から抽出する。
+   */
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
     try {
       const res = await got(url, {
-        headers: {
-          'X-Radiko-AuthToken': token,
-          'X-Radiko-App': 'pc_html5',
-          'X-Radiko-App-Version': '0.0.1',
-          'X-Radiko-User': 'dummy_user',
-          'X-Radiko-Device': 'pc',
-        },
+        headers: { 'X-Radiko-AuthToken': token, ...RADIKO_APP_HEADERS },
       });
 
       // HLSマスタープレイリストから#で始まらない最初の行(メディアプレイリストURI)を取得
@@ -334,17 +418,24 @@ export default class Radiko {
         .split('\n')
         .map(line => line.trim())
         .find(line => line.startsWith('http') && !line.startsWith('#'));
-      if (!chunkUrl) {
+      if (chunkUrl === undefined) {
         this.logger.error(`JP_Radio::genTempChunkM3u8URL: no media playlist URI found. url=${url} status=${res.statusCode} body=${res.body.slice(0, 500)}`);
         return null;
       }
       return chunkUrl;
-    } catch (err: any) {
-      this.logger.error(`JP_Radio::genTempChunkM3u8URL error url=${url} status=${err?.response?.statusCode} body=${err?.response?.body ?? err?.message}`);
+    } catch (error: any) {
+      let bodyOrMessage = error?.response?.body;
+      if (bodyOrMessage === undefined) {
+        bodyOrMessage = error?.message;
+      }
+      this.logger.error(`JP_Radio::genTempChunkM3u8URL error url=${url} status=${error?.response?.statusCode} body=${bodyOrMessage}`);
       return null;
     }
   }
 
+  /**
+   * 指定局・指定日の番組表XMLを取得してパースする。
+   */
   async getProgramDaily(station: string, date: string): Promise<any> {
     const res = await got(format(PROG_DAILY_STATION_URL, station, date));
     return xmlParser.parse(res.body);

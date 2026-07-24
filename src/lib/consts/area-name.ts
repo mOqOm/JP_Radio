@@ -1,4 +1,7 @@
-export const AreaKanji = new Map([
+/**
+ * エリアID(`JP1`~`JP47`)から都道府県名(漢字)を引くためのマップ。
+ */
+export const AREA_KANJI = new Map([
   // 北海道・東北
   ['JP1', '北海道'], ['JP2', '青森'], ['JP3', '岩手'],
   ['JP4', '宮城'], ['JP5', '秋田'], ['JP6', '山形'], ['JP7', '福島'],
