@@ -10,6 +10,7 @@ import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
 import { LoggerEx } from '@/utils/logger';
+import { getCurrentRadioTime, getCurrentRadioDate, getProgramTimeStatus, parseRadioTime, addDaysToDateOnly, setRadioDelay } from '@/utils/radio-time';
 
 export = ControllerJpRadio;
 
@@ -166,13 +167,25 @@ class ControllerJpRadio {
   }
 
   /**
-   * UI設定画面で入力されたサービスポート番号を保存し、変更があれば再起動を促す。
+   * UI設定画面で入力されたサービスポート番号・ネットワーク遅延補正値を保存し、変更があれば再起動を促す。
    * @param data 保存ボタンから渡される入力値。
    */
-  async saveServicePort(data: { servicePort: string }): Promise<void> {
+  async saveNetworkSetting(data: { servicePort: string; networkDelay: string }): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
     const newPort = Number(data.servicePort);
-    if (isNaN(newPort) === false && this.config !== null && this.config.get('servicePort') !== newPort) {
+    const newDelay = Number(data.networkDelay);
+    let updated = false;
+    if (isNaN(newPort) === false && this.config.get('servicePort') !== newPort) {
       this.config.set('servicePort', newPort);
+      updated = true;
+    }
+    if (isNaN(newDelay) === false && this.config.get('networkDelay') !== newDelay) {
+      this.config.set('networkDelay', newDelay);
+      updated = true;
+    }
+    if (updated === true) {
       this.showRestartModal();
     }
   }
@@ -228,6 +241,52 @@ class ControllerJpRadio {
     }
     if (this.config.get('tempo') !== data.tempo.value) {
       this.config.set('tempo', data.tempo.value);
+      this.showRestartModal();
+    }
+  }
+
+  /**
+   * UI設定画面で選択されたアルバムアート取得方式を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される選択値。
+   */
+  async saveAlbumartSetting(data: { albumartType: { value: string } }): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
+    if (this.config.get('albumartType') !== data.albumartType.value) {
+      this.config.set('albumartType', data.albumartType.value);
+      this.showRestartModal();
+    }
+  }
+
+  /**
+   * UI設定画面で入力/選択された番組表のデフォルト表示期間・日時表示書式を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される入力値。
+   */
+  async saveTimetableDisplaySetting(data: {
+    programPeriodFrom: string;
+    programPeriodTo: string;
+    timeFormat: { value: string };
+  }): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
+    const newFrom = Number(data.programPeriodFrom);
+    const newTo = Number(data.programPeriodTo);
+    let updated = false;
+    if (isNaN(newFrom) === false && this.config.get('programPeriodFrom') !== newFrom) {
+      this.config.set('programPeriodFrom', newFrom);
+      updated = true;
+    }
+    if (isNaN(newTo) === false && this.config.get('programPeriodTo') !== newTo) {
+      this.config.set('programPeriodTo', newTo);
+      updated = true;
+    }
+    if (this.config.get('timeFormat') !== data.timeFormat.value) {
+      this.config.set('timeFormat', data.timeFormat.value);
+      updated = true;
+    }
+    if (updated === true) {
       this.showRestartModal();
     }
   }
@@ -292,9 +351,20 @@ class ControllerJpRadio {
     const browseMode2 = this.config.get('browseMode2');
     const radikoAreaIdArray = this.getRadikoAreaIdArray();
     const tempo = Number(this.config.get('tempo'));
+    const programPeriodFrom = Number(this.config.get('programPeriodFrom'));
+    const programPeriodTo = Number(this.config.get('programPeriodTo'));
+    const timeFormat = this.config.get('timeFormat');
+    const albumartType = this.config.get('albumartType');
+    const networkDelay = Number(this.config.get('networkDelay'));
     const account = createLoginAccount(radikoUser, radikoPass);
 
-    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2, radikoAreaIdArray, tempo);
+    setRadioDelay(networkDelay);
+
+    this.appRadio = new JpRadio(
+      servicePort, this.logger, account, this.commandRouter, this.serviceName,
+      browseMode1, browseMode2, radikoAreaIdArray, tempo,
+      programPeriodFrom, programPeriodTo, timeFormat, albumartType,
+    );
 
     this.appRadio.start()
       .then(() => {
@@ -359,11 +429,15 @@ class ControllerJpRadio {
     )
       .then(async (uiconf: any) => {
         const servicePort = this.config!.get('servicePort');
+        const networkDelay = this.config!.get('networkDelay');
         const radikoUser = this.config!.get('radikoUser');
         const radikoPass = this.config!.get('radikoPass');
 
         if (uiconf.sections?.[0]?.content?.[0] !== undefined) {
           uiconf.sections[0].content[0].value = servicePort;
+        }
+        if (uiconf.sections?.[0]?.content?.[1] !== undefined) {
+          uiconf.sections[0].content[1].value = networkDelay;
         }
         if (uiconf.sections?.[1]?.content?.[0] !== undefined) {
           uiconf.sections[1].content[0].value = radikoUser;
@@ -380,8 +454,20 @@ class ControllerJpRadio {
         if (uiconf.sections?.[3]?.content?.[0] !== undefined) {
           this.populateSelectValue(uiconf.sections[3].content[0], this.config!.get('tempo'));
         }
-        if (uiconf.sections?.[4] !== undefined && radikoUser !== '' && radikoPass !== '') {
-          await this.populateRadikoAreasSection(uiconf.sections[4]);
+        if (uiconf.sections?.[4]?.content?.[0] !== undefined) {
+          this.populateSelectValue(uiconf.sections[4].content[0], this.config!.get('albumartType'));
+        }
+        if (uiconf.sections?.[5]?.content?.[0] !== undefined) {
+          uiconf.sections[5].content[0].value = this.config!.get('programPeriodFrom');
+        }
+        if (uiconf.sections?.[5]?.content?.[1] !== undefined) {
+          uiconf.sections[5].content[1].value = this.config!.get('programPeriodTo');
+        }
+        if (uiconf.sections?.[5]?.content?.[2] !== undefined) {
+          this.populateSelectValue(uiconf.sections[5].content[2], this.config!.get('timeFormat'));
+        }
+        if (uiconf.sections?.[6] !== undefined && radikoUser !== '' && radikoPass !== '') {
+          await this.populateRadikoAreasSection(uiconf.sections[6]);
         }
 
         defer.resolve(uiconf);
@@ -469,10 +555,27 @@ class ControllerJpRadio {
       task = appRadio.rootMenu();
     } else if (baseUri === 'radiko/live') {
       task = appRadio.radioStations();
+    } else if (baseUri === 'radiko/live/favourites') {
+      task = appRadio.radioFavouriteStations('live');
     } else if (baseUri === 'radiko/timefree') {
       task = appRadio.timeFreeStations();
+    } else if (baseUri === 'radiko/timefree_today') {
+      task = appRadio.timeFreeStations('today');
+    } else if (baseUri === 'radiko/timefree/favourites') {
+      task = appRadio.radioFavouriteStations('timefree');
+    } else if (segments[0] === 'radiko' && segments[1] === 'timetable_today' && segments[2] !== undefined) {
+      task = appRadio.stationTimetable(segments[2], { isToday: true });
     } else if (segments[0] === 'radiko' && segments[1] === 'timetable' && segments[2] !== undefined) {
-      task = appRadio.stationTimetable(segments[2]);
+      let timetableOpts: { ft?: string; to?: string } | undefined;
+      if (queryString !== undefined) {
+        const params = new URLSearchParams(queryString);
+        const ft = params.get('ft');
+        const to = params.get('to');
+        if (ft !== null && to !== null) {
+          timetableOpts = { ft, to };
+        }
+      }
+      task = appRadio.stationTimetable(segments[2], timetableOpts);
     } else {
       task = null;
     }
@@ -530,6 +633,16 @@ class ControllerJpRadio {
           }
         },
         {
+          name: messageCatalog.get('PROGINFO_ADD_TO_FAVOURITES'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'addFavouriteFromProgInfoModal',
+            data
+          }
+        },
+        {
           name: this.commandRouter.getI18nString('COMMON.CLOSE'),
           class: 'btn btn-warning',
           emit: 'closeModals',
@@ -537,6 +650,26 @@ class ControllerJpRadio {
         }
       ]
     };
+
+    // タイムフリー番組(?ft=&to=付き)のみ、放送状態に応じて再生系ボタンを出し分ける
+    const [, queryStr] = data.uri.split('?');
+    if (queryStr !== undefined) {
+      const params = new URLSearchParams(queryStr);
+      const ft = params.get('ft');
+      const to = params.get('to');
+      if (ft !== null && to !== null) {
+        const currentRadioTime = getCurrentRadioTime();
+        const farFutureCutoffDate = addDaysToDateOnly(parseRadioTime(currentRadioTime).date, 7);
+        if (parseRadioTime(ft).date > farFutureCutoffDate) {
+          // 7日以上先の番組は再生/キュー/お気に入りボタンを全て非表示
+          modalMessage.buttons.splice(0, 3);
+        } else if (getProgramTimeStatus(ft, to, currentRadioTime) !== 'past') {
+          // 配信前・放送中(追っかけ再生になる)は再生/キューボタンのみ非表示
+          modalMessage.buttons.splice(0, 2);
+        }
+      }
+    }
+
     this.commandRouter.broadcastMessage('openModal', modalMessage);
   }
 
@@ -568,31 +701,82 @@ class ControllerJpRadio {
 
   /**
    * キューのトラック選択時に呼ばれ、mpdのキューをクリアして再生対象のURIを追加・再生する。
+   * タイムフリーの`?ft=&to=`が不正、または番組が配信前/放送中(追っかけ再生は不安定なため)の場合は、
+   * ライブ再生のURIにフォールバックしてトースト通知する。
    * @param track 再生キュー内のトラック情報(`uri`を含む)。
    */
-  clearAddPlayTrack(track: any): Promise<any> {
+  async clearAddPlayTrack(track: any): Promise<any> {
     this.logger.info('IDX_I009', track.uri);
-    const safeUri = track.uri.replace(/"/g, '\\"');
-    return this.mpdPlugin.sendMpdCommand('stop', [])
-      .then(() => {
-        return this.mpdPlugin.sendMpdCommand('clear', []);
-      })
-      .then(() => {
-        return this.mpdPlugin.sendMpdCommand(`add "${safeUri}"`, []);
-      })
-      .then(() => {
-        this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
-        return this.mpdPlugin.sendMpdCommand('play', []);
-      });
+
+    let uri: string = track.uri;
+    if (uri.includes('/radiko/play/') === true) {
+      const [liveUri, queryStr] = uri.split('?');
+      if (queryStr !== undefined && queryStr !== '') {
+        const params = new URLSearchParams(queryStr);
+        const ft = params.get('ft');
+        const to = params.get('to');
+        if (ft === null || to === null || ft.length !== 14 || to.length !== 14) {
+          this.logger.warn('IDX_W001', uri);
+          this.commandRouter.pushToastMessage('error', messageCatalog.get('APP_TITLE'), messageCatalog.get('ERROR_INVALID_TIMEFREE_PARAMS'));
+          uri = liveUri;
+        } else {
+          const status = getProgramTimeStatus(ft, to, getCurrentRadioTime());
+          if (status === 'future') {
+            this.logger.warn('IDX_W002', uri);
+            this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('WARNING_SWITCH_LIVE_FUTURE'));
+            uri = liveUri;
+          } else if (status === 'live') {
+            this.logger.warn('IDX_W003', uri);
+            this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('WARNING_SWITCH_LIVE_CATCHUP'));
+            uri = liveUri;
+          }
+        }
+      }
+    }
+
+    const safeUri = uri.replace(/"/g, '\\"');
+    await this.mpdPlugin.sendMpdCommand('stop', []);
+    await this.mpdPlugin.sendMpdCommand('clear', []);
+    await this.mpdPlugin.sendMpdCommand(`add "${safeUri}"`, []);
+    this.commandRouter.stateMachine.setConsumeUpdateService('mpd');
+    return this.mpdPlugin.sendMpdCommand('play', []);
   }
 
   /**
-   * ライブストリームのためシークは非対応。常にrejectする。
-   * @param timepos シーク先の再生位置(未使用)。
+   * タイムフリー再生中のみシークに対応する。再生中の項目をシーク位置付きの新URIに差し替える
+   * (`add`でキュー末尾に追加後、再生中だった項目を`delete 0`で削除すると、mpdは残った項目の再生へ自動的に進む)。
+   * ライブ再生はシーク非対応のため、{@link JpRadio.forcePushSongState}でタイムバーを元の位置に戻してrejectする。
+   * @param timepos シーク先の再生位置(ミリ秒)。
    */
   seek(timepos: number): Promise<any> {
     this.logger.info('IDX_I010', timepos);
-    return libQ.reject();
+    const defer = libQ.defer();
+
+    (async () => {
+      const currentSong = await this.mpdPlugin.sendMpdCommand('currentsong', []);
+      const uri: string = currentSong.file;
+      if (typeof uri !== 'string' || uri.includes('/radiko/play/') === false) {
+        throw new Error('Not a JP Radio track');
+      }
+
+      const [liveUri, queryStr] = uri.split('?');
+      if (queryStr === undefined || queryStr === '') {
+        await this.appRadio?.forcePushSongState();
+        throw new Error('Seek is not supported for live playback');
+      }
+
+      const seekSec = Math.round(timepos / 1000);
+      const newUri = `${liveUri}?${queryStr.replace(/&?seek=\d+/, '')}&seek=${seekSec}`;
+      await this.mpdPlugin.sendMpdCommand(`add "${newUri}"`, []);
+      await this.mpdPlugin.sendMpdCommand('delete 0', []);
+    })()
+      .then(() => defer.resolve())
+      .catch((error: any) => {
+        this.logger.error('IDX_E010', error);
+        defer.reject(error);
+      });
+
+    return defer.promise;
   }
 
   /**
@@ -701,9 +885,97 @@ class ControllerJpRadio {
   }
 
   /**
-   * アルバム/アーティストへのジャンプは未対応。呼び出し元がエラー扱いしないよう空のresolveを返す。
+   * 再生画面の「アーティストへ移動」「アルバムへ移動」から呼ばれる。対象局の番組表(タイムフリー再生中なら
+   * その放送日、ライブ再生中なら当日)へブラウズ画面を遷移させる。
+   * @param data `uri`(再生中トラックのURI)を含む。
    */
-  goto(_data: any): Promise<any> {
-    return libQ.resolve();
+  goto(data: any): Promise<any> {
+    this.logger.info('IDX_I017', JSON.stringify(data));
+    const defer = libQ.defer();
+
+    const appRadio = this.appRadio;
+    if (typeof data?.uri !== 'string' || data.uri.includes('/radiko/play/') === false || appRadio === null) {
+      defer.resolve({});
+      return defer.promise;
+    }
+
+    const [liveUri, queryStr] = data.uri.split('?');
+    const stationId = liveUri.split('/').pop();
+    if (stationId === undefined) {
+      defer.resolve({});
+      return defer.promise;
+    }
+
+    let dateOnly = getCurrentRadioDate();
+    if (queryStr !== undefined) {
+      const ft = new URLSearchParams(queryStr).get('ft');
+      if (ft !== null) {
+        dateOnly = parseRadioTime(ft).date;
+      }
+    }
+
+    libQ.resolve()
+      .then(() => appRadio.stationTimetable(stationId, { ft: dateOnly, to: dateOnly }))
+      .then((result: any) => defer.resolve(result))
+      .fail((error: any) => {
+        this.logger.error('IDX_E011', error);
+        defer.reject(error);
+      });
+
+    return defer.promise;
+  }
+
+  /**
+   * 番組情報モーダルの「お気に入りに追加」ボタンから呼ばれる。Volumioコアの「radio-favourites」
+   * プレイリストへ直接書き込む({@link JpRadio.radioFavouriteStations}が読み出す先と同じ)。
+   * @param data {@link showProgInfoModal}のボタンから渡される番組情報。
+   */
+  addFavouriteFromProgInfoModal(data: ProgInfoData): void {
+    this.logger.info('IDX_I018', data.uri);
+    this.commandRouter.pushToastMessage(
+      'success',
+      messageCatalog.get('APP_TITLE'),
+      messageCatalog.get('FAVOURITE_ADDED', data.title)
+    );
+    this.commandRouter.playListManager.commonAddToPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder,
+      'radio-favourites',
+      'webradio',
+      data.uri,
+      data.title,
+      data.albumart
+    );
+  }
+
+  /**
+   * Browse画面のハートアイコン(お気に入り追加)から、Volumioコアがこのプラグインのサービス名宛てに
+   * 呼び出す。{@link addFavouriteFromProgInfoModal}と同じ「radio-favourites」プレイリストへ書き込む。
+   * @param data `uri`/`title`/`albumart`を含むお気に入り登録対象の情報。
+   */
+  addToFavourites(data: { uri: string; title?: string; albumart?: string }): Promise<any> {
+    this.logger.info('IDX_I019', data.uri);
+    return this.commandRouter.playListManager.commonAddToPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder,
+      'radio-favourites',
+      'webradio',
+      data.uri,
+      data.title,
+      data.albumart
+    );
+  }
+
+  /**
+   * Browse画面のハートアイコン(お気に入り解除)から、Volumioコアがこのプラグインのサービス名宛てに
+   * 呼び出す。
+   * @param data `uri`を含むお気に入り解除対象の情報。
+   */
+  removeFromFavourites(data: { uri: string }): Promise<any> {
+    this.logger.info('IDX_I020', data.uri);
+    return this.commandRouter.playListManager.commonRemoveFromPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder,
+      'radio-favourites',
+      'webradio',
+      data.uri
+    );
   }
 }

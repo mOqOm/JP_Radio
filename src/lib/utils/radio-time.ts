@@ -1,14 +1,30 @@
 import { format } from 'date-fns-tz';
 import { parse, addDays, addSeconds, format as formatDate } from 'date-fns';
+import { ja } from 'date-fns/locale';
 
 /** Radikoの番組表・配信はJST基準のため、サーバのシステムタイムゾーンによらずJSTで統一する。 */
 const TIME_ZONE = 'Asia/Tokyo';
 
 /**
  * Radikoのライブ配信遅延(実測、約20s)。ラジオ時間の算出時にこの分だけ巻き戻す。
+ * UI設定(ネットワーク遅延)で上書きできるよう可変値にしている。
  */
-export const DELAY_SEC = 20;
-const DELAY_MSEC = DELAY_SEC * 1000;
+let radioDelaySec = 20;
+
+/**
+ * ライブ配信遅延補正値(秒)を設定する。UI設定の`networkDelay`から`onStart`時に呼ばれる想定。
+ * @param sec 遅延秒数。
+ */
+export function setRadioDelay(sec: number): void {
+  radioDelaySec = sec;
+}
+
+/**
+ * 現在設定されているライブ配信遅延補正値(秒)を返す。
+ */
+export function getRadioDelay(): number {
+  return radioDelaySec;
+}
 
 /** ラジオの一日の開始時刻(05:00)。この時刻を境に「ラジオ日付」が切り替わる。 */
 const RADIO_DAY_START_MSEC = 5 * 3600 * 1000;
@@ -26,7 +42,7 @@ export function getCurrentDate(): string {
  * 配信遅延分(`DELAY_SEC`)を差し引いた時刻を基準にする。
  */
 export function getCurrentRadioTime(): string {
-  const adjustedNow = Date.now() - DELAY_MSEC;
+  const adjustedNow = Date.now() - radioDelaySec * 1000;
   const src = format(adjustedNow, 'yyyyMMddHHmmss', { timeZone: TIME_ZONE });
   const today = format(adjustedNow - RADIO_DAY_START_MSEC, 'yyyyMMdd', { timeZone: TIME_ZONE });
   return cnvRadioTime(src, today);
@@ -36,7 +52,7 @@ export function getCurrentRadioTime(): string {
  * 深夜0:00～5:00は前日として扱う「ラジオ日付」を`yyyyMMdd`形式で返す。
  */
 export function getCurrentRadioDate(): string {
-  return format(Date.now() - DELAY_MSEC - RADIO_DAY_START_MSEC, 'yyyyMMdd', { timeZone: TIME_ZONE });
+  return format(Date.now() - radioDelaySec * 1000 - RADIO_DAY_START_MSEC, 'yyyyMMdd', { timeZone: TIME_ZONE });
 }
 
 /**
@@ -175,4 +191,66 @@ export function getTimeSpan(begin: string, end: string): number {
  */
 export function isWithinTimeFreeWindow(ft: string, currentRadioTime: string): boolean {
   return ft <= currentRadioTime;
+}
+
+/** 番組の放送状態。`'future'`=配信開始前、`'live'`=放送中(追っかけ再生になる)、`'past'`=放送終了済み(タイムフリー再生可能)。 */
+export type ProgramTimeStatus = 'future' | 'live' | 'past';
+
+/**
+ * 番組の放送状態を判定する。`ft`/`tt`/`currentRadioTime`はいずれも{@link cnvRadioTime}で
+ * 正規化された`'yyyyMMddHHmmss'`文字列前提で、単純な文字列比較で時系列の前後関係を判定する。
+ * @param ft 番組の放送開始時刻。
+ * @param tt 番組の放送終了時刻。
+ * @param currentRadioTime 現在時刻(`getCurrentRadioTime`の戻り値)。
+ */
+export function getProgramTimeStatus(ft: string, tt: string, currentRadioTime: string): ProgramTimeStatus {
+  if (currentRadioTime < ft) {
+    return 'future';
+  }
+  if (currentRadioTime < tt) {
+    return 'live';
+  }
+  return 'past';
+}
+
+/**
+ * `ft`~`tt`の番組放送区間を、ユーザー設定の書式で整形する。書式は空白区切りで
+ * `'<日付書式> <開始時刻書式>-<終了時刻書式>'`の3ブロックとして解釈する
+ * (例: `'yyyy/MM/dd HH:mm-HH:mm'` => `'2026/07/25 12:00-13:00'`)。
+ * `ft`/`tt`はラジオ時間表記(`24:00`~`29:00`表記を含みうる)のため、{@link revCnvRadioTime}で
+ * 実時刻に戻してから`date-fns`でフォーマットする。
+ * @param ft 番組の放送開始時刻(ラジオ時間表記)。
+ * @param tt 番組の放送終了時刻(ラジオ時間表記)。
+ * @param pattern 表示書式。
+ */
+export function formatRadioTimeRange(ft: string, tt: string, pattern: string): string {
+  const [datePattern, timePattern = 'HH:mm-HH:mm'] = pattern.split(' ');
+  const [startTimePattern, endTimePattern = 'HH:mm'] = timePattern.split('-');
+
+  const ftDate = parse(revCnvRadioTime(ft), 'yyyyMMddHHmmss', new Date());
+  const ttDate = parse(revCnvRadioTime(tt), 'yyyyMMddHHmmss', new Date());
+
+  const datePart = formatDate(ftDate, datePattern, { locale: ja });
+  const startTimePart = formatDate(ftDate, startTimePattern, { locale: ja });
+  const endTimePart = formatDate(ttDate, endTimePattern, { locale: ja });
+
+  return `${datePart} ${startTimePart}-${endTimePart}`;
+}
+
+/**
+ * `'yyyyMMdd'`形式の日付文字列を任意の書式(曜日を含む書式も可)に整形する。
+ * @param dateOnly `'yyyyMMdd'`形式の日付文字列。
+ * @param pattern date-fnsの書式(例: `'M月d日(E)'`)。
+ */
+export function formatDateOnly(dateOnly: string, pattern: string): string {
+  return formatDate(parse(dateOnly, 'yyyyMMdd', new Date()), pattern, { locale: ja });
+}
+
+/**
+ * `'yyyyMMdd'`形式の日付文字列にN日加算する(負数で減算)。
+ * @param dateOnly `'yyyyMMdd'`形式の日付文字列。
+ * @param days 加算する日数。
+ */
+export function addDaysToDateOnly(dateOnly: string, days: number): string {
+  return formatDate(addDays(parse(dateOnly, 'yyyyMMdd', new Date()), days), 'yyyyMMdd');
 }

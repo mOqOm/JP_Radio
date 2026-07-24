@@ -21,6 +21,10 @@ export interface BrowseItem {
   bitdepth?: number;
   // チャンネル数（例: 2）
   channels?: number;
+  // お気に入り済みかどうか（Volumio UIのハートアイコンの状態に反映される）
+  favourite?: boolean;
+  // 番組開始時刻（`'yyyyMMddHHmmss'`、お気に入り一覧のソートに使用）
+  time?: string;
 }
 
 /**
@@ -33,6 +37,8 @@ export interface BrowseList {
   availableListViews: string[];
   // 表示されるアイテムの配列
   items: BrowseItem[];
+  // 表示順を制御するためのソートキー（番組表のページングナビゲーションで使用）
+  sortKey?: string;
 }
 
 /**

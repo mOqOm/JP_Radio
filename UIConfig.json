@@ -5,19 +5,20 @@
   },
   "sections": [
     {
-      "id": "service_port",
+      "id": "network",
       "element": "section",
       "label": "TRANSLATE.SERVICE_PORT_LABEL",
       "icon": "fa-user",
       "onSave": {
         "type": "controller",
         "endpoint": "music_service/jp_radio",
-        "method": "saveServicePort"
+        "method": "saveNetworkSetting"
       },
       "saveButton": {
         "label": "TRANSLATE.SAVE",
         "data": [
-          "servicePort"
+          "servicePort",
+          "networkDelay"
         ]
       },
       "content": [
@@ -34,6 +35,20 @@
           ],
           "value": 0,
           "description": "TRANSLATE.SERVICE_PORT_DESC"
+        },
+        {
+          "id": "networkDelay",
+          "type": "number",
+          "element": "input",
+          "label": "TRANSLATE.NETWORK_DELAY_LABEL",
+          "attributes": [
+            {
+              "min": 0,
+              "max": 300
+            }
+          ],
+          "value": 20,
+          "description": "TRANSLATE.NETWORK_DELAY_DESC"
         }
       ]
     },
@@ -168,6 +183,101 @@
             { "value": "1.25", "label": "1.25x" },
             { "value": "1.5", "label": "1.5x" },
             { "value": "2.0", "label": "2.0x" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "albumart",
+      "element": "section",
+      "label": "TRANSLATE.ALBUMART_LABEL",
+      "description": "TRANSLATE.ALBUMART_DESC",
+      "icon": "fa-file-image-o",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveAlbumartSetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SAVE",
+        "data": [
+          "albumartType"
+        ]
+      },
+      "content": [
+        {
+          "id": "albumartType",
+          "element": "select",
+          "label": "TRANSLATE.ALBUMART_LABEL",
+          "doc": "TRANSLATE.ALBUMART_DOC",
+          "value": {
+            "value": "type3",
+            "label": "TRANSLATE.ALBUMART_TYPE3"
+          },
+          "options": [
+            { "value": "type1", "label": "TRANSLATE.ALBUMART_TYPE1" },
+            { "value": "type2", "label": "TRANSLATE.ALBUMART_TYPE2" },
+            { "value": "type3", "label": "TRANSLATE.ALBUMART_TYPE3" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timetable_display",
+      "element": "section",
+      "label": "TRANSLATE.TIMETABLE_DISPLAY_LABEL",
+      "description": "TRANSLATE.TIMETABLE_DISPLAY_DESC",
+      "icon": "fa-calendar",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveTimetableDisplaySetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SAVE",
+        "data": [
+          "programPeriodFrom",
+          "programPeriodTo",
+          "timeFormat"
+        ]
+      },
+      "content": [
+        {
+          "id": "programPeriodFrom",
+          "type": "number",
+          "element": "input",
+          "label": "TRANSLATE.PROGRAM_PERIOD_FROM_LABEL",
+          "doc": "TRANSLATE.PROGRAM_PERIOD_FROM_DOC",
+          "attributes": [
+            { "min": 0, "max": 30 }
+          ],
+          "value": 7
+        },
+        {
+          "id": "programPeriodTo",
+          "type": "number",
+          "element": "input",
+          "label": "TRANSLATE.PROGRAM_PERIOD_TO_LABEL",
+          "doc": "TRANSLATE.PROGRAM_PERIOD_TO_DOC",
+          "attributes": [
+            { "min": 0, "max": 6 }
+          ],
+          "value": 0
+        },
+        {
+          "id": "timeFormat",
+          "element": "select",
+          "label": "TRANSLATE.TIME_FORMAT_LABEL",
+          "doc": "TRANSLATE.TIME_FORMAT_DOC",
+          "value": {
+            "value": "yyyy/MM/dd HH:mm-HH:mm",
+            "label": "TRANSLATE.TIME_FORMAT_TYPE1"
+          },
+          "options": [
+            { "value": "yyyy/MM/dd HH:mm-HH:mm", "label": "TRANSLATE.TIME_FORMAT_TYPE1" },
+            { "value": "MM/dd HH:mm-HH:mm", "label": "TRANSLATE.TIME_FORMAT_TYPE2" },
+            { "value": "M月d日(E) HH:mm-HH:mm", "label": "TRANSLATE.TIME_FORMAT_TYPE3" },
+            { "value": "M/d HH:mm-HH:mm", "label": "TRANSLATE.TIME_FORMAT_TYPE4" }
           ]
         }
       ]

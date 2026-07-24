@@ -1,6 +1,6 @@
 {
   "name": "jp_radio",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "description": "Japanese radio relay server for Volumio4",
   "main": "./dist/index.js",
   "scripts": {
@@ -54,6 +54,7 @@
     "date-fns": "2.29.3",
     "date-fns-tz": "^1.3.7",
     "date-utils": "^1.2.21",
+    "ejs": "^3.1.10",
     "express": "^4.18.2",
     "fast-xml-parser": "^5.2.3",
     "got": "^11.8.6",

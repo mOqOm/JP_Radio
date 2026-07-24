@@ -20,6 +20,8 @@ export interface RegionData {
     banner: string;
     // 所属エリアID（例: 'JP13'）
     area_id: string;
+    // ロゴ画像URL（XMLの`<logo>`要素のうち最大幅のもの。取得できない場合は空文字列）
+    logo_url: string;
   }>;
 }
 
@@ -43,4 +45,6 @@ export interface StationInfo {
   asciiName: string;
   // エリアフリー対応可否（例: '1'）
   areaFree: string;
+  // 局ロゴ画像URL（ローカルキャッシュ成功時はキャッシュ先の`/albumart?sourceicon=...`URL、失敗時はRadikoのリモートURL）
+  logoUrl: string;
 }

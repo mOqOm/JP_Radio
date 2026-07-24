@@ -3,6 +3,10 @@
     "type": "int",
     "value": 9000
   },
+  "networkDelay": {
+    "type": "int",
+    "value": 20
+  },
   "radikoUser": {
     "type": "string",
     "value": ""
@@ -22,6 +26,22 @@
   "tempo": {
     "type": "string",
     "value": "1.0"
+  },
+  "albumartType": {
+    "type": "string",
+    "value": "type3"
+  },
+  "programPeriodFrom": {
+    "type": "int",
+    "value": 7
+  },
+  "programPeriodTo": {
+    "type": "int",
+    "value": 0
+  },
+  "timeFormat": {
+    "type": "string",
+    "value": "yyyy/MM/dd HH:mm-HH:mm"
   },
   "radikoAreas": {
     "JP1": {

@@ -1,4 +1,6 @@
 import 'date-utils';
+import fs from 'fs';
+import path from 'path';
 import { format } from 'util';
 import { randomBytes } from 'crypto';
 import got, { OptionsOfJSONResponseBody, Response } from 'got';
@@ -21,6 +23,7 @@ import {
 import { AREA_KANJI } from '@/consts/area-name';
 import { selectLiveEntry } from '@/logic/live-entry-selector';
 import { revCnvRadioTime } from '@/utils/radio-time';
+import { ASSETS_IMAGES_DIR } from '@/utils/plugin-paths';
 import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { LoggerEx } from '@/utils/logger';
 
@@ -225,6 +228,7 @@ export default class Radiko {
         timefree: s.timefree,
         banner: s.banner,
         area_id: s.area_id,
+        logo_url: Radiko.#pickLogoUrl(s.logo),
       })),
     }));
 
@@ -257,6 +261,9 @@ export default class Radiko {
     }
 
     // 3. regionData をもとに stations を構成
+    const logoCacheLimit = pLimit(5);
+    const logoCacheTasks: Promise<void>[] = [];
+
     for (const region of regionData) {
       for (const station of region.stations) {
         const id = station.id;
@@ -271,7 +278,7 @@ export default class Radiko {
 
         if (this.loginState !== null || allowedStations.includes(id)) {
           // 'TBS'
-          this.stations.set(id, {
+          const stationInfo: StationInfo = {
             // '関東'
             regionName: region.region_name,
             // 'http://radiko.jp/res/banner/radiko_banner.png'
@@ -288,12 +295,85 @@ export default class Radiko {
             asciiName: station.ascii_name,
             // '1'
             areaFree: station.areafree,
-          });
+            // キャッシュ完了までの仮値(バナーで代用)
+            logoUrl: station.banner,
+          };
+          this.stations.set(id, stationInfo);
+
+          const remoteLogoUrl = station.logo_url || station.banner;
+          logoCacheTasks.push(
+            logoCacheLimit(async () => {
+              stationInfo.logoUrl = await this.#cacheStationLogo(id, remoteLogoUrl);
+            })
+          );
         }
       }
     }
 
+    await Promise.all(logoCacheTasks);
+
     this.stationData = regionData;
+  }
+
+  /**
+   * XMLからパースした`logo`要素(単一または配列)から、最大幅のロゴ画像URLを選択する。
+   * @param logo `fast-xml-parser`でパースした`<logo>`要素(単一オブジェクトまたは配列)。
+   */
+  static #pickLogoUrl(logo: any): string {
+    if (logo === undefined || logo === null) {
+      return '';
+    }
+    const logos: any[] = Array.isArray(logo) ? logo : [logo];
+    if (logos.length === 0) {
+      return '';
+    }
+    const widest = logos.reduce((best, current) => {
+      const bestWidth = Number(best?.['@width']) || 0;
+      const currentWidth = Number(current?.['@width']) || 0;
+      return currentWidth > bestWidth ? current : best;
+    });
+    return widest?.['#text'] || '';
+  }
+
+  /**
+   * 局ロゴをローカルにキャッシュする。Radikoのロゴ画像は透過PNGで見栄えが悪いため、
+   * ffmpegで白背景合成してから`ASSETS_IMAGES_DIR`配下に保存する。既にキャッシュ済みならそのまま使い、
+   * 変換に失敗した場合はリモートURLをそのまま返す(フェイルセーフ)。
+   * @param stationId 局ID。
+   * @param logoUrl Radiko側のロゴ(またはバナー)画像URL。
+   */
+  async #cacheStationLogo(stationId: string, logoUrl: string): Promise<string> {
+    if (logoUrl === undefined || logoUrl === '') {
+      return '';
+    }
+    const logoFileName = `${stationId}_logo.png`;
+    const logoPath = path.join(ASSETS_IMAGES_DIR, logoFileName);
+    const sourceIconUrl = `/albumart?sourceicon=music_service/jp_radio/assets/images/${logoFileName}`;
+
+    if (fs.existsSync(logoPath) === true) {
+      return sourceIconUrl;
+    }
+
+    return new Promise((resolve) => {
+      const ffmpeg = spawn('ffmpeg', [
+        '-y', '-i', logoUrl, logoPath,
+        '-filter_complex',
+        'color=white,format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1',
+        '-loglevel', 'error',
+      ]);
+      ffmpeg.on('close', (code) => {
+        if (code === 0 && fs.existsSync(logoPath) === true) {
+          resolve(sourceIconUrl);
+        } else {
+          this.logger.warn('RDK_W002', stationId, logoUrl);
+          resolve(logoUrl);
+        }
+      });
+      ffmpeg.on('error', (error: any) => {
+        this.logger.error('RDK_E010', stationId, error);
+        resolve(logoUrl);
+      });
+    });
   }
 
   /**
