@@ -1,18 +1,23 @@
 'use strict';
 
-const tseslint = require('typescript-eslint');
+const tsParser = require('@typescript-eslint/parser');
+const tsPlugin = require('@typescript-eslint/eslint-plugin');
 
-module.exports = tseslint.config(
+module.exports = [
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
-  ...tseslint.configs.recommended,
   {
+    files: ['**/*.ts'],
     languageOptions: {
+      parser: tsParser,
       parserOptions: {
         project: './tsconfig.json',
         tsconfigRootDir: __dirname,
       },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
     },
     rules: {
       '@typescript-eslint/naming-convention': [
@@ -66,4 +71,4 @@ module.exports = tseslint.config(
       ],
     },
   },
-);
+];
