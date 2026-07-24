@@ -11,6 +11,7 @@ function makeStation(overrides: Partial<StationInfo> = {}): StationInfo {
     name: 'TBSラジオ',
     asciiName: 'TBS RADIO',
     areaFree: '0',
+    logoUrl: '',
     ...overrides,
   };
 }
