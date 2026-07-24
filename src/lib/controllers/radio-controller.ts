@@ -393,7 +393,7 @@ export default class JpRadio {
         playUrl.searchParams.set('ft', program.ft);
         playUrl.searchParams.set('to', program.tt);
 
-        let albumart = program.img;
+        let albumart: string | undefined = program.img;
         if (albumart === '' || albumart === undefined) {
           albumart = stationInfo?.bannerUrl;
           if (albumart === undefined) {
