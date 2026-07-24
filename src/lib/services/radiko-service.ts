@@ -22,6 +22,7 @@ import { AREA_KANJI } from '@/consts/area-name';
 import { selectLiveEntry } from '@/logic/live-entry-selector';
 import { revCnvRadioTime } from '@/utils/radio-time';
 import type { TimeFreeQuery } from '@/models/time-free-query-model';
+import type { LoggerEx } from '@/utils/logger';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -48,7 +49,7 @@ export default class Radiko {
    * @param logger ログ出力先。
    * @param port medialist-proxyへの中継URL生成に使う自身のリッスンポート番号。
    */
-  constructor(private logger: Console, private port: number) { }
+  constructor(private logger: LoggerEx, private port: number) { }
 
   /**
    * プレミアム会員としてのログイン(指定時)と、エリア判定トークンの取得・局一覧の取得を行う。
@@ -57,7 +58,7 @@ export default class Radiko {
    */
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
     if (acct !== null) {
-      this.logger.info('JP_Radio::Attempting login');
+      this.logger.info('RDK_I001');
       let loginOK = await this.checkLogin();
       if (loginOK === null) {
         this.cookieJar = await this.login(acct);
@@ -92,7 +93,7 @@ export default class Radiko {
    * @param acct ログインに使うアカウント情報。
    */
   private async login(acct: LoginAccount): Promise<CookieJar> {
-    this.logger.info('JP_Radio::Radiko.login');
+    this.logger.info('RDK_I002');
     const jar = new tough.CookieJar();
     try {
       await got.post(LOGIN_URL, {
@@ -104,7 +105,7 @@ export default class Radiko {
       if (error.statusCode === 302) {
         return jar;
       }
-      this.logger.error('JP_Radio::Login failed', error);
+      this.logger.error('RDK_E001', error);
       throw error;
     }
   }
@@ -113,7 +114,7 @@ export default class Radiko {
    * 現在のCookieJarでログイン状態(会員種別)を確認する。未ログイン/失敗時はnullを返す。
    */
   private async checkLogin(): Promise<LoginState | null> {
-    this.logger.info('JP_Radio::Radiko.checkLogin');
+    this.logger.info('RDK_I003');
     try {
       const options: OptionsOfJSONResponseBody = {
         cookieJar: this.cookieJar,
@@ -124,18 +125,18 @@ export default class Radiko {
       const response: Response<any> = await got(CHECK_URL, options);
       const body = response.body as LoginState;
 
-      this.logger.info(`JP_Radio::Login status: ${body.member_type.type}`);
+      this.logger.info('RDK_I004', body.member_type.type);
       return body;
 
     } catch (error: any) {
       const statusCode = error?.response?.statusCode;
 
       if (statusCode === 400) {
-        this.logger.info('JP_Radio::premium not logged in (HTTP 400)');
+        this.logger.info('RDK_I005');
         return null;
       }
 
-      this.logger.error(`JP_Radio::premium account login check error: ${error.message}`, error);
+      this.logger.error('RDK_E002', error);
       return null;
     }
   }
@@ -144,12 +145,12 @@ export default class Radiko {
    * auth1/auth2の一連の認証フローを実行し、`[token, areaId]`を返す。
    */
   private async getToken(): Promise<[string, string]> {
-    this.logger.info('JP_Radio::Radiko.getToken');
+    this.logger.info('RDK_I006');
     const auth1Headers = await this.auth1();
     const [partialKey, token] = this.getPartialKey(auth1Headers);
     const result = await this.auth2(token, partialKey);
     const [areaId] = result.trim().split(',');
-    this.logger.info(`JP_Radio::Radiko.getToken: areaId=${areaId}`);
+    this.logger.info('RDK_I007', areaId);
     return [token, areaId];
   }
 
@@ -157,7 +158,7 @@ export default class Radiko {
    * 認証第1段階。レスポンスヘッダーにトークンとパーシャルキー算出用のオフセット/長さが含まれる。
    */
   private async auth1(): Promise<Record<string, string>> {
-    this.logger.info('JP_Radio::Radiko.auth1');
+    this.logger.info('RDK_I008');
     const res = await got.get(AUTH1_URL, {
       cookieJar: this.cookieJar,
       headers: RADIKO_APP_HEADERS,
@@ -171,7 +172,7 @@ export default class Radiko {
    * @returns `[partialKey, token]`。
    */
   private getPartialKey(headers: Record<string, string>): [string, string] {
-    this.logger.info('JP_Radio::Radiko.getPartialKey');
+    this.logger.info('RDK_I009');
     const token = headers['x-radiko-authtoken'];
     const offset = parseInt(headers['x-radiko-keyoffset'], 10);
     const length = parseInt(headers['x-radiko-keylength'], 10);
@@ -185,7 +186,7 @@ export default class Radiko {
    * @param partialKey {@link getPartialKey}で算出したパーシャルキー。
    */
   private async auth2(token: string, partialKey: string): Promise<string> {
-    this.logger.info('JP_Radio::Radiko.auth2');
+    this.logger.info('RDK_I010');
     const res = await got.get(AUTH2_URL, {
       cookieJar: this.cookieJar,
       headers: {
@@ -203,7 +204,7 @@ export default class Radiko {
    * ログイン中またはエリア内から視聴可能な局のみを{@link Radiko.stations}へ格納する。
    */
   private async getStations(): Promise<void> {
-    this.logger.info('JP_Radio::Radiko.getStations');
+    this.logger.info('RDK_I011');
     this.stations = new Map();
     this.areaData = new Map();
 
@@ -329,9 +330,9 @@ export default class Radiko {
    * @param resumeSeek 指定すると、タイムフリー再生をこの実時刻(`'yyyyMMddHHmmss'`)から開始する(途中再開用)。
    */
   async play(station: string, timeFreeQuery?: TimeFreeQuery, tempo?: number, resumeSeek?: string): Promise<ChildProcess | null> {
-    this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
+    this.logger.info('RDK_I012', station);
     if (this.stations?.has(station) === false) {
-      this.logger.warn(`JP_Radio::Station not found: ${station}`);
+      this.logger.warn('RDK_W001', station);
       return null;
     }
 
@@ -352,12 +353,12 @@ export default class Radiko {
       if (m3u8 !== null) {
         break;
       }
-      this.logger.info('JP_Radio::Retrying stream fetch with new token');
+      this.logger.info('RDK_I013');
       [this.token, this.areaId] = await this.getToken();
     }
 
     if (m3u8 === null) {
-      this.logger.error('JP_Radio::Failed to get playlist URL');
+      this.logger.error('RDK_E003');
       return null;
     }
 
@@ -391,7 +392,7 @@ export default class Radiko {
       '-i', proxyUrl, ...codecArgs, '-f', 'adts', 'pipe:1'
     ];
 
-    this.logger.info(`JP_Radio::Radiko.play: ffmpeg ${args}`);
+    this.logger.info('RDK_I014', args.join(' '));
 
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], detached: true });
   }
@@ -426,14 +427,14 @@ export default class Radiko {
 
       const createUrl = chosen?.playlist_create_url;
       if (createUrl === undefined) {
-        this.logger.error(`JP_Radio::getLivePlaylistUrl: no playlist_create_url found for ${station}`);
+        this.logger.error('RDK_E004', station);
         return null;
       }
 
       const lsid = randomBytes(16).toString('hex');
       return createUrl + format(PLAY_LIVE_QUERY, station, lsid);
     } catch (error: any) {
-      this.logger.error('JP_Radio::getLivePlaylistUrl error', error);
+      this.logger.error('RDK_E005', error);
       return null;
     }
   }
@@ -455,7 +456,7 @@ export default class Radiko {
 
       const createUrl = chosen?.playlist_create_url;
       if (createUrl === undefined) {
-        this.logger.error(`JP_Radio::getTimeFreePlaylistUrl: no playlist_create_url found for ${station}`);
+        this.logger.error('RDK_E006', station);
         return null;
       }
 
@@ -468,7 +469,7 @@ export default class Radiko {
       }
       return playlistUrl;
     } catch (error: any) {
-      this.logger.error('JP_Radio::getTimeFreePlaylistUrl error', error);
+      this.logger.error('RDK_E007', error);
       return null;
     }
   }
@@ -491,7 +492,7 @@ export default class Radiko {
         .map(line => line.trim())
         .find(line => line.startsWith('http') && !line.startsWith('#'));
       if (chunkUrl === undefined) {
-        this.logger.error(`JP_Radio::genTempChunkM3u8URL: no media playlist URI found. url=${url} status=${res.statusCode} body=${res.body.slice(0, 500)}`);
+        this.logger.error('RDK_E008', url, String(res.statusCode), res.body.slice(0, 500));
         return null;
       }
       return chunkUrl;
@@ -500,7 +501,7 @@ export default class Radiko {
       if (bodyOrMessage === undefined) {
         bodyOrMessage = error?.message;
       }
-      this.logger.error(`JP_Radio::genTempChunkM3u8URL error url=${url} status=${error?.response?.statusCode} body=${bodyOrMessage}`);
+      this.logger.error('RDK_E009', url, String(error?.response?.statusCode), String(bodyOrMessage));
       return null;
     }
   }

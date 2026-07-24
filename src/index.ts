@@ -9,6 +9,7 @@ import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
 import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
+import { LoggerEx } from '@/utils/logger';
 
 export = ControllerJpRadio;
 
@@ -23,7 +24,7 @@ export = ControllerJpRadio;
 class ControllerJpRadio {
   private context: any;
   private commandRouter: any;
-  private logger: any;
+  private logger: LoggerEx;
   private configManager: any;
   private config: InstanceType<typeof VConf> | null = null;
   private readonly serviceName = 'jp_radio';
@@ -36,7 +37,7 @@ class ControllerJpRadio {
   constructor(context: any) {
     this.context = context;
     this.commandRouter = context.coreCommand;
-    this.logger = context.logger;
+    this.logger = new LoggerEx(context.logger);
     this.configManager = context.configManager;
   }
 
@@ -273,13 +274,13 @@ class ControllerJpRadio {
    * 設定値からアカウント情報とサービスポートを取り出し、{@link JpRadio}を起動してブラウズソースに登録する。
    */
   onStart(): Promise<void> {
-    this.logger.info(`JP_Radio::onStart: ## START ##`);
+    this.logger.info('IDX_I001');
     const defer = libQ.defer();
 
     this.mpdPlugin = this.commandRouter.pluginManager.getPlugin('music_service', 'mpd');
 
     if (this.config === null) {
-      this.logger.error('Config not initialized onStart');
+      this.logger.error('IDX_E001');
       defer.reject(new Error('Config not initialized'));
       return defer.promise;
     }
@@ -299,13 +300,13 @@ class ControllerJpRadio {
       .then(() => {
         this.addToBrowseSources();
         defer.resolve();
-        this.logger.info(`JP_Radio::onStart: ## COMPLETE ##`);
+        this.logger.info('IDX_I002');
       })
       .catch((error: any) => {
-        this.logger.error('JP_Radio::Failed to start appRadio', error);
+        this.logger.error('IDX_E002', error);
         if (error.code === 'EADDRINUSE') {
           const message = messageCatalog.get('ERROR_PORT_IN_USE', servicePort);
-          this.logger.error(`JP_Radio::ポート使用中エラー: ${message}`);
+          this.logger.error('IDX_E003', message);
           this.commandRouter.pushToastMessage('error', messageCatalog.get('ERROR_BOOT_TITLE'), message);
         } else {
           this.commandRouter.pushToastMessage(
@@ -316,7 +317,7 @@ class ControllerJpRadio {
         }
         defer.reject(error);
       });
-    this.logger.info(`JP_Radio::onStart: ## EXIT ##`);
+    this.logger.info('IDX_I003');
     return defer.promise;
   }
 
@@ -324,13 +325,13 @@ class ControllerJpRadio {
    * プラグイン無効化時に呼ばれるライフサイクルメソッド。JpRadioを停止し、ブラウズソースから除去する。
    */
   async onStop(): Promise<void> {
-    this.logger.info(`JP_Radio::onStop:`);
+    this.logger.info('IDX_I004');
     try {
       if (this.appRadio !== null) {
         await this.appRadio.stop();
       }
     } catch (error: any) {
-      this.logger.error('JP_Radio::Error stopping appRadio', error);
+      this.logger.error('IDX_E004', error);
     }
     this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
   }
@@ -339,12 +340,12 @@ class ControllerJpRadio {
    * UI設定画面(UIConfig.json)を多言語化しつつ、現在の設定値を埋め込んで返す。
    */
   getUIConfig(): Promise<any> {
-    this.logger.info(`JP_Radio::getUIConfig:`);
+    this.logger.info('IDX_I005');
     const defer = libQ.defer();
 
     if (this.config === null) {
       const error = new Error('Config not initialized');
-      this.logger.error('getUIConfig failed:', error);
+      this.logger.error('IDX_E005', error);
       defer.reject(error);
       return defer.promise;
     }
@@ -386,7 +387,7 @@ class ControllerJpRadio {
         defer.resolve(uiconf);
       })
       .fail((error: any) => {
-        this.logger.error('getUIConfig failed:', error);
+        this.logger.error('IDX_E005', error);
         defer.reject(error);
       });
 
@@ -404,7 +405,7 @@ class ControllerJpRadio {
    * VolumioのBrowseメニューに「RADIKO」ソースを追加する。
    */
   addToBrowseSources(): void {
-    this.logger.info(`JP_Radio::addToBrowseSources: pluginName=${this.serviceName}`);
+    this.logger.info('IDX_I006', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
       name: 'RADIKO',
       uri: 'radiko',
@@ -428,7 +429,7 @@ class ControllerJpRadio {
 
     const appRadio = this.appRadio;
     if (appRadio === null) {
-      this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
+      this.logger.error('IDX_E006');
       defer.resolve({});
       return defer.promise;
     }
@@ -456,7 +457,7 @@ class ControllerJpRadio {
           defer.resolve({});
         })
         .fail((error: any) => {
-          this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+          this.logger.error('IDX_E007', error);
           defer.reject(error);
         });
 
@@ -477,7 +478,7 @@ class ControllerJpRadio {
     }
 
     if (task === null) {
-      this.logger.error('[JP_Radio] handleBrowseUri else');
+      this.logger.error('IDX_E008');
       defer.resolve({});
       return defer.promise;
     }
@@ -486,7 +487,7 @@ class ControllerJpRadio {
       .then(() => task)
       .then((result: any) => defer.resolve(result))
       .fail((error: any) => {
-        this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+        this.logger.error('IDX_E007', error);
         defer.reject(error);
       });
 
@@ -544,7 +545,7 @@ class ControllerJpRadio {
    * @param data {@link showProgInfoModal}のボタンから渡されるトラック情報。
    */
   playFromProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::playFromProgInfoModal: uri=${data.uri}`);
+    this.logger.info('IDX_I007', data.uri);
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     arrayQueue.unshift(data);
     this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
@@ -557,7 +558,7 @@ class ControllerJpRadio {
    * @param data {@link showProgInfoModal}のボタンから渡されるトラック情報。
    */
   addQueueFromProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::addQueueFromProgInfoModal: uri=${data.uri}`);
+    this.logger.info('IDX_I008', data.uri);
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     arrayQueue.push(data);
     this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
@@ -570,7 +571,7 @@ class ControllerJpRadio {
    * @param track 再生キュー内のトラック情報(`uri`を含む)。
    */
   clearAddPlayTrack(track: any): Promise<any> {
-    this.logger.info(`JP_Radio::clearAddPlayTrack: uri=${track.uri}`);
+    this.logger.info('IDX_I009', track.uri);
     const safeUri = track.uri.replace(/"/g, '\\"');
     return this.mpdPlugin.sendMpdCommand('stop', [])
       .then(() => {
@@ -590,7 +591,7 @@ class ControllerJpRadio {
    * @param timepos シーク先の再生位置(未使用)。
    */
   seek(timepos: number): Promise<any> {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::seek to ${timepos}`);
+    this.logger.info('IDX_I010', timepos);
     return libQ.reject();
   }
 
@@ -598,7 +599,7 @@ class ControllerJpRadio {
    * mpdへ再生停止コマンドを送る。
    */
   stop(): Promise<any> {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::stop`);
+    this.logger.info('IDX_I011');
     return this.mpdPlugin.sendMpdCommand('stop', []);
   }
 
@@ -606,7 +607,7 @@ class ControllerJpRadio {
    * mpdへ一時停止コマンドを送る。
    */
   pause(): Promise<any> {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::pause`);
+    this.logger.info('IDX_I012');
     return this.mpdPlugin.sendMpdCommand('pause', []);
   }
 
@@ -614,14 +615,14 @@ class ControllerJpRadio {
    * Volumioコアのインターフェース要件上必要だが、本プラグインでは未使用。
    */
   getState(): void {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::getState`);
+    this.logger.info('IDX_I013');
   }
 
   /**
    * Volumioコアのインターフェース要件上必要だが、本プラグインでは未使用。
    */
   parseState(_sState: any): void {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::parseState`);
+    this.logger.info('IDX_I014');
   }
 
   /**
@@ -629,7 +630,7 @@ class ControllerJpRadio {
    * @param state プッシュする再生状態。
    */
   pushState(state: any): any {
-    this.logger.info(`[${new Date().toISOString()}] JP_Radio::pushState`);
+    this.logger.info('IDX_I015');
     return this.commandRouter.servicePushState(state, this.serviceName);
   }
 
@@ -642,7 +643,7 @@ class ControllerJpRadio {
    * @param uri キュー内のURI。
    */
   explodeUri(uri: string): Promise<any> {
-    this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
+    this.logger.info('IDX_I016', uri);
     const defer = libQ.defer();
 
     // uri=http://localhost:9000/radiko/play/FMT[?ft=...&to=...]
@@ -685,7 +686,7 @@ class ControllerJpRadio {
         });
       })
       .fail((error: any) => {
-        this.logger.error('[JP_Radio] explodeUri error: ' + error);
+        this.logger.error('IDX_E009', error);
         defer.reject(error);
       });
 

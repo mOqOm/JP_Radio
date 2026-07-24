@@ -2,6 +2,7 @@ import type { Response } from 'express';
 import type { ChildProcess } from 'child_process';
 import Radiko from './radiko-service';
 import type { TimeFreeQuery } from '@/models/time-free-query-model';
+import type { LoggerEx } from '@/utils/logger';
 
 /**
  * 1回分の再生リクエストに対するffmpegプロセスのライフサイクルを管理する。
@@ -28,7 +29,7 @@ export default class StreamSession {
   constructor(
     private readonly rdk: Radiko,
     private readonly station: string,
-    private readonly logger: Console,
+    private readonly logger: LoggerEx,
     private readonly onFirstStreamStarted: () => void,
     private readonly onStopped: () => void,
     private readonly timeFreeQuery?: TimeFreeQuery,
@@ -43,7 +44,7 @@ export default class StreamSession {
   start(res: Response): void {
     res.on('close', () => this.#handleClose());
     res.on('error', (error: any) => {
-      this.logger.error(`JP_Radio::StreamSession: res error: ${error.message}`);
+      this.logger.error('SES_E001', error.message);
     });
 
     this.#spawnFfmpeg(res);
@@ -55,11 +56,11 @@ export default class StreamSession {
   #handleClose(): void {
     this.stopped = true;
     this.onStopped();
-    this.logger.info('JP_Radio::StreamSession: res.on(close)');
+    this.logger.info('SES_I001');
     if (this.currentFfmpeg?.pid !== undefined) {
       try {
         process.kill(-this.currentFfmpeg.pid, 'SIGTERM');
-        this.logger.info(`JP_Radio::StreamSession: SIGTERM sent to ffmpeg group ${this.currentFfmpeg.pid}`);
+        this.logger.info('SES_I002', this.currentFfmpeg.pid);
       } catch (error: any) {
         let reason: string;
         if (error.code === 'ESRCH') {
@@ -67,7 +68,7 @@ export default class StreamSession {
         } else {
           reason = error.message;
         }
-        this.logger.warn(`JP_Radio::StreamSession: Kill ffmpeg failed: ${reason}`);
+        this.logger.warn('SES_W001', reason);
       }
     }
   }
@@ -86,7 +87,7 @@ export default class StreamSession {
       const ffmpeg = await this.rdk.play(this.station, this.timeFreeQuery, this.tempo, this.resumeSeek);
 
       if (ffmpeg === null || ffmpeg.stdout === null) {
-        this.logger.error('JP_Radio::StreamSession: ffmpeg start failed or stdout is null');
+        this.logger.error('SES_E002');
         if (this.firstAttempt === true && res.headersSent === false) {
           res.status(500).send('Stream start error');
         }
@@ -96,34 +97,34 @@ export default class StreamSession {
       this.currentFfmpeg = ffmpeg;
 
       ffmpeg.on('exit', (code, signal) => {
-        this.logger.info(`JP_Radio::StreamSession: ffmpeg process ${ffmpeg.pid} exited. code=${code} signal=${signal}`);
+        this.logger.info('SES_I003', String(ffmpeg.pid), String(code), String(signal));
         if (this.stopped === true) {
           return;
         }
         if (this.timeFreeQuery !== undefined) {
           // タイムフリーは有限のクリップなので、ffmpeg終了=再生終了として扱い、ライブのような再接続はしない
-          this.logger.info('JP_Radio::StreamSession: time-free stream finished');
+          this.logger.info('SES_I004');
           this.stopped = true;
           this.onStopped();
           res.end();
           return;
         }
-        this.logger.info('JP_Radio::StreamSession: stream still connected, restarting ffmpeg');
+        this.logger.info('SES_I005');
         setTimeout(() => this.#spawnFfmpeg(res), 500);
       });
       ffmpeg.stderr?.on('data', (chunk: Buffer) => {
-        this.logger.error(`JP_Radio::StreamSession: ffmpeg stderr: ${chunk.toString().trim()}`);
+        this.logger.error('SES_E003', chunk.toString().trim());
       });
       ffmpeg.stdout.pipe(res, { end: false });
-      this.logger.info(`JP_Radio::StreamSession: ffmpeg=${ffmpeg.pid}`);
+      this.logger.info('SES_I006', String(ffmpeg.pid));
 
       if (this.firstAttempt === true) {
         this.firstAttempt = false;
         this.onFirstStreamStarted();
-        this.logger.info('JP_Radio::StreamSession: Streaming started');
+        this.logger.info('SES_I007');
       }
     } catch (error: any) {
-      this.logger.error('JP_Radio::StreamSession: Stream error', error);
+      this.logger.error('SES_E004', error);
       if (this.firstAttempt === true && res.headersSent === false) {
         res.status(500).send('Internal server error');
       }

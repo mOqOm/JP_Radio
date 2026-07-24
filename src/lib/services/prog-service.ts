@@ -12,6 +12,7 @@ import type { StationInfo } from '@/models/station-model';
 import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, toMinutePrecision } from '@/utils/radio-time';
 import { toArray } from '@/utils/xml';
 import { isStationRelevantForArea, isDuplicateAreaFreeStation } from '@/logic/station-filter';
+import type { LoggerEx } from '@/utils/logger';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   station: '',
@@ -28,7 +29,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
  * 現在放送中の番組を高速に引けるよう、直近の検索結果を`cachedProgram`にキャッシュする。
  */
 export default class RdkProg {
-  private readonly logger: Console;
+  private readonly logger: LoggerEx;
   private readonly db = Datastore.create({ inMemoryOnly: true });
   private readonly xmlParser = new XMLParser({
     attributeNamePrefix: '@',
@@ -43,7 +44,7 @@ export default class RdkProg {
   /**
    * @param logger ログ出力先。
    */
-  constructor(logger: Console) {
+  constructor(logger: LoggerEx) {
     this.logger = logger;
     this.initDBIndexes();
   }
@@ -68,14 +69,14 @@ export default class RdkProg {
         if (result !== null) {
           this.cachedProgram = result;
         } else {
-          this.logger.error(`JP_Radio::RdkProg.getCurProgram: ## ${station}:${currentTime} cannot find. ##`);
+          this.logger.error('PRG_E001', station, currentTime);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 
         this.lastStation = station;
         this.lastTime = currentTime;
       } catch (error: any) {
-        this.logger.error(`JP_Radio::DB find error for station ${station}`, error);
+        this.logger.error('PRG_E002', station, error);
       }
     }
 
@@ -99,7 +100,7 @@ export default class RdkProg {
       }
       return undefined;
     } catch (error: any) {
-      this.logger.error(`JP_Radio::DB find error for station ${station}, ft ${ft}`, error);
+      this.logger.error('PRG_E003', station, ft, error);
       return undefined;
     }
   }
@@ -113,7 +114,7 @@ export default class RdkProg {
       await this.db.insert(prog);
     } catch (error: any) {
       if (error?.errorType !== 'uniqueViolated') {
-        this.logger.error('JP_Radio::DB insert error', error);
+        this.logger.error('PRG_E004', error);
       }
     }
   }
@@ -127,7 +128,7 @@ export default class RdkProg {
       const currentTime = toMinutePrecision(getCurrentRadioTime());
       await this.db.remove({ tt: { $lt: currentTime } }, { multi: true });
     } catch (error: any) {
-      this.logger.error('JP_Radio::DB delete error', error);
+      this.logger.error('PRG_E005', error);
     }
   }
 
@@ -150,7 +151,7 @@ export default class RdkProg {
       currentDate = getCurrentDate();
       bootOrCron = 'cron';
     }
-    this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${bootOrCron}] ${currentDate}`);
+    this.logger.info('PRG_I001', bootOrCron, currentDate);
 
     const limit = pLimit(5);
     const doneAreaFree = new Set<string>();
@@ -211,7 +212,7 @@ export default class RdkProg {
             }
           }
         } catch (error: any) {
-          this.logger.error(`JP_Radio::Failed to update program for ${areaId}`, error);
+          this.logger.error('PRG_E006', areaId, error);
         }
       })
     );
@@ -262,7 +263,7 @@ export default class RdkProg {
         }
       }
     } catch (error: any) {
-      this.logger.error(`JP_Radio::Failed to get station programs for ${stationId}`, error);
+      this.logger.error('PRG_E007', stationId, error);
     }
     return programs;
   }
@@ -271,7 +272,7 @@ export default class RdkProg {
    * DBファイルをコンパクションして終了する(プラグイン停止時に呼ばれる)。
    */
   async dbClose(): Promise<void> {
-    this.logger.info('JP_Radio::DB compacting');
+    this.logger.info('PRG_I002');
     await this.db.persistence.compactDatafile();
   }
 

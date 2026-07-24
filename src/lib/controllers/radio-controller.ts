@@ -13,6 +13,7 @@ import type { ProgInfoData } from '@/models/prog-info-model';
 import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimeFreeWindow, revCnvRadioTime, addSecondsToTimeString } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
+import type { LoggerEx } from '@/utils/logger';
 
 
 /**
@@ -26,7 +27,7 @@ export default class JpRadio {
   private readonly task1: ReturnType<typeof cron.schedule>;
   private readonly task2: ReturnType<typeof cron.schedule>;
   private readonly port: number;
-  private readonly logger: Console;
+  private readonly logger: LoggerEx;
   private readonly acct: LoginAccount | null;
   private readonly commandRouter: any;
   private prg: RdkProg | null = null;
@@ -55,7 +56,7 @@ export default class JpRadio {
    * @param radikoAreaIdArray エリアフリー会員が設定画面で選択した、番組表取得対象のエリアID一覧。
    * @param tempo タイムフリー再生の速度倍率。
    */
-  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = [], tempo = 1) {
+  constructor(port = 0, logger: LoggerEx, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = [], tempo = 1) {
     this.app = express();
     this.port = port;
     this.logger = logger;
@@ -83,7 +84,7 @@ export default class JpRadio {
    * Express上に局一覧取得・プレイリストプロキシ・再生ストリーム配信の各ルートを登録する。
    */
   #setupRoutes(): void {
-    this.logger.info('JP_Radio::JpRadio.#setupRoutes');
+    this.logger.info('RCT_I001');
 
     this.app.get('/radiko/all/stations', async (_req: Request, res: Response) => {
       try {
@@ -118,7 +119,7 @@ export default class JpRadio {
         res.set('Content-Type', contentType);
         res.send(body);
       } catch (error: any) {
-        this.logger.error(`JP_Radio::medialist-proxy error: ${error?.message || error}`);
+        this.logger.error('RCT_E001', error?.message || error);
         res.status(502).send('proxy error');
       }
     });
@@ -126,16 +127,17 @@ export default class JpRadio {
     this.app.get('/radiko/play/:stationID', async (req: Request, res: Response): Promise<void> => {
       // FM802対策
       this.station = String(req.params['stationID']);
-      this.logger.info(`JP_Radio::JpRadio.#setupRoutes.get=> req.originalUrl=${req.originalUrl}`);
+      this.logger.info('RCT_I002', req.originalUrl);
 
       if (this.rdk === null || this.rdk.stations?.has(this.station) === false) {
         let msg: string;
         if (this.rdk === null) {
           msg = 'JP_Radio::Radiko instance not initialized';
+          this.logger.error('RCT_E002');
         } else {
           msg = `JP_Radio::${this.station} not in available stations`;
+          this.logger.error('RCT_E003', this.station);
         }
-        this.logger.error(msg);
         res.status(500).send(msg);
         return;
       }
@@ -207,8 +209,8 @@ export default class JpRadio {
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
         const artist = `${stationName} / ${formatHourMinute(progData.ft)}-${formatHourMinute(progData.tt)}`;
-        this.logger.info(`JP_Radio::JpRadio.#pushSongState: ${t0}-${t1}`);
-        this.logger.info(`JP_Radio::JpRadio.#pushSongState: "${artist}", now=${now}`);
+        this.logger.info('RCT_I003', t0, t1);
+        this.logger.info('RCT_I004', artist, now);
 
         state.title = progData.title;
         state.artist = artist;
@@ -345,7 +347,7 @@ export default class JpRadio {
    * 局一覧をVolumioのBrowse画面用データ(地域名ごとにグループ化したリスト)に変換して返す。
    */
   async radioStations(): Promise<BrowseResult> {
-    this.logger.info('JP_Radio::JpRadio.radioStations');
+    this.logger.info('RCT_I005');
 
     if (this.rdk?.stations === undefined) {
       return {
@@ -401,7 +403,7 @@ export default class JpRadio {
         }
         grouped[region].push(item);
       } catch (error: any) {
-        this.logger.error(`[JP_Radio] Error getting program for ${stationId}: ${error}`);
+        this.logger.error('RCT_E004', stationId, error);
       }
     });
 
@@ -427,7 +429,7 @@ export default class JpRadio {
    * 選択すると{@link stationTimetable}で番組一覧に遷移する。
    */
   async timeFreeStations(): Promise<BrowseResult> {
-    this.logger.info('JP_Radio::JpRadio.timeFreeStations');
+    this.logger.info('RCT_I006');
 
     if (this.rdk?.stations === undefined) {
       return {
@@ -482,7 +484,7 @@ export default class JpRadio {
    * @param stationId 局ID。
    */
   async stationTimetable(stationId: string): Promise<BrowseResult> {
-    this.logger.info(`JP_Radio::JpRadio.stationTimetable: stationId=${stationId}`);
+    this.logger.info('RCT_I007', stationId);
 
     const stationInfo = this.rdk?.stations.get(stationId);
     let stationName = stationInfo?.name;
@@ -679,9 +681,9 @@ export default class JpRadio {
    * HTTPサーバを起動し、局データ・番組表の初期取得と番組表定期更新タスクを開始する。
    */
   async start(): Promise<void> {
-    this.logger.info(`JP_Radio::JpRadio.start`);
+    this.logger.info('RCT_I008');
     if (this.server !== null) {
-      this.logger.info('JP_Radio::JpRadio.start: Already started');
+      this.logger.info('RCT_I009');
       this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('ALREADY_STARTED'));
       return;
     }
@@ -698,7 +700,7 @@ export default class JpRadio {
     return new Promise((resolve, reject) => {
       this.server = this.app
         .listen(this.port, () => {
-          this.logger.info(`JP_Radio::Listening on port ${this.port}`);
+          this.logger.info('RCT_I010', this.port);
           this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('BOOT_COMPLETED'));
           this.commandRouter.servicePushState({
             status: 'play',
@@ -710,7 +712,7 @@ export default class JpRadio {
           resolve();
         })
         .on('error', (error: any) => {
-          this.logger.error('JP_Radio::App error:', error);
+          this.logger.error('RCT_E005', error);
           this.commandRouter.pushToastMessage(
             'error',
             messageCatalog.get('ERROR_START_FAILED_TITLE'),
@@ -744,7 +746,7 @@ export default class JpRadio {
    * 起動直後にRadikoへログイン・局一覧を取得し、番組表を初回更新する。
    */
   async #init(): Promise<void> {
-    this.logger.info('JP_Radio::JpRadio.#init');
+    this.logger.info('RCT_I011');
     if (this.rdk !== null) {
       await this.rdk.init(this.acct);
     }
@@ -758,7 +760,7 @@ export default class JpRadio {
    */
   async #pgupdate(whenBoot = false): Promise<void> {
     if (this.prg !== null) {
-      this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
+      this.logger.info('RCT_I012');
       if (whenBoot === true) {
         this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('PROGRAM_DATA_GETTING'));
       }
@@ -790,7 +792,7 @@ export default class JpRadio {
         );
       }
 
-      this.logger.info(`JP_Radio::JpRadio.#pgupdate: complete. ### ${processingTime}ms ###`);
+      this.logger.info('RCT_I013', processingTime);
     }
   }
 }
