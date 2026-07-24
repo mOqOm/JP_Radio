@@ -156,7 +156,8 @@ export default class JpRadio {
             setTimeout(this.#pushSongState.bind(this), 3000);
             this.task2.start();
           } else {
-            setTimeout(() => this.#pushTimefreeState(timefreeQuery, resumePositionSec), 3000);
+            const query = timefreeQuery;
+            setTimeout(() => this.#pushTimefreeState(query, resumePositionSec), 3000);
             this.#startTimefreeProgressTracking();
           }
         },
