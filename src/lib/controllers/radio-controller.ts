@@ -37,8 +37,9 @@ export default class JpRadio {
   private readonly serviceName: string;
   private readonly browseMode1: string;
   private readonly browseMode2: string;
+  private readonly radikoAreaIdArray: string[];
 
-  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1') {
+  constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = []) {
     this.app = express();
     this.port = port;
     this.logger = logger;
@@ -47,6 +48,7 @@ export default class JpRadio {
     this.serviceName = serviceName;
     this.browseMode1 = browseMode1;
     this.browseMode2 = browseMode2;
+    this.radikoAreaIdArray = radikoAreaIdArray;
 
     // 番組表データ更新（6h間隔）
     this.task1 = cron.schedule('0 5,11,17,23 * * *', this.#pgupdate.bind(this), {
@@ -490,6 +492,28 @@ export default class JpRadio {
   }
 
   /**
+   * 自身のエリアID・会員種別を`'JP13/premium'`形式で返す(`Radiko.getMyAreaId()`のパススルー)。
+   * エリア選択設定画面で「自分のエリア」を示すために使う。
+   */
+  async getMyAreaId(): Promise<string> {
+    if (this.rdk === null) {
+      return '';
+    }
+    return this.rdk.getMyAreaId();
+  }
+
+  /**
+   * 指定エリアIDに属する局のID一覧を返す(エリア選択設定画面の説明表示に使う)。
+   */
+  getAreaStations(areaId: string): string[] {
+    const stations = this.rdk?.areaData.get(areaId)?.stations;
+    if (stations === undefined) {
+      return [];
+    }
+    return stations;
+  }
+
+  /**
    * 指定局・指定区間のタイムフリー番組情報を組み立てる。DBに該当番組が見つからない場合は
    * タイトル等を空のまま返す(URIのft/toから放送時間だけは表示できるようにする)。
    */
@@ -623,7 +647,6 @@ export default class JpRadio {
         this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('PROGRAM_DATA_GETTING'));
       }
 
-      // TODO: 設定画面で取得エリアを絞り込めるようにしたい
       // JP**/AreaFree
       const myAreaId = await this.rdk?.getMyAreaId();
       let stationsMap = this.rdk?.stations;
@@ -633,8 +656,8 @@ export default class JpRadio {
 
       // エリアフリーでない場合も、局一覧(関東圏の他エリア局など)に実際に含まれる全エリアの番組表を取得する
       // (自分のエリアだけだとBAYFM78/NACK5/YFMのような他エリアの局の番組情報が取れないため)
-      const stationAreaIds = Array.from(new Set(Array.from(stationsMap.values()).map((s) => s.areaId)));
-      const areaIdArray = resolveAreaIdArray(myAreaId, stationAreaIds);
+      const stationAreaIdArray = Array.from(new Set(Array.from(stationsMap.values()).map((s) => s.areaId)));
+      const areaIdArray = resolveAreaIdArray(myAreaId, stationAreaIdArray, this.radikoAreaIdArray);
       //const areaIDs = new Array('JP13', 'JP27') // デバッグ用(東京/大阪だけ)
 
       const updateStartTime = new Date();

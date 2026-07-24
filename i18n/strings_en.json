@@ -16,5 +16,7 @@
   "BROWSE_MODE_TIMEFREE_LABEL": "Time-Free",
   "BROWSE_MODE_TIMEFREE_DOC": "Configure the action when selecting a Time-Free program.<br/>　Default: Play",
   "BROWSE_MODE_TYPE1": "Play",
-  "BROWSE_MODE_TYPE2": "Show program info"
+  "BROWSE_MODE_TYPE2": "Show program info",
+  "RADIKO_AREAS_LABEL": "Area Selection",
+  "RADIKO_AREAS_DESC": "For AreaFree members. Choose which areas to fetch program listings for. If none are selected, all 47 areas nationwide are fetched."
 }

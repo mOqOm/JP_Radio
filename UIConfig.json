@@ -133,6 +133,24 @@
           ]
         }
       ]
+    },
+    {
+      "id": "radiko_areas",
+      "element": "section",
+      "hidden": true,
+      "label": "TRANSLATE.RADIKO_AREAS_LABEL",
+      "description": "TRANSLATE.RADIKO_AREAS_DESC",
+      "icon": "fa-globe",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "music_service/jp_radio",
+        "method": "saveRadikoAreasSetting"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SAVE",
+        "data": []
+      },
+      "content": []
     }
   ]
 }

@@ -16,5 +16,7 @@
   "BROWSE_MODE_TIMEFREE_LABEL": "タイムフリー",
   "BROWSE_MODE_TIMEFREE_DOC": "タイムフリー番組選択時の動作を設定します。<br/>　デフォルト値：再生",
   "BROWSE_MODE_TYPE1": "再生",
-  "BROWSE_MODE_TYPE2": "番組情報を表示"
+  "BROWSE_MODE_TYPE2": "番組情報を表示",
+  "RADIKO_AREAS_LABEL": "エリア選択",
+  "RADIKO_AREAS_DESC": "エリアフリー会員向けの設定です。番組表を取得するエリアを選択します。何も選択しない場合は全国47エリアを取得します。"
 }

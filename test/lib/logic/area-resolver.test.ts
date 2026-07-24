@@ -25,4 +25,13 @@ describe('resolveAreaIdArray', () => {
     // (現状の実装通りの挙動を確認するテスト。実運用では起こりにくい組み合わせ)
     expect(resolveAreaIdArray(undefined, [])).toEqual([undefined, 'JP13']);
   });
+
+  it('AreaFree会員が設定画面でエリアを選択していれば、そのエリアのみを返す', () => {
+    expect(resolveAreaIdArray('JP13/AreaFree', [], ['JP13', 'JP27'])).toEqual(['JP13', 'JP27']);
+  });
+
+  it('AreaFree会員でも選択エリアが空なら全国47エリアを返す', () => {
+    const result = resolveAreaIdArray('JP13/AreaFree', [], []);
+    expect(result).toHaveLength(47);
+  });
 });

@@ -8,6 +8,7 @@ import { messageCatalog } from '@/utils/message-catalog';
 import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
 import type { TimefreeQuery } from '@/models/timefree-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
+import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
 
 export = ControllerJpRadio;
 
@@ -97,6 +98,67 @@ class ControllerJpRadio {
   }
 
   /**
+   * 設定画面(`radikoAreas.JP1`~`radikoAreas.JP47`)で選択済みのエリアIDの一覧を返す。
+   * 何も選択されていなければ空配列(→全国47エリアを取得するデフォルト動作)。
+   */
+  private getRadikoAreaIdArray(): string[] {
+    if (this.config === null) {
+      return [];
+    }
+    const areaIdArray: string[] = [];
+    for (let i = 1; i <= 47; i++) {
+      const areaId = `JP${i}`;
+      if (this.config.get(`radikoAreas.${areaId}`) === true) {
+        areaIdArray.push(areaId);
+      }
+    }
+    return areaIdArray;
+  }
+
+  /**
+   * エリア選択設定(`radiko_areas`)セクションの内容を、地域ごとにグループ化して動的に構築する。
+   * この時点(`i18nJson`実行後)に新規追加する項目は翻訳の対象外になるため、ラベル等は
+   * ここで直接最終的な文字列を組み立てる({@link messageCatalog}を使うのはそのため)。
+   */
+  private async populateRadikoAreasSection(section: any): Promise<void> {
+    if (this.appRadio === null || this.config === null) {
+      return;
+    }
+    section.hidden = false;
+    section.content = [];
+    section.saveButton.data = [];
+
+    const myAreaInfo = await this.appRadio.getMyAreaId();
+    const [myAreaId] = myAreaInfo.split('/');
+
+    for (const region of AREA_REGIONS) {
+      section.content.push({ label: region.name });
+      for (const areaId of region.areaIdArray) {
+        let label = AREA_KANJI.get(areaId);
+        if (label === undefined) {
+          label = areaId;
+        }
+        if (areaId === myAreaId) {
+          label += messageCatalog.get('RADIKO_MY_AREA');
+        }
+        let value = this.config.get(`radikoAreas.${areaId}`);
+        if (value !== true) {
+          value = false;
+        }
+        section.content.push({
+          id: areaId,
+          element: 'switch',
+          label,
+          value,
+          description: this.appRadio.getAreaStations(areaId).join(', '),
+        });
+        section.saveButton.data.push(areaId);
+      }
+      section.content.push({ label: '' });
+    }
+  }
+
+  /**
    * UI設定画面で入力されたサービスポート番号を保存し、変更があれば再起動を促す。
    */
   async saveServicePort(data: { servicePort: string }): Promise<void> {
@@ -147,6 +209,27 @@ class ControllerJpRadio {
   }
 
   /**
+   * UI設定画面で選択されたエリア選択(`radikoAreas.<areaId>`)を保存し、変更があれば再起動を促す。
+   * `data`のキーはエリアID(例: 'JP13')、値はそのエリアを取得対象にするかどうかの真偽値。
+   */
+  async saveRadikoAreasSetting(data: Record<string, boolean>): Promise<void> {
+    if (this.config === null) {
+      return;
+    }
+    let updated = false;
+    for (const [areaId, value] of Object.entries(data)) {
+      const key = `radikoAreas.${areaId}`;
+      if (this.config.get(key) !== value) {
+        updated = true;
+        this.config.set(key, value);
+      }
+    }
+    if (updated === true) {
+      this.showRestartModal();
+    }
+  }
+
+  /**
    * Volumio起動時に最初に呼ばれるライフサイクルメソッド。config.jsonを読み込む。
    */
   onVolumioStart(): Promise<void> {
@@ -183,9 +266,10 @@ class ControllerJpRadio {
     const servicePort = this.config.get('servicePort');
     const browseMode1 = this.config.get('browseMode1');
     const browseMode2 = this.config.get('browseMode2');
+    const radikoAreaIdArray = this.getRadikoAreaIdArray();
     const account = createLoginAccount(radikoUser, radikoPass);
 
-    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2);
+    this.appRadio = new JpRadio(servicePort, this.logger, account, this.commandRouter, this.serviceName, browseMode1, browseMode2, radikoAreaIdArray);
 
     this.appRadio.start()
       .then(() => {
@@ -248,7 +332,7 @@ class ControllerJpRadio {
       path.join(I18N_DIR, 'strings_en.json'),
       UI_CONFIG_PATH
     )
-      .then((uiconf: any) => {
+      .then(async (uiconf: any) => {
         const servicePort = this.config!.get('servicePort');
         const radikoUser = this.config!.get('radikoUser');
         const radikoPass = this.config!.get('radikoPass');
@@ -267,6 +351,9 @@ class ControllerJpRadio {
         }
         if (uiconf.sections?.[2]?.content?.[1] !== undefined) {
           this.populateSelectValue(uiconf.sections[2].content[1], this.config!.get('browseMode2'));
+        }
+        if (uiconf.sections?.[3] !== undefined && radikoUser !== '' && radikoPass !== '') {
+          await this.populateRadikoAreasSection(uiconf.sections[3]);
         }
 
         defer.resolve(uiconf);
