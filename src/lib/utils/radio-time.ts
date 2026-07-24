@@ -63,6 +63,7 @@ export interface RadioTimeParts {
 
 /**
  * `'yyyyMMddHHmmss'`形式の文字列を{@link RadioTimeParts}に分解する。
+ * @param t 分解対象の`'yyyyMMddHHmmss'`形式の文字列。
  */
 export function parseRadioTime(t: string): RadioTimeParts {
   return {
@@ -93,6 +94,7 @@ export function cnvRadioTime(src: string, today: string): string {
 /**
  * {@link cnvRadioTime}の逆変換。`24:00`～`29:00`表記を翌日の`00:00`～`05:00`の実時刻表記に戻す。
  * Radiko APIのタイムフリー再生パラメータ(`start_at`/`ft`/`end_at`/`to`)は実時刻表記を要求するため使う。
+ * @param src 変換対象の`'yyyyMMddHHmmss'`形式の文字列(ラジオ時間表記)。
  */
 export function revCnvRadioTime(src: string): string {
   const parts = parseRadioTime(src);
@@ -109,6 +111,8 @@ export function revCnvRadioTime(src: string): string {
 /**
  * `'yyyyMMddHHmmss'`形式の実時刻文字列にN秒を加算する。タイムフリー再生の途中再開位置
  * (`revCnvRadioTime`で実時刻に戻した`ft` + 経過秒)を計算するために使う。
+ * @param src 加算対象の`'yyyyMMddHHmmss'`形式の実時刻文字列。
+ * @param seconds 加算する秒数。
  */
 export function addSecondsToTimeString(src: string, seconds: number): string {
   const date = parse(src, 'yyyyMMddHHmmss', new Date());
@@ -117,6 +121,7 @@ export function addSecondsToTimeString(src: string, seconds: number): string {
 
 /**
  * `'yyyyMMddHHmmss'` => `'HH:mm:ss'`
+ * @param t 変換対象の`'yyyyMMddHHmmss'`形式の文字列。
  */
 export function formatTimeString(t: string): string {
   const { hour, minute, second } = parseRadioTime(t);
@@ -125,6 +130,7 @@ export function formatTimeString(t: string): string {
 
 /**
  * `'yyyyMMddHHmmss'` => `'HH:mm'`（表示用に秒を省略）
+ * @param t 変換対象の`'yyyyMMddHHmmss'`形式の文字列。
  */
 export function formatHourMinute(t: string): string {
   const { hour, minute } = parseRadioTime(t);
@@ -133,13 +139,17 @@ export function formatHourMinute(t: string): string {
 
 /**
  * `'yyyyMMddHHmmss'` => `'yyyyMMddHHmm'`（分単位、DBの範囲検索に使う）
+ * @param t 変換対象の`'yyyyMMddHHmmss'`形式の文字列。
  */
 export function toMinutePrecision(t: string): string {
   const { date, hour, minute } = parseRadioTime(t);
   return date + hour + minute;
 }
 
-/** `'HH:mm:ss'`(または`'HH:mm'`)形式の時刻を秒単位に変換する。 */
+/**
+ * `'HH:mm:ss'`(または`'HH:mm'`)形式の時刻を秒単位に変換する。
+ * @param t 変換対象の時刻文字列。
+ */
 function toSeconds(t: string): number {
   const [hour, minute, second = '0'] = t.split(':');
   return Number(hour) * 3600 + Number(minute) * 60 + Number(second);
@@ -147,6 +157,8 @@ function toSeconds(t: string): number {
 
 /**
  * `'HH:mm:ss'`(または`'HH:mm'`)形式の2つの時刻の差を秒単位で返す(`end - begin`)。
+ * @param begin 開始時刻。
+ * @param end 終了時刻。
  */
 export function getTimeSpan(begin: string, end: string): number {
   return toSeconds(end) - toSeconds(begin);
@@ -158,7 +170,9 @@ export function getTimeSpan(begin: string, end: string): number {
  * (日付+時刻が矛盾なく連動している)なので、単純な文字列比較で時系列の前後関係を判定できる。
  * 「タイムフリーとして古すぎないか(7日以内か)」は、番組データの取得元である
  * `PROG_WEEKLY_STATION_URL`自体が前後1週間分しか返さないため、ここでは判定しない。
+ * @param ft 判定対象の番組の放送開始時刻。
+ * @param currentRadioTime 現在時刻(`getCurrentRadioTime`の戻り値)。
  */
-export function isWithinTimefreeWindow(ft: string, currentRadioTime: string): boolean {
+export function isWithinTimeFreeWindow(ft: string, currentRadioTime: string): boolean {
   return ft <= currentRadioTime;
 }

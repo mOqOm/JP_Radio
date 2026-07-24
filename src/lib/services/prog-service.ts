@@ -40,6 +40,9 @@ export default class RdkProg {
   private lastTime = '';
   private cachedProgram: RadikoProgramData = { ...EMPTY_PROGRAM };
 
+  /**
+   * @param logger ログ出力先。
+   */
   constructor(logger: Console) {
     this.logger = logger;
     this.initDBIndexes();
@@ -47,6 +50,7 @@ export default class RdkProg {
 
   /**
    * 指定局の現在放送中の番組を返す。直前と同じ局・同じ分であればキャッシュを返す。
+   * @param station 局ID。
    */
   async getCurProgram(station: string): Promise<RadikoProgramData | undefined> {
     const currentTime = toMinutePrecision(getCurrentRadioTime());
@@ -84,6 +88,8 @@ export default class RdkProg {
   /**
    * 指定局・指定放送開始時刻(`ft`)に一致する番組をDBから検索する。
    * タイムフリー再生時に、URIで指定された`ft`から番組のタイトル等を引くために使う。
+   * @param station 局ID。
+   * @param ft 放送開始時刻(ラジオ時間、`'yyyyMMddHHmmss'`)。
    */
   async findProgram(station: string, ft: string): Promise<RadikoProgramData | undefined> {
     try {
@@ -100,6 +106,7 @@ export default class RdkProg {
 
   /**
    * 番組データを1件DBへ挿入する。重複挿入(`uniqueViolated`)はエラーログを出さず無視する。
+   * @param prog 挿入する番組データ。
    */
   async putProgram(prog: RadikoProgramData): Promise<void> {
     try {
@@ -217,6 +224,7 @@ export default class RdkProg {
    * タイムフリーのブラウズ一覧を組み立てるために使う。
    * 週次レスポンスは日ごとに`progs`ブロックが分かれているため、`updatePrograms`と同様に
    * 各ブロックの先頭番組の日付をその日の基準日として個別に`cnvRadioTime`で正規化する。
+   * @param stationId 局ID。
    */
   async getStationPrograms(stationId: string): Promise<RadikoProgramData[]> {
     const url = utilFormat(PROG_WEEKLY_STATION_URL, stationId);

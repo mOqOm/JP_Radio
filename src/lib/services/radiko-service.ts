@@ -13,7 +13,7 @@ import type { LoginAccount, LoginState } from '@/models/auth-model';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
-  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIMEFREE_QUERY,
+  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIME_FREE_QUERY,
   AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL,
   RADIKO_APP_HEADERS
 } from '@/consts/radiko-urls';
@@ -21,7 +21,7 @@ import {
 import { AREA_KANJI } from '@/consts/area-name';
 import { selectLiveEntry } from '@/logic/live-entry-selector';
 import { revCnvRadioTime } from '@/utils/radio-time';
-import type { TimefreeQuery } from '@/models/timefree-query-model';
+import type { TimeFreeQuery } from '@/models/time-free-query-model';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -44,6 +44,10 @@ export default class Radiko {
   public stationData: RegionData[] = [];
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
 
+  /**
+   * @param logger ログ出力先。
+   * @param port medialist-proxyへの中継URL生成に使う自身のリッスンポート番号。
+   */
   constructor(private logger: Console, private port: number) { }
 
   /**
@@ -85,6 +89,7 @@ export default class Radiko {
 
   /**
    * メールアドレス/パスワードでRadikoにログインし、認証済みCookieJarを返す。
+   * @param acct ログインに使うアカウント情報。
    */
   private async login(acct: LoginAccount): Promise<CookieJar> {
     this.logger.info('JP_Radio::Radiko.login');
@@ -162,6 +167,8 @@ export default class Radiko {
 
   /**
    * auth1のレスポンスヘッダーから、auth2に必要なパーシャルキー(base64)とトークンを算出する。
+   * @param headers auth1のレスポンスヘッダー。
+   * @returns `[partialKey, token]`。
    */
   private getPartialKey(headers: Record<string, string>): [string, string] {
     this.logger.info('JP_Radio::Radiko.getPartialKey');
@@ -174,6 +181,8 @@ export default class Radiko {
 
   /**
    * 認証第2段階。成功するとレスポンスボディに`areaId,areaName,...`形式の文字列が返る。
+   * @param token auth1で取得したトークン。
+   * @param partialKey {@link getPartialKey}で算出したパーシャルキー。
    */
   private async auth2(token: string, partialKey: string): Promise<string> {
     this.logger.info('JP_Radio::Radiko.auth2');
@@ -288,6 +297,7 @@ export default class Radiko {
 
   /**
    * 局IDから表示用の局名(日本語)を取得する。
+   * @param stationId 局ID。
    */
   async getStationName(stationId: string): Promise<string> {
     let name = this.stations?.get(stationId)?.name;
@@ -299,6 +309,7 @@ export default class Radiko {
 
   /**
    * 局IDからアスキー名(英語表記)を取得する。
+   * @param stationId 局ID。
    */
   async getStationAsciiName(stationId: string): Promise<string> {
     let asciiName = this.stations?.get(stationId)?.asciiName;
@@ -311,12 +322,13 @@ export default class Radiko {
   /**
    * 指定局のライブストリームURLを解決し、ffmpegでAAC(ADTS)に変換しながらstdoutへ流すプロセスを起動する。
    * トークン取得・プレイリスト解決に失敗した場合は`MAX_RETRY_COUNT`回までトークンを取り直して再試行する。
+   * @param station 局ID。
    * @returns 起動したffmpegの{@link ChildProcess}。局が存在しない/解決失敗の場合はnull。
-   * @param timefreeQuery 指定するとタイムフリー再生(過去の番組)を、指定しなければライブ再生を行う。
+   * @param timeFreeQuery 指定するとタイムフリー再生(過去の番組)を、指定しなければライブ再生を行う。
    * @param tempo タイムフリー再生の速度倍率(`1`以外を指定すると`atempo`フィルタを適用する)。ライブ再生には適用しない。
    * @param resumeSeek 指定すると、タイムフリー再生をこの実時刻(`'yyyyMMddHHmmss'`)から開始する(途中再開用)。
    */
-  async play(station: string, timefreeQuery?: TimefreeQuery, tempo?: number, resumeSeek?: string): Promise<ChildProcess | null> {
+  async play(station: string, timeFreeQuery?: TimeFreeQuery, tempo?: number, resumeSeek?: string): Promise<ChildProcess | null> {
     this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
     if (this.stations?.has(station) === false) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
@@ -329,8 +341,8 @@ export default class Radiko {
         [this.token, this.areaId] = await this.getToken();
       }
       let playlistUrl: string | null;
-      if (timefreeQuery !== undefined) {
-        playlistUrl = await this.getTimefreePlaylistUrl(station, timefreeQuery, resumeSeek);
+      if (timeFreeQuery !== undefined) {
+        playlistUrl = await this.getTimeFreePlaylistUrl(station, timeFreeQuery, resumeSeek);
       } else {
         playlistUrl = await this.getLivePlaylistUrl(station);
       }
@@ -362,7 +374,7 @@ export default class Radiko {
 
     // atempoフィルタで速度変更する場合は再エンコードが必要になるため、'-acodec copy'とは排他になる
     let codecArgs: string[];
-    if (timefreeQuery !== undefined && tempo !== undefined && tempo !== 1) {
+    if (timeFreeQuery !== undefined && tempo !== undefined && tempo !== 1) {
       codecArgs = ['-af', `atempo=${tempo}`];
     } else {
       codecArgs = ['-acodec', 'copy'];
@@ -384,8 +396,12 @@ export default class Radiko {
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], detached: true });
   }
 
-  // ffmpegのHLSデマルチプレクサはプレイリストのreload時に-headersを引き継がないため、
-  // ローカルプロキシ経由でこのメソッドを都度呼び出し、正しいRadikoヘッダーを付けて中継する
+  /**
+   * ffmpegのHLSデマルチプレクサはプレイリストのreload時に-headersを引き継がないため、
+   * ローカルプロキシ経由でこのメソッドを都度呼び出し、正しいRadikoヘッダーを付けて中継する。
+   * @param upstreamUrl 中継先のRadiko側プレイリストURL。
+   * @param token 付与する`X-Radiko-AuthToken`。
+   */
   async fetchMedialist(upstreamUrl: string, token: string): Promise<{ contentType: string; body: Buffer }> {
     const res = await got(upstreamUrl, {
       headers: { 'X-Radiko-AuthToken': token, ...RADIKO_APP_HEADERS },
@@ -399,6 +415,7 @@ export default class Radiko {
 
   /**
    * 局ごとのstream XML(`STATION_STREAM_XML_URL`)からライブ配信用`playlist_create_url`を選び、lsidを付与したURLを組み立てる。
+   * @param station 局ID。
    */
   private async getLivePlaylistUrl(station: string): Promise<string | null> {
     try {
@@ -425,9 +442,11 @@ export default class Radiko {
    * 局ごとのstream XML(`STATION_STREAM_XML_URL`)からタイムフリー配信用`playlist_create_url`を選び、
    * lsidと再生区間(`start_at`/`ft`/`end_at`/`to`)を付与したURLを組み立てる。
    * Radiko APIには実時刻表記が必要なため、ラジオ時間(24-29時表記)は{@link revCnvRadioTime}で実時刻に戻す。
+   * @param station 局ID。
+   * @param query 番組の放送区間。
    * @param resumeSeek 指定すると、Radiko側のタイムフリー再生をこの実時刻(`'yyyyMMddHHmmss'`)から開始する`seek`パラメータを付与する。
    */
-  private async getTimefreePlaylistUrl(station: string, query: TimefreeQuery, resumeSeek?: string): Promise<string | null> {
+  private async getTimeFreePlaylistUrl(station: string, query: TimeFreeQuery, resumeSeek?: string): Promise<string | null> {
     try {
       const res = await got(format(STATION_STREAM_XML_URL, station));
       const parsed = xmlParser.parse(res.body);
@@ -436,26 +455,28 @@ export default class Radiko {
 
       const createUrl = chosen?.playlist_create_url;
       if (createUrl === undefined) {
-        this.logger.error(`JP_Radio::getTimefreePlaylistUrl: no playlist_create_url found for ${station}`);
+        this.logger.error(`JP_Radio::getTimeFreePlaylistUrl: no playlist_create_url found for ${station}`);
         return null;
       }
 
       const lsid = randomBytes(16).toString('hex');
       const ft = revCnvRadioTime(query.ft);
       const to = revCnvRadioTime(query.to);
-      let playlistUrl = createUrl + format(PLAY_TIMEFREE_QUERY, station, ft, ft, to, to, lsid);
+      let playlistUrl = createUrl + format(PLAY_TIME_FREE_QUERY, station, ft, ft, to, to, lsid);
       if (resumeSeek !== undefined) {
         playlistUrl += `&seek=${resumeSeek}`;
       }
       return playlistUrl;
     } catch (error: any) {
-      this.logger.error('JP_Radio::getTimefreePlaylistUrl error', error);
+      this.logger.error('JP_Radio::getTimeFreePlaylistUrl error', error);
       return null;
     }
   }
 
   /**
    * マスタープレイリスト(m3u8)を取得し、ffmpegに渡すメディアプレイリストURIを1行目から抽出する。
+   * @param url マスタープレイリストのURL。
+   * @param token 付与する`X-Radiko-AuthToken`。
    */
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
     try {
@@ -486,6 +507,8 @@ export default class Radiko {
 
   /**
    * 指定局・指定日の番組表XMLを取得してパースする。
+   * @param station 局ID。
+   * @param date 対象日(`'yyyyMMdd'`)。
    */
   async getProgramDaily(station: string, date: string): Promise<any> {
     const res = await got(format(PROG_DAILY_STATION_URL, station, date));

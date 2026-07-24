@@ -7,10 +7,10 @@ import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-resul
 import type { StationInfo } from '@/models/station-model';
 import type { LoginAccount } from '@/models/auth-model';
 import type { TrackMeta } from '@/models/track-meta-model';
-import type { TimefreeQuery } from '@/models/timefree-query-model';
+import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 
-import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimefreeWindow, revCnvRadioTime, addSecondsToTimeString } from '@/utils/radio-time';
+import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimeFreeWindow, revCnvRadioTime, addSecondsToTimeString } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
 
@@ -41,9 +41,20 @@ export default class JpRadio {
   private readonly tempo: number;
 
   /** タイムフリー再生の途中再開用の進捗(局・番組・再生位置)。同じ番組を選び直した時だけ使う。 */
-  private timefreeProgress: { station: string; ft: string; to: string; positionSec: number } | null = null;
-  private timefreeProgressTimer: ReturnType<typeof setInterval> | null = null;
+  private timeFreeProgress: { station: string; ft: string; to: string; positionSec: number } | null = null;
+  private timeFreeProgressTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * @param port `/radiko/play/...`等のURI生成に使う自身のリッスンポート番号。
+   * @param logger ログ出力先。
+   * @param acct Radikoプレミアム会員としてログインする場合のアカウント情報。未指定ならログインしない。
+   * @param commandRouter Volumioコアのコマンドルータ。
+   * @param serviceName BrowseItemの`service`に設定するサービス名。
+   * @param browseMode1 ライブ局選択時の動作('type1'=直接再生、'type2'=番組情報モーダル)。
+   * @param browseMode2 タイムフリー番組選択時の動作('type1'=直接再生、'type2'=番組情報モーダル)。
+   * @param radikoAreaIdArray エリアフリー会員が設定画面で選択した、番組表取得対象のエリアID一覧。
+   * @param tempo タイムフリー再生の速度倍率。
+   */
   constructor(port = 0, logger: Console, acct: LoginAccount | null = null, commandRouter: any, serviceName: string, browseMode1 = 'type1', browseMode2 = 'type1', radikoAreaIdArray: string[] = [], tempo = 1) {
     this.app = express();
     this.port = port;
@@ -131,17 +142,17 @@ export default class JpRadio {
 
       const ft = req.query['ft'];
       const to = req.query['to'];
-      let timefreeQuery: TimefreeQuery | undefined;
+      let timeFreeQuery: TimeFreeQuery | undefined;
       if (typeof ft === 'string' && typeof to === 'string') {
-        timefreeQuery = { ft, to };
+        timeFreeQuery = { ft, to };
       } else {
-        timefreeQuery = undefined;
+        timeFreeQuery = undefined;
       }
 
       let resumeSeek: string | undefined;
       let resumePositionSec = 0;
-      if (timefreeQuery !== undefined) {
-        const resume = this.#resolveResume(this.station, timefreeQuery);
+      if (timeFreeQuery !== undefined) {
+        const resume = this.#resolveResume(this.station, timeFreeQuery);
         resumeSeek = resume.seek;
         resumePositionSec = resume.positionSec;
       }
@@ -151,24 +162,24 @@ export default class JpRadio {
         this.station,
         this.logger,
         () => {
-          if (timefreeQuery === undefined) {
+          if (timeFreeQuery === undefined) {
             // max60sも待ちたくないのですぐ呼ぶ
             setTimeout(this.#pushSongState.bind(this), 3000);
             this.task2.start();
           } else {
-            const query = timefreeQuery;
-            setTimeout(() => this.#pushTimefreeState(query, resumePositionSec), 3000);
-            this.#startTimefreeProgressTracking();
+            const query = timeFreeQuery;
+            setTimeout(() => this.#pushTimeFreeState(query, resumePositionSec), 3000);
+            this.#startTimeFreeProgressTracking();
           }
         },
         () => {
-          if (timefreeQuery === undefined) {
+          if (timeFreeQuery === undefined) {
             this.task2.stop();
           } else {
-            this.#stopTimefreeProgressTracking();
+            this.#stopTimeFreeProgressTracking();
           }
         },
-        timefreeQuery,
+        timeFreeQuery,
         this.tempo,
         resumeSeek,
       );
@@ -230,9 +241,12 @@ export default class JpRadio {
    * タイムフリー再生の途中再開位置を解決する。直前に再生していたのと同じ局・同じ番組(`ft`/`to`が一致)を
    * 選び直した場合のみ、前回の再生位置(`positionSec`)からの再開に必要な`seek`(実時刻)を返す。
    * それ以外(別の局・別の番組を選んだ場合)は進捗を0にリセットし、先頭から再生する。
+   * @param station 局ID。
+   * @param query 再生しようとしている番組の放送区間。
+   * @returns `seek`は再開先の実時刻(途中再開しない場合はundefined)、`positionSec`は再開位置(秒、0なら先頭から)。
    */
-  #resolveResume(station: string, query: TimefreeQuery): { seek?: string; positionSec: number } {
-    const progress = this.timefreeProgress;
+  #resolveResume(station: string, query: TimeFreeQuery): { seek?: string; positionSec: number } {
+    const progress = this.timeFreeProgress;
     if (
       progress !== null &&
       progress.station === station &&
@@ -243,15 +257,17 @@ export default class JpRadio {
       const seek = addSecondsToTimeString(revCnvRadioTime(query.ft), progress.positionSec);
       return { seek, positionSec: progress.positionSec };
     }
-    this.timefreeProgress = { station, ft: query.ft, to: query.to, positionSec: 0 };
+    this.timeFreeProgress = { station, ft: query.ft, to: query.to, positionSec: 0 };
     return { seek: undefined, positionSec: 0 };
   }
 
   /**
    * タイムフリー再生開始直後に1回だけ、番組の長さと再生位置(途中再開時のみ0以外)をVolumioへ反映する。
    * ライブと異なり、以降は自然に増えていくmpd側の再生位置をそのまま使うため、継続的な上書きは行わない。
+   * @param query 再生中の番組の放送区間。
+   * @param resumePositionSec 途中再開の場合の再生位置(秒)。先頭からの場合は0。
    */
-  #pushTimefreeState(query: TimefreeQuery, resumePositionSec: number): void {
+  #pushTimeFreeState(query: TimeFreeQuery, resumePositionSec: number): void {
     const state = this.commandRouter.stateMachine.getState();
     const t0 = formatTimeString(query.ft);
     const t1 = formatTimeString(query.to);
@@ -267,18 +283,18 @@ export default class JpRadio {
   }
 
   /**
-   * タイムフリー再生中、`this.timefreeProgress.positionSec`を定期的に更新する。
+   * タイムフリー再生中、`this.timeFreeProgress.positionSec`を定期的に更新する。
    * ストリームが停止した後も最後の値が残るため、次に同じ番組を選んだ時の途中再開に使える。
    */
-  #startTimefreeProgressTracking(): void {
-    this.#stopTimefreeProgressTracking();
-    this.timefreeProgressTimer = setInterval(() => {
-      if (this.timefreeProgress === null) {
+  #startTimeFreeProgressTracking(): void {
+    this.#stopTimeFreeProgressTracking();
+    this.timeFreeProgressTimer = setInterval(() => {
+      if (this.timeFreeProgress === null) {
         return;
       }
       const state = this.commandRouter.stateMachine.getState();
       if (typeof state.seek === 'number') {
-        this.timefreeProgress.positionSec = Math.floor(state.seek / 1000);
+        this.timeFreeProgress.positionSec = Math.floor(state.seek / 1000);
       }
     }, 5000);
   }
@@ -286,16 +302,16 @@ export default class JpRadio {
   /**
    * タイムフリー再生の進捗更新タイマーを止める(進捗の値自体は次回の途中再開のために残す)。
    */
-  #stopTimefreeProgressTracking(): void {
-    if (this.timefreeProgressTimer !== null) {
-      clearInterval(this.timefreeProgressTimer);
-      this.timefreeProgressTimer = null;
+  #stopTimeFreeProgressTracking(): void {
+    if (this.timeFreeProgressTimer !== null) {
+      clearInterval(this.timeFreeProgressTimer);
+      this.timeFreeProgressTimer = null;
     }
   }
 
   /**
    * ルートメニュー(ライブ/タイムフリーの2項目)を返す。各項目は`radio-category`型で、
-   * 選択すると{@link radioStations}/{@link timefreeStations}へ遷移する。
+   * 選択すると{@link radioStations}/{@link timeFreeStations}へ遷移する。
    */
   async rootMenu(): Promise<BrowseResult> {
     const items: BrowseItem[] = [
@@ -410,8 +426,8 @@ export default class JpRadio {
    * 各アイテムは`radio-category`型(直接再生ではなく再度ブラウズを呼び出す)にし、
    * 選択すると{@link stationTimetable}で番組一覧に遷移する。
    */
-  async timefreeStations(): Promise<BrowseResult> {
-    this.logger.info('JP_Radio::JpRadio.timefreeStations');
+  async timeFreeStations(): Promise<BrowseResult> {
+    this.logger.info('JP_Radio::JpRadio.timeFreeStations');
 
     if (this.rdk?.stations === undefined) {
       return {
@@ -463,6 +479,7 @@ export default class JpRadio {
 
   /**
    * 指定局のタイムフリー番組一覧(既に放送開始済みのもののみ、新しい順)をBrowse画面用データに変換して返す。
+   * @param stationId 局ID。
    */
   async stationTimetable(stationId: string): Promise<BrowseResult> {
     this.logger.info(`JP_Radio::JpRadio.stationTimetable: stationId=${stationId}`);
@@ -480,7 +497,7 @@ export default class JpRadio {
 
     const currentRadioTime = getCurrentRadioTime();
     const items: BrowseItem[] = programs
-      .filter((program) => isWithinTimefreeWindow(program.ft, currentRadioTime))
+      .filter((program) => isWithinTimeFreeWindow(program.ft, currentRadioTime))
       .sort((a, b) => {
         if (a.ft < b.ft) {
           return 1;
@@ -538,16 +555,17 @@ export default class JpRadio {
    * 指定局IDの現在のトラック情報を返す(explodeUriから呼ばれる)。
    * URIには局IDのみを載せ、タイトルやアルバムアートなどの表示用メタデータは
    * 再生選択のたびにここで最新の状態を取得し直す(長い日本語テキストをURIに含めないため)。
-   * @param timefreeQuery 指定するとタイムフリー再生時の番組情報を、指定しなければ現在放送中の情報を返す。
+   * @param stationId 局ID。
+   * @param timeFreeQuery 指定するとタイムフリー再生時の番組情報を、指定しなければ現在放送中の情報を返す。
    * @returns 局が存在しない場合はnull。
    */
-  async getTrackMeta(stationId: string, timefreeQuery?: TimefreeQuery): Promise<TrackMeta | null> {
+  async getTrackMeta(stationId: string, timeFreeQuery?: TimeFreeQuery): Promise<TrackMeta | null> {
     const stationInfo = this.rdk?.stations.get(stationId);
     if (stationInfo === undefined) {
       return null;
     }
-    if (timefreeQuery !== undefined) {
-      return this.#buildTimefreeTrackMeta(stationId, stationInfo, timefreeQuery);
+    if (timeFreeQuery !== undefined) {
+      return this.#buildTimeFreeTrackMeta(stationId, stationInfo, timeFreeQuery);
     }
     return this.#buildTrackMeta(stationId, stationInfo);
   }
@@ -556,17 +574,19 @@ export default class JpRadio {
    * 番組情報モーダル表示用のデータを組み立てる(`handleBrowseUri`の`radiko/proginfo/<stationId>`から呼ばれる)。
    * `explodeUri`の返却値と同じ形にして返すことで、モーダルの「再生」「キューに追加」ボタンから
    * このデータをそのままVolumioの再生キューへ渡せるようにする。
+   * @param stationId 局ID。
+   * @param timeFreeQuery 指定するとタイムフリー番組の情報を、指定しなければ現在放送中の情報を組み立てる。
    * @returns 局が存在しない場合はnull。
    */
-  async progInfo(stationId: string, timefreeQuery?: TimefreeQuery): Promise<ProgInfoData | null> {
-    const meta = await this.getTrackMeta(stationId, timefreeQuery);
+  async progInfo(stationId: string, timeFreeQuery?: TimeFreeQuery): Promise<ProgInfoData | null> {
+    const meta = await this.getTrackMeta(stationId, timeFreeQuery);
     if (meta === null) {
       return null;
     }
     const playUrl = new URL(`http://localhost:${this.port}/radiko/play/${stationId}`);
-    if (timefreeQuery !== undefined) {
-      playUrl.searchParams.set('ft', timefreeQuery.ft);
-      playUrl.searchParams.set('to', timefreeQuery.to);
+    if (timeFreeQuery !== undefined) {
+      playUrl.searchParams.set('ft', timeFreeQuery.ft);
+      playUrl.searchParams.set('to', timeFreeQuery.to);
     }
     return {
       service: this.serviceName,
@@ -593,6 +613,7 @@ export default class JpRadio {
 
   /**
    * 指定エリアIDに属する局のID一覧を返す(エリア選択設定画面の説明表示に使う)。
+   * @param areaId エリアID(例: 'JP13')。
    */
   getAreaStations(areaId: string): string[] {
     const stations = this.rdk?.areaData.get(areaId)?.stations;
@@ -605,8 +626,11 @@ export default class JpRadio {
   /**
    * 指定局・指定区間のタイムフリー番組情報を組み立てる。DBに該当番組が見つからない場合は
    * タイトル等を空のまま返す(URIのft/toから放送時間だけは表示できるようにする)。
+   * @param stationId 局ID。
+   * @param stationInfo 局情報(局名・エリア名などの表示に使う)。
+   * @param query 番組の放送区間。
    */
-  async #buildTimefreeTrackMeta(stationId: string, stationInfo: StationInfo, query: TimefreeQuery): Promise<TrackMeta> {
+  async #buildTimeFreeTrackMeta(stationId: string, stationInfo: StationInfo, query: TimeFreeQuery): Promise<TrackMeta> {
     const program = await this.prg?.findProgram(stationId, query.ft);
     let title = '';
     let album = '';
@@ -627,6 +651,8 @@ export default class JpRadio {
   /**
    * 指定局の現在のトラック情報(タイトル・パーソナリティ名・表示用アーティスト文字列・アルバムアート)を組み立てる。
    * radioStations()とgetTrackMeta()の両方から共通で使う。
+   * @param stationId 局ID。
+   * @param stationInfo 局情報(局名・エリア名などの表示に使う)。
    */
   async #buildTrackMeta(stationId: string, stationInfo: StationInfo): Promise<TrackMeta> {
     const progData = await this.prg?.getCurProgram(stationId);
@@ -702,7 +728,7 @@ export default class JpRadio {
     if (this.server !== null) {
       this.task1.stop();
       this.task2.stop();
-      this.#stopTimefreeProgressTracking();
+      this.#stopTimeFreeProgressTracking();
       this.server.close();
       this.server = null;
 

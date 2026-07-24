@@ -8,7 +8,7 @@ import {
   formatHourMinute,
   toMinutePrecision,
   getTimeSpan,
-  isWithinTimefreeWindow,
+  isWithinTimeFreeWindow,
   revCnvRadioTime,
   addSecondsToTimeString,
 } from '@/utils/radio-time';
@@ -93,17 +93,17 @@ describe('getTimeSpan', () => {
   });
 });
 
-describe('isWithinTimefreeWindow', () => {
+describe('isWithinTimeFreeWindow', () => {
   it('既に放送開始済みの番組はtrue', () => {
-    expect(isWithinTimefreeWindow('20250831050000', '20250831120000')).toBe(true);
+    expect(isWithinTimeFreeWindow('20250831050000', '20250831120000')).toBe(true);
   });
 
   it('放送開始時刻と現在時刻が同じならtrue', () => {
-    expect(isWithinTimefreeWindow('20250831120000', '20250831120000')).toBe(true);
+    expect(isWithinTimeFreeWindow('20250831120000', '20250831120000')).toBe(true);
   });
 
   it('まだ放送されていない(未来の)番組はfalse', () => {
-    expect(isWithinTimefreeWindow('20250901050000', '20250831120000')).toBe(false);
+    expect(isWithinTimeFreeWindow('20250901050000', '20250831120000')).toBe(false);
   });
 });
 

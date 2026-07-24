@@ -6,7 +6,7 @@ import { BrowseResult } from '@/models/browse-result-model';
 import { createLoginAccount } from '@/logic/auth';
 import { messageCatalog } from '@/utils/message-catalog';
 import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
-import type { TimefreeQuery } from '@/models/timefree-query-model';
+import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
 
@@ -30,6 +30,9 @@ class ControllerJpRadio {
   private appRadio: JpRadio | null = null;
   private mpdPlugin: any;
 
+  /**
+   * @param context Volumioコアから渡されるプラグインコンテキスト(coreCommand/logger/configManagerを含む)。
+   */
   constructor(context: any) {
     this.context = context;
     this.commandRouter = context.coreCommand;
@@ -86,6 +89,8 @@ class ControllerJpRadio {
   /**
    * UIConfig.jsonのselect要素(`content.value`/`content.options`)に現在値を反映する。
    * `content.options[].label`はこの時点で既に`i18nJson`によって翻訳済みの文字列になっている。
+   * @param content UIConfig.jsonのselect要素(`value`/`options`を持つオブジェクト)。
+   * @param currentValue 現在の設定値。
    */
   private populateSelectValue(content: any, currentValue: string): void {
     content.value.value = currentValue;
@@ -119,6 +124,7 @@ class ControllerJpRadio {
    * エリア選択設定(`radiko_areas`)セクションの内容を、地域ごとにグループ化して動的に構築する。
    * この時点(`i18nJson`実行後)に新規追加する項目は翻訳の対象外になるため、ラベル等は
    * ここで直接最終的な文字列を組み立てる({@link messageCatalog}を使うのはそのため)。
+   * @param section UIConfig.jsonの`radiko_areas`セクションオブジェクト。
    */
   private async populateRadikoAreasSection(section: any): Promise<void> {
     if (this.appRadio === null || this.config === null) {
@@ -160,6 +166,7 @@ class ControllerJpRadio {
 
   /**
    * UI設定画面で入力されたサービスポート番号を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される入力値。
    */
   async saveServicePort(data: { servicePort: string }): Promise<void> {
     const newPort = Number(data.servicePort);
@@ -171,6 +178,7 @@ class ControllerJpRadio {
 
   /**
    * UI設定画面で入力されたRadikoプレミアム会員のアカウント情報を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される入力値。
    */
   async saveRadikoAccount(data: { radikoUser: string; radikoPass: string }): Promise<void> {
     if (this.config === null) {
@@ -189,6 +197,7 @@ class ControllerJpRadio {
   /**
    * UI設定画面で選択されたブラウズ動作(ライブ/タイムフリー選択時に直接再生するか、
    * 番組情報モーダルを表示するか)を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される選択値。
    */
   async saveBrowseModeSetting(data: { browseMode1: { value: string }; browseMode2: { value: string } }): Promise<void> {
     if (this.config === null) {
@@ -210,6 +219,7 @@ class ControllerJpRadio {
 
   /**
    * UI設定画面で選択されたタイムフリー再生速度を保存し、変更があれば再起動を促す。
+   * @param data 保存ボタンから渡される選択値。
    */
   async saveTempoSetting(data: { tempo: { value: string } }): Promise<void> {
     if (this.config === null) {
@@ -223,7 +233,7 @@ class ControllerJpRadio {
 
   /**
    * UI設定画面で選択されたエリア選択(`radikoAreas.<areaId>`)を保存し、変更があれば再起動を促す。
-   * `data`のキーはエリアID(例: 'JP13')、値はそのエリアを取得対象にするかどうかの真偽値。
+   * @param data キーがエリアID(例: 'JP13')、値がそのエリアを取得対象にするかどうかの真偽値。
    */
   async saveRadikoAreasSetting(data: Record<string, boolean>): Promise<void> {
     if (this.config === null) {
@@ -407,9 +417,10 @@ class ControllerJpRadio {
   /**
    * BrowseメニューでURIが選択された際に呼ばれ、対応するブラウズ結果を返す。
    * `radiko` → ルートメニュー(ライブ/タイムフリー)、`radiko/live` → {@link JpRadio.radioStations}、
-   * `radiko/timefree` → {@link JpRadio.timefreeStations}、
+   * `radiko/timefree` → {@link JpRadio.timeFreeStations}、
    * `radiko/timetable/<stationId>` → {@link JpRadio.stationTimetable}、
    * `radiko/proginfo/<stationId>[?ft=&to=]` → 番組情報モーダルを表示(ブラウズ結果は返さず空を返す)。
+   * @param curUri 選択されたURI。
    */
   handleBrowseUri(curUri: string): Promise<BrowseResult | Record<string, never>> {
     const defer = libQ.defer();
@@ -426,18 +437,18 @@ class ControllerJpRadio {
 
     if (segments[0] === 'radiko' && segments[1] === 'proginfo' && segments[2] !== undefined) {
       const stationId = segments[2];
-      let timefreeQuery: TimefreeQuery | undefined;
+      let timeFreeQuery: TimeFreeQuery | undefined;
       if (queryString !== undefined) {
         const params = new URLSearchParams(queryString);
         const ft = params.get('ft');
         const to = params.get('to');
         if (ft !== null && to !== null) {
-          timefreeQuery = { ft, to };
+          timeFreeQuery = { ft, to };
         }
       }
 
       libQ.resolve()
-        .then(() => appRadio.progInfo(stationId, timefreeQuery))
+        .then(() => appRadio.progInfo(stationId, timeFreeQuery))
         .then((data: ProgInfoData | null) => {
           if (data !== null) {
             this.showProgInfoModal(data);
@@ -458,7 +469,7 @@ class ControllerJpRadio {
     } else if (baseUri === 'radiko/live') {
       task = appRadio.radioStations();
     } else if (baseUri === 'radiko/timefree') {
-      task = appRadio.timefreeStations();
+      task = appRadio.timeFreeStations();
     } else if (segments[0] === 'radiko' && segments[1] === 'timetable' && segments[2] !== undefined) {
       task = appRadio.stationTimetable(segments[2]);
     } else {
@@ -485,6 +496,7 @@ class ControllerJpRadio {
   /**
    * 番組情報モーダルを表示する。「再生」「キューに追加」ボタンは{@link playFromProgInfoModal}/
    * {@link addQueueFromProgInfoModal}を`callMethod`で呼び出し、`data`(explodeUriと同形式)をそのまま渡す。
+   * @param data モーダルに表示する番組情報(再生キューへそのまま渡せる形式)。
    */
   private showProgInfoModal(data: ProgInfoData): void {
     let message = `<div>${data.artist}</div>`;
@@ -529,6 +541,7 @@ class ControllerJpRadio {
 
   /**
    * 番組情報モーダルの「再生」ボタンから呼ばれる。対象トラックを再生キューの先頭に追加して即再生する。
+   * @param data {@link showProgInfoModal}のボタンから渡されるトラック情報。
    */
   playFromProgInfoModal(data: any): void {
     this.logger.info(`JP_Radio::playFromProgInfoModal: uri=${data.uri}`);
@@ -541,6 +554,7 @@ class ControllerJpRadio {
 
   /**
    * 番組情報モーダルの「キューに追加」ボタンから呼ばれる。対象トラックを再生キューの末尾に追加する。
+   * @param data {@link showProgInfoModal}のボタンから渡されるトラック情報。
    */
   addQueueFromProgInfoModal(data: any): void {
     this.logger.info(`JP_Radio::addQueueFromProgInfoModal: uri=${data.uri}`);
@@ -553,6 +567,7 @@ class ControllerJpRadio {
 
   /**
    * キューのトラック選択時に呼ばれ、mpdのキューをクリアして再生対象のURIを追加・再生する。
+   * @param track 再生キュー内のトラック情報(`uri`を含む)。
    */
   clearAddPlayTrack(track: any): Promise<any> {
     this.logger.info(`JP_Radio::clearAddPlayTrack: uri=${track.uri}`);
@@ -572,6 +587,7 @@ class ControllerJpRadio {
 
   /**
    * ライブストリームのためシークは非対応。常にrejectする。
+   * @param timepos シーク先の再生位置(未使用)。
    */
   seek(timepos: number): Promise<any> {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::seek to ${timepos}`);
@@ -610,6 +626,7 @@ class ControllerJpRadio {
 
   /**
    * 再生状態をVolumioコアへプッシュする。
+   * @param state プッシュする再生状態。
    */
   pushState(state: any): any {
     this.logger.info(`[${new Date().toISOString()}] JP_Radio::pushState`);
@@ -622,6 +639,7 @@ class ControllerJpRadio {
    * タイトルやアルバムアートなどの表示用メタデータはURIに含めず、{@link JpRadio.getTrackMeta}で都度取得し直す
    * (長い日本語テキストや画像URLをそのままURIに埋め込みたくないため)。
    * タイムフリー再生時は`?ft=&to=`クエリで放送区間を受け取る。
+   * @param uri キュー内のURI。
    */
   explodeUri(uri: string): Promise<any> {
     this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
@@ -641,15 +659,15 @@ class ControllerJpRadio {
       return defer.promise;
     }
 
-    let timefreeQuery: TimefreeQuery | undefined;
+    let timeFreeQuery: TimeFreeQuery | undefined;
     if (ft !== null && to !== null) {
-      timefreeQuery = { ft, to };
+      timeFreeQuery = { ft, to };
     } else {
-      timefreeQuery = undefined;
+      timeFreeQuery = undefined;
     }
 
     libQ.resolve()
-      .then(() => appRadio.getTrackMeta(stationId, timefreeQuery))
+      .then(() => appRadio.getTrackMeta(stationId, timeFreeQuery))
       .then((meta: any) => {
         if (meta === null) {
           defer.resolve({});

@@ -13,6 +13,9 @@ const CATALOG_NAMES = ['push_messages', 'browse_texts'] as const;
 export class MessageCatalog {
   private readonly messages: Record<string, string> = {};
 
+  /**
+   * @param lang 読み込む言語コード(`i18n/{name}.{lang}.ini`)。
+   */
   constructor(lang = 'ja') {
     for (const name of CATALOG_NAMES) {
       const filePath = path.join(I18N_DIR, `${name}.${lang}.ini`);

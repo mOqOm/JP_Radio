@@ -135,7 +135,7 @@
       ]
     },
     {
-      "id": "timefree_playback",
+      "id": "time_free_playback",
       "element": "section",
       "label": "TRANSLATE.TEMPO_LABEL",
       "description": "TRANSLATE.TEMPO_DESC",
