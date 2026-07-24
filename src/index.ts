@@ -3,6 +3,7 @@ import VConf from 'v-conf';
 import JpRadio from '@/controllers/radio-controller';
 import { BrowseResult } from '@/models/browse-result-model';
 import { createLoginAccount } from '@/logic/auth';
+import { messageCatalog } from '@/utils/message-catalog';
 
 export = ControllerJpRadio;
 
@@ -39,7 +40,11 @@ class ControllerJpRadio {
       await this.onStop();
       await this.onStart();
     } catch {
-      this.commandRouter.pushToastMessage('error', 'Restart Failed', 'The plugin could not be restarted.');
+      this.commandRouter.pushToastMessage(
+        'error',
+        messageCatalog.get('RESTART_FAILED_TITLE'),
+        messageCatalog.get('RESTART_FAILED_MESSAGE'),
+      );
     }
   }
 
@@ -48,8 +53,8 @@ class ControllerJpRadio {
    */
   private showRestartModal(): void {
     const message = {
-      title: 'Plugin Restart Required',
-      message: 'Changes have been made that require the JP Radio plugin to be restarted. Please click the restart button below.',
+      title: messageCatalog.get('RESTART_MODAL_TITLE'),
+      message: messageCatalog.get('RESTART_MODAL_MESSAGE'),
       size: 'lg',
       buttons: [
         {
@@ -149,11 +154,15 @@ class ControllerJpRadio {
       .catch((error: any) => {
         this.logger.error('JP_Radio::Failed to start appRadio', error);
         if (error.code === 'EADDRINUSE') {
-          const message = `ポート ${servicePort} はすでに使用中です。JP Radio を開始できません。`;
+          const message = messageCatalog.get('ERROR_PORT_IN_USE', servicePort);
           this.logger.error(`JP_Radio::ポート使用中エラー: ${message}`);
-          this.commandRouter.pushToastMessage('error', 'JP Radio 起動エラー', message);
+          this.commandRouter.pushToastMessage('error', messageCatalog.get('ERROR_BOOT_TITLE'), message);
         } else {
-          this.commandRouter.pushToastMessage('error', 'JP Radio 起動エラー', error.message || '不明なエラー');
+          this.commandRouter.pushToastMessage(
+            'error',
+            messageCatalog.get('ERROR_BOOT_TITLE'),
+            error.message || messageCatalog.get('ERROR_UNKNOWN'),
+          );
         }
         defer.reject(error);
       });

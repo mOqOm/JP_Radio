@@ -10,6 +10,7 @@ import type { TrackMeta } from '@/models/track-meta-model';
 
 import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
+import { messageCatalog } from '@/utils/message-catalog';
 
 
 /**
@@ -189,7 +190,7 @@ export default class JpRadio {
       return {
         navigation: {
           lists: [{
-            title: 'LIVE',
+            title: messageCatalog.get('BROWSE_LABEL_LIVE'),
             availableListViews: ['grid', 'list'],
             items: []
           }]
@@ -300,7 +301,7 @@ export default class JpRadio {
     this.logger.info(`JP_Radio::JpRadio.start`);
     if (this.server !== null) {
       this.logger.info('JP_Radio::JpRadio.start: Already started');
-      this.commandRouter.pushToastMessage('info', 'JP Radio', 'すでに起動しています');
+      this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('ALREADY_STARTED'));
       return;
     }
 
@@ -317,7 +318,7 @@ export default class JpRadio {
       this.server = this.app
         .listen(this.port, () => {
           this.logger.info(`JP_Radio::Listening on port ${this.port}`);
-          this.commandRouter.pushToastMessage('success', 'JP Radio', '起動しました');
+          this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('BOOT_COMPLETED'));
           this.commandRouter.servicePushState({
             status: 'play',
             service: this.serviceName,
@@ -329,7 +330,11 @@ export default class JpRadio {
         })
         .on('error', (error: any) => {
           this.logger.error('JP_Radio::App error:', error);
-          this.commandRouter.pushToastMessage('error', 'JP Radio 起動失敗', error.message || 'エラー');
+          this.commandRouter.pushToastMessage(
+            'error',
+            messageCatalog.get('ERROR_START_FAILED_TITLE'),
+            error.message || messageCatalog.get('ERROR_GENERIC'),
+          );
           reject(error);
         });
     });
@@ -349,7 +354,7 @@ export default class JpRadio {
       this.prg = null;
       this.rdk = null;
 
-      this.commandRouter.pushToastMessage('info', 'JP Radio', '停止しました');
+      this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('STOPPED'));
     }
   }
 
@@ -373,7 +378,7 @@ export default class JpRadio {
     if (this.prg !== null) {
       this.logger.info('JP_Radio::JpRadio.#pgupdate: Updating program listings...');
       if (whenBoot === true) {
-        this.commandRouter.pushToastMessage('info', 'JP Radio', '番組データ：取得中...');
+        this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('PROGRAM_DATA_GETTING'));
       }
 
       // TODO: 設定画面で取得エリアを絞り込めるようにしたい
@@ -397,7 +402,11 @@ export default class JpRadio {
       const processingTime = updateEndTime.getTime() - updateStartTime.getTime();
 
       if (whenBoot === true) {
-        this.commandRouter.pushToastMessage('success', 'JP Radio', `番組データ：取得完了！ ${processingTime}ms`);
+        this.commandRouter.pushToastMessage(
+          'success',
+          messageCatalog.get('APP_TITLE'),
+          messageCatalog.get('PROGRAM_DATA_DONE', processingTime),
+        );
       }
 
       this.logger.info(`JP_Radio::JpRadio.#pgupdate: complete. ### ${processingTime}ms ###`);

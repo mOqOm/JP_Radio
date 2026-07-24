@@ -1,30 +1,30 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import { createLoginAccount } from '@/logic/auth';
 
-test('createLoginAccount: user/passが両方有効ならLoginAccountを返す', () => {
-  assert.deepEqual(createLoginAccount('user@example.com', 'pass1234'), {
-    mail: 'user@example.com',
-    pass: 'pass1234',
+describe('createLoginAccount', () => {
+  it('user/passが両方有効ならLoginAccountを返す', () => {
+    expect(createLoginAccount('user@example.com', 'pass1234')).toEqual({
+      mail: 'user@example.com',
+      pass: 'pass1234',
+    });
   });
-});
 
-test('createLoginAccount: radikoUserが未指定ならnull', () => {
-  assert.equal(createLoginAccount(undefined, 'pass1234'), null);
-});
+  it('radikoUserが未指定ならnull', () => {
+    expect(createLoginAccount(undefined, 'pass1234')).toBeNull();
+  });
 
-test('createLoginAccount: radikoPassが未指定ならnull', () => {
-  assert.equal(createLoginAccount('user@example.com', undefined), null);
-});
+  it('radikoPassが未指定ならnull', () => {
+    expect(createLoginAccount('user@example.com', undefined)).toBeNull();
+  });
 
-test('createLoginAccount: radikoUserが空文字ならnull', () => {
-  assert.equal(createLoginAccount('', 'pass1234'), null);
-});
+  it('radikoUserが空文字ならnull', () => {
+    expect(createLoginAccount('', 'pass1234')).toBeNull();
+  });
 
-test('createLoginAccount: radikoPassが空文字ならnull', () => {
-  assert.equal(createLoginAccount('user@example.com', ''), null);
-});
+  it('radikoPassが空文字ならnull', () => {
+    expect(createLoginAccount('user@example.com', '')).toBeNull();
+  });
 
-test('createLoginAccount: 両方未指定ならnull', () => {
-  assert.equal(createLoginAccount(undefined, undefined), null);
+  it('両方未指定ならnull', () => {
+    expect(createLoginAccount(undefined, undefined)).toBeNull();
+  });
 });

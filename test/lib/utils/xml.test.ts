@@ -1,21 +1,21 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import { toArray } from '@/utils/xml';
 
-test('toArray: 配列はそのまま返す', () => {
-  const input = [{ id: '1' }, { id: '2' }];
-  assert.deepEqual(toArray(input), input);
-});
+describe('toArray', () => {
+  it('配列はそのまま返す', () => {
+    const input = [{ id: '1' }, { id: '2' }];
+    expect(toArray(input)).toEqual(input);
+  });
 
-test('toArray: 単一オブジェクトは配列に包む', () => {
-  const input = { id: '1' };
-  assert.deepEqual(toArray(input), [input]);
-});
+  it('単一オブジェクトは配列に包む', () => {
+    const input = { id: '1' };
+    expect(toArray(input)).toEqual([input]);
+  });
 
-test('toArray: undefinedは空配列にする', () => {
-  assert.deepEqual(toArray(undefined), []);
-});
+  it('undefinedは空配列にする', () => {
+    expect(toArray(undefined)).toEqual([]);
+  });
 
-test('toArray: 空配列はそのまま空配列', () => {
-  assert.deepEqual(toArray([]), []);
+  it('空配列はそのまま空配列', () => {
+    expect(toArray([])).toEqual([]);
+  });
 });
