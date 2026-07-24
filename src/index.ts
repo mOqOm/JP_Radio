@@ -1,9 +1,11 @@
+import path from 'path';
 import libQ from 'kew';
 import VConf from 'v-conf';
 import JpRadio from '@/controllers/radio-controller';
 import { BrowseResult } from '@/models/browse-result-model';
 import { createLoginAccount } from '@/logic/auth';
 import { messageCatalog } from '@/utils/message-catalog';
+import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
 
 export = ControllerJpRadio;
 
@@ -202,9 +204,9 @@ class ControllerJpRadio {
     const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
     this.commandRouter.i18nJson(
-      `${__dirname}/../i18n/strings_${langCode}.json`,
-      `${__dirname}/../i18n/strings_en.json`,
-      `${__dirname}/../UIConfig.json`
+      path.join(I18N_DIR, `strings_${langCode}.json`),
+      path.join(I18N_DIR, 'strings_en.json'),
+      UI_CONFIG_PATH
     )
       .then((uiconf: any) => {
         const servicePort = this.config!.get('servicePort');
