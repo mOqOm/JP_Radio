@@ -8,6 +8,8 @@ import {
   formatHourMinute,
   toMinutePrecision,
   getTimeSpan,
+  isWithinTimefreeWindow,
+  revCnvRadioTime,
 } from '@/utils/radio-time';
 
 describe('parseRadioTime', () => {
@@ -29,6 +31,22 @@ describe('cnvRadioTime', () => {
   it('深夜0:00~5:00は前日日付+24時間表記になる', () => {
     // 2025/09/01 02:30:00 は「ラジオ日付」的には2025/08/31の26:30:00として扱う
     expect(cnvRadioTime('20250901023000', '20250831')).toBe('20250831263000');
+  });
+});
+
+describe('revCnvRadioTime', () => {
+  it('24時以降の表記を翌日の実時刻に戻す', () => {
+    expect(revCnvRadioTime('20250831263000')).toBe('20250901023000');
+  });
+
+  it('23時台以前はそのまま(既に実時刻)', () => {
+    expect(revCnvRadioTime('20250831120000')).toBe('20250831120000');
+  });
+
+  it('cnvRadioTimeの逆変換になっている', () => {
+    const original = '20250901023000';
+    const radioTime = cnvRadioTime(original, '20250831');
+    expect(revCnvRadioTime(radioTime)).toBe(original);
   });
 });
 
@@ -61,6 +79,20 @@ describe('getTimeSpan', () => {
 
   it('endがbeginより前ならマイナスを返す', () => {
     expect(getTimeSpan('06:00:00', '05:00:00')).toBe(-3600);
+  });
+});
+
+describe('isWithinTimefreeWindow', () => {
+  it('既に放送開始済みの番組はtrue', () => {
+    expect(isWithinTimefreeWindow('20250831050000', '20250831120000')).toBe(true);
+  });
+
+  it('放送開始時刻と現在時刻が同じならtrue', () => {
+    expect(isWithinTimefreeWindow('20250831120000', '20250831120000')).toBe(true);
+  });
+
+  it('まだ放送されていない(未来の)番組はfalse', () => {
+    expect(isWithinTimefreeWindow('20250901050000', '20250831120000')).toBe(false);
   });
 });
 

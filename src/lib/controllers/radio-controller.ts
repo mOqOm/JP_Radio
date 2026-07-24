@@ -7,8 +7,9 @@ import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-resul
 import type { StationInfo } from '@/models/station-model';
 import type { LoginAccount } from '@/models/auth-model';
 import type { TrackMeta } from '@/models/track-meta-model';
+import type { TimefreeQuery } from '@/models/timefree-query-model';
 
-import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan } from '@/utils/radio-time';
+import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan, isWithinTimefreeWindow } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
 
@@ -115,16 +116,32 @@ export default class JpRadio {
         return;
       }
 
+      const ft = req.query['ft'];
+      const to = req.query['to'];
+      let timefreeQuery: TimefreeQuery | undefined;
+      if (typeof ft === 'string' && typeof to === 'string') {
+        timefreeQuery = { ft, to };
+      } else {
+        timefreeQuery = undefined;
+      }
+
       const session = new StreamSession(
         this.rdk,
         this.station,
         this.logger,
         () => {
-          // max60sも待ちたくないのですぐ呼ぶ
-          setTimeout(this.#pushSongState.bind(this), 3000);
-          this.task2.start();
+          if (timefreeQuery === undefined) {
+            // max60sも待ちたくないのですぐ呼ぶ
+            setTimeout(this.#pushSongState.bind(this), 3000);
+            this.task2.start();
+          }
         },
-        () => this.task2.stop(),
+        () => {
+          if (timefreeQuery === undefined) {
+            this.task2.stop();
+          }
+        },
+        timefreeQuery,
       );
       session.start(res);
     });
@@ -178,6 +195,38 @@ export default class JpRadio {
 
       }
     }
+  }
+
+  /**
+   * ルートメニュー(ライブ/タイムフリーの2項目)を返す。各項目は`radio-category`型で、
+   * 選択すると{@link radioStations}/{@link timefreeStations}へ遷移する。
+   */
+  async rootMenu(): Promise<BrowseResult> {
+    const items: BrowseItem[] = [
+      {
+        service: this.serviceName,
+        type: 'radio-category',
+        title: messageCatalog.get('BROWSE_LABEL_LIVE'),
+        uri: 'radiko/live',
+      },
+      {
+        service: this.serviceName,
+        type: 'radio-category',
+        title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+        uri: 'radiko/timefree',
+      },
+    ];
+
+    return {
+      navigation: {
+        lists: [{
+          title: messageCatalog.get('APP_TITLE'),
+          availableListViews: ['list'],
+          items
+        }]
+      },
+      uri: 'radiko'
+    };
   }
 
   /**
@@ -256,17 +305,167 @@ export default class JpRadio {
   }
 
   /**
+   * タイムフリー用の局一覧をVolumioのBrowse画面用データに変換して返す。
+   * 各アイテムは`radio-category`型(直接再生ではなく再度ブラウズを呼び出す)にし、
+   * 選択すると{@link stationTimetable}で番組一覧に遷移する。
+   */
+  async timefreeStations(): Promise<BrowseResult> {
+    this.logger.info('JP_Radio::JpRadio.timefreeStations');
+
+    if (this.rdk?.stations === undefined) {
+      return {
+        navigation: {
+          lists: [{
+            title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+            availableListViews: ['grid', 'list'],
+            items: []
+          }]
+        },
+        uri: 'radiko'
+      };
+    }
+
+    const grouped: Record<string, BrowseItem[]> = {};
+    for (const [stationId, stationInfo] of this.rdk.stations.entries()) {
+      const areaName = stationInfo.areaKanji || stationInfo.areaName;
+      const item: BrowseItem = {
+        service: this.serviceName,
+        type: 'radio-category',
+        title: stationInfo.name,
+        artist: `${areaName} / ${stationInfo.name}`,
+        albumart: stationInfo.bannerUrl,
+        uri: `radiko/timetable/${stationId}`,
+        samplerate: '',
+        bitdepth: 0,
+        channels: 0
+      };
+      const region = stationInfo.regionName || 'その他';
+      if (grouped[region] === undefined) {
+        grouped[region] = [];
+      }
+      grouped[region].push(item);
+    }
+
+    const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
+      title: regionName,
+      availableListViews: ['grid', 'list'],
+      items
+    }));
+
+    return {
+      navigation: {
+        lists
+      },
+      uri: 'radiko'
+    };
+  }
+
+  /**
+   * 指定局のタイムフリー番組一覧(既に放送開始済みのもののみ、新しい順)をBrowse画面用データに変換して返す。
+   */
+  async stationTimetable(stationId: string): Promise<BrowseResult> {
+    this.logger.info(`JP_Radio::JpRadio.stationTimetable: stationId=${stationId}`);
+
+    const stationInfo = this.rdk?.stations.get(stationId);
+    let stationName = stationInfo?.name;
+    if (stationName === undefined) {
+      stationName = stationId;
+    }
+
+    let programs = await this.prg?.getStationPrograms(stationId);
+    if (programs === undefined) {
+      programs = [];
+    }
+
+    const currentRadioTime = getCurrentRadioTime();
+    const items: BrowseItem[] = programs
+      .filter((program) => isWithinTimefreeWindow(program.ft, currentRadioTime))
+      .sort((a, b) => {
+        if (a.ft < b.ft) {
+          return 1;
+        }
+        return -1;
+      })
+      .map((program) => {
+        const t0 = formatHourMinute(program.ft);
+        const t1 = formatHourMinute(program.tt);
+        const playUrl = new URL(`http://localhost:${this.port}/radiko/play/${stationId}`);
+        playUrl.searchParams.set('ft', program.ft);
+        playUrl.searchParams.set('to', program.tt);
+
+        let albumart = program.img;
+        if (albumart === '' || albumart === undefined) {
+          albumart = stationInfo?.bannerUrl;
+          if (albumart === undefined) {
+            albumart = '';
+          }
+        }
+
+        const item: BrowseItem = {
+          service: this.serviceName,
+          type: 'song',
+          title: program.title,
+          album: program.pfm,
+          artist: `${stationName} ${t0}-${t1}`,
+          albumart,
+          uri: playUrl.toString(),
+          samplerate: '',
+          bitdepth: 0,
+          channels: 0
+        };
+        return item;
+      });
+
+    return {
+      navigation: {
+        lists: [{
+          title: stationName,
+          availableListViews: ['grid', 'list'],
+          items
+        }]
+      },
+      uri: `radiko/timetable/${stationId}`
+    };
+  }
+
+  /**
    * 指定局IDの現在のトラック情報を返す(explodeUriから呼ばれる)。
    * URIには局IDのみを載せ、タイトルやアルバムアートなどの表示用メタデータは
    * 再生選択のたびにここで最新の状態を取得し直す(長い日本語テキストをURIに含めないため)。
+   * @param timefreeQuery 指定するとタイムフリー再生時の番組情報を、指定しなければ現在放送中の情報を返す。
    * @returns 局が存在しない場合はnull。
    */
-  async getTrackMeta(stationId: string): Promise<TrackMeta | null> {
+  async getTrackMeta(stationId: string, timefreeQuery?: TimefreeQuery): Promise<TrackMeta | null> {
     const stationInfo = this.rdk?.stations.get(stationId);
     if (stationInfo === undefined) {
       return null;
     }
+    if (timefreeQuery !== undefined) {
+      return this.#buildTimefreeTrackMeta(stationId, stationInfo, timefreeQuery);
+    }
     return this.#buildTrackMeta(stationId, stationInfo);
+  }
+
+  /**
+   * 指定局・指定区間のタイムフリー番組情報を組み立てる。DBに該当番組が見つからない場合は
+   * タイトル等を空のまま返す(URIのft/toから放送時間だけは表示できるようにする)。
+   */
+  async #buildTimefreeTrackMeta(stationId: string, stationInfo: StationInfo, query: TimefreeQuery): Promise<TrackMeta> {
+    const program = await this.prg?.findProgram(stationId, query.ft);
+    let title = '';
+    let album = '';
+    let img = '';
+    if (program !== undefined) {
+      title = program.title;
+      album = program.pfm;
+      img = program.img;
+    }
+    const areaName = stationInfo.areaKanji || stationInfo.areaName;
+    const t0 = formatHourMinute(query.ft);
+    const t1 = formatHourMinute(query.to);
+    const albumart = img || stationInfo.bannerUrl || '';
+    const artist = `${areaName} / ${stationInfo.name} ${t0}-${t1}`;
+    return { title, album, artist, albumart };
   }
 
   /**

@@ -6,6 +6,7 @@ import { BrowseResult } from '@/models/browse-result-model';
 import { createLoginAccount } from '@/logic/auth';
 import { messageCatalog } from '@/utils/message-catalog';
 import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
+import type { TimefreeQuery } from '@/models/timefree-query-model';
 
 export = ControllerJpRadio;
 
@@ -255,29 +256,49 @@ class ControllerJpRadio {
   }
 
   /**
-   * BrowseメニューでURIが選択された際に呼ばれ、局一覧({@link JpRadio.radioStations})を返す。
+   * BrowseメニューでURIが選択された際に呼ばれ、対応するブラウズ結果を返す。
+   * `radiko` → ルートメニュー(ライブ/タイムフリー)、`radiko/live` → {@link JpRadio.radioStations}、
+   * `radiko/timefree` → {@link JpRadio.timefreeStations}、
+   * `radiko/timetable/<stationId>` → {@link JpRadio.stationTimetable}。
    */
   handleBrowseUri(curUri: string): Promise<BrowseResult | Record<string, never>> {
     const defer = libQ.defer();
     const [baseUri] = curUri.split('?');
 
+    const appRadio = this.appRadio;
+    if (appRadio === null) {
+      this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
+      defer.resolve({});
+      return defer.promise;
+    }
+
+    const segments = baseUri.split('/');
+    let task: Promise<BrowseResult> | null;
     if (baseUri === 'radiko') {
-      if (this.appRadio === null) {
-        this.logger.error('[JP_Radio] handleBrowseUri !this.appRadio');
-        defer.resolve({});
-      } else {
-        libQ.resolve()
-          .then(() => this.appRadio!.radioStations())
-          .then((result: any) => defer.resolve(result))
-          .fail((error: any) => {
-            this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
-            defer.reject(error);
-          });
-      }
+      task = appRadio.rootMenu();
+    } else if (baseUri === 'radiko/live') {
+      task = appRadio.radioStations();
+    } else if (baseUri === 'radiko/timefree') {
+      task = appRadio.timefreeStations();
+    } else if (segments[0] === 'radiko' && segments[1] === 'timetable' && segments[2] !== undefined) {
+      task = appRadio.stationTimetable(segments[2]);
     } else {
+      task = null;
+    }
+
+    if (task === null) {
       this.logger.error('[JP_Radio] handleBrowseUri else');
       defer.resolve({});
+      return defer.promise;
     }
+
+    libQ.resolve()
+      .then(() => task)
+      .then((result: any) => defer.resolve(result))
+      .fail((error: any) => {
+        this.logger.error('[JP_Radio] handleBrowseUri error: ' + error);
+        defer.reject(error);
+      });
 
     return defer.promise;
   }
@@ -352,24 +373,35 @@ class ControllerJpRadio {
    * clearAddPlayTrackが要求するトラック情報オブジェクトに展開する。
    * タイトルやアルバムアートなどの表示用メタデータはURIに含めず、{@link JpRadio.getTrackMeta}で都度取得し直す
    * (長い日本語テキストや画像URLをそのままURIに埋め込みたくないため)。
+   * タイムフリー再生時は`?ft=&to=`クエリで放送区間を受け取る。
    */
   explodeUri(uri: string): Promise<any> {
     this.logger.info(`JP_Radio::explodeUri: uri=${uri}`);
     const defer = libQ.defer();
 
-    // uri=http://localhost:9000/radiko/play/FMT
-    //      0   1        2         3     4    5
-    const uris = uri.split('/');
-    const serviceId = uris[3];
-    const stationId = uris[5];
+    // uri=http://localhost:9000/radiko/play/FMT[?ft=...&to=...]
+    const parsedUri = new URL(uri);
+    const segments = parsedUri.pathname.split('/');
+    const serviceId = segments[1];
+    const stationId = segments[3];
+    const ft = parsedUri.searchParams.get('ft');
+    const to = parsedUri.searchParams.get('to');
 
-    if (serviceId !== 'radiko' || this.appRadio === null) {
+    const appRadio = this.appRadio;
+    if (serviceId !== 'radiko' || appRadio === null) {
       defer.resolve();
       return defer.promise;
     }
 
+    let timefreeQuery: TimefreeQuery | undefined;
+    if (ft !== null && to !== null) {
+      timefreeQuery = { ft, to };
+    } else {
+      timefreeQuery = undefined;
+    }
+
     libQ.resolve()
-      .then(() => this.appRadio!.getTrackMeta(stationId))
+      .then(() => appRadio.getTrackMeta(stationId, timefreeQuery))
       .then((meta: any) => {
         if (meta === null) {
           defer.resolve({});

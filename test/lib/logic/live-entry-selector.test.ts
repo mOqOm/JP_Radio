@@ -43,4 +43,18 @@ describe('selectLiveEntry', () => {
     const entries = [{ '@timefree': '1', '@areafree': '1', url: 'timefree' }];
     expect(selectLiveEntry(entries, true)).toBeUndefined();
   });
+
+  it('timefree=1を指定するとタイムフリー配信を選ぶ', () => {
+    const entries = [
+      { '@timefree': '0', '@areafree': '0', url: 'live' },
+      { '@timefree': '1', '@areafree': '0', url: 'timefree-free' },
+      { '@timefree': '1', '@areafree': '1', url: 'timefree-premium' },
+    ];
+    expect(selectLiveEntry(entries, true, '1').url).toBe('timefree-premium');
+  });
+
+  it('timefree=1でライブ配信しかなければundefinedを返す', () => {
+    const entries = [{ '@timefree': '0', '@areafree': '0', url: 'live' }];
+    expect(selectLiveEntry(entries, true, '1')).toBeUndefined();
+  });
 });

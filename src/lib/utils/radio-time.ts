@@ -1,4 +1,5 @@
 import { format } from 'date-fns-tz';
+import { parse, addDays, format as formatDate } from 'date-fns';
 
 /** Radikoの番組表・配信はJST基準のため、サーバのシステムタイムゾーンによらずJSTで統一する。 */
 const TIME_ZONE = 'Asia/Tokyo';
@@ -90,6 +91,22 @@ export function cnvRadioTime(src: string, today: string): string {
 }
 
 /**
+ * {@link cnvRadioTime}の逆変換。`24:00`～`29:00`表記を翌日の`00:00`～`05:00`の実時刻表記に戻す。
+ * Radiko APIのタイムフリー再生パラメータ(`start_at`/`ft`/`end_at`/`to`)は実時刻表記を要求するため使う。
+ */
+export function revCnvRadioTime(src: string): string {
+  const parts = parseRadioTime(src);
+  const hourNum = Number(parts.hour);
+  if (hourNum < 24) {
+    return src;
+  }
+  const baseDate = parse(parts.date, 'yyyyMMdd', new Date());
+  const nextDate = formatDate(addDays(baseDate, 1), 'yyyyMMdd');
+  const hour = String(hourNum - 24).padStart(2, '0');
+  return nextDate + hour + parts.minute + parts.second;
+}
+
+/**
  * `'yyyyMMddHHmmss'` => `'HH:mm:ss'`
  */
 export function formatTimeString(t: string): string {
@@ -124,4 +141,15 @@ function toSeconds(t: string): number {
  */
 export function getTimeSpan(begin: string, end: string): number {
   return toSeconds(end) - toSeconds(begin);
+}
+
+/**
+ * 番組がタイムフリーで再生可能(=既に放送開始済み)かどうかを判定する。
+ * `ft`/`currentRadioTime`はどちらも{@link cnvRadioTime}で正規化された`'yyyyMMddHHmmss'`文字列
+ * (日付+時刻が矛盾なく連動している)なので、単純な文字列比較で時系列の前後関係を判定できる。
+ * 「タイムフリーとして古すぎないか(7日以内か)」は、番組データの取得元である
+ * `PROG_WEEKLY_STATION_URL`自体が前後1週間分しか返さないため、ここでは判定しない。
+ */
+export function isWithinTimefreeWindow(ft: string, currentRadioTime: string): boolean {
+  return ft <= currentRadioTime;
 }

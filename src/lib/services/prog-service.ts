@@ -4,7 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
-import { PROG_DATE_AREA_URL } from '@/consts/radiko-urls';
+import { PROG_DATE_AREA_URL, PROG_WEEKLY_STATION_URL } from '@/consts/radiko-urls';
 import type { RadikoProgramData } from '@/models/radiko-program-model';
 import type { RadikoXMLData } from '@/models/radiko-xml-station-model';
 import type { StationInfo } from '@/models/station-model';
@@ -30,6 +30,11 @@ const EMPTY_PROGRAM: RadikoProgramData = {
 export default class RdkProg {
   private readonly logger: Console;
   private readonly db = Datastore.create({ inMemoryOnly: true });
+  private readonly xmlParser = new XMLParser({
+    attributeNamePrefix: '@',
+    ignoreAttributes: false,
+    allowBooleanAttributes: true,
+  });
 
   private lastStation = '';
   private lastTime = '';
@@ -74,6 +79,23 @@ export default class RdkProg {
       return this.cachedProgram;
     }
     return undefined;
+  }
+
+  /**
+   * 指定局・指定放送開始時刻(`ft`)に一致する番組をDBから検索する。
+   * タイムフリー再生時に、URIで指定された`ft`から番組のタイトル等を引くために使う。
+   */
+  async findProgram(station: string, ft: string): Promise<RadikoProgramData | undefined> {
+    try {
+      const result: RadikoProgramData | null = await this.db.findOne({ station, ft });
+      if (result !== null) {
+        return result;
+      }
+      return undefined;
+    } catch (error: any) {
+      this.logger.error(`JP_Radio::DB find error for station ${station}, ft ${ft}`, error);
+      return undefined;
+    }
   }
 
   /**
@@ -123,12 +145,6 @@ export default class RdkProg {
     }
     this.logger.info(`JP_Radio::RdkProg.updatePrograms: [${bootOrCron}] ${currentDate}`);
 
-    const parser = new XMLParser({
-      attributeNamePrefix: '@',
-      ignoreAttributes: false,
-      allowBooleanAttributes: true,
-    });
-
     const limit = pLimit(5);
     const doneAreaFree = new Set<string>();
 
@@ -137,7 +153,7 @@ export default class RdkProg {
         const url = utilFormat(PROG_DATE_AREA_URL, currentDate, areaId);
         try {
           const response = await got(url);
-          const xmlData: RadikoXMLData = parser.parse(response.body);
+          const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
           const stations = toArray(xmlData?.radiko?.stations?.station);
 
           for (const stationData of stations) {
@@ -194,6 +210,53 @@ export default class RdkProg {
     );
 
     await Promise.all(tasks);
+  }
+
+  /**
+   * 指定局の前後1週間分(`PROG_WEEKLY_STATION_URL`)の番組表を取得し、DBへ保存した上で配列として返す。
+   * タイムフリーのブラウズ一覧を組み立てるために使う。
+   * 週次レスポンスは日ごとに`progs`ブロックが分かれているため、`updatePrograms`と同様に
+   * 各ブロックの先頭番組の日付をその日の基準日として個別に`cnvRadioTime`で正規化する。
+   */
+  async getStationPrograms(stationId: string): Promise<RadikoProgramData[]> {
+    const url = utilFormat(PROG_WEEKLY_STATION_URL, stationId);
+    const programs: RadikoProgramData[] = [];
+    try {
+      const response = await got(url);
+      const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
+      const stations = toArray(xmlData?.radiko?.stations?.station);
+
+      for (const stationData of stations) {
+        const progsBlocks = toArray(stationData.progs);
+        for (const block of progsBlocks) {
+          const progs = toArray(block?.prog);
+          if (progs.length === 0) {
+            continue;
+          }
+          const today = parseRadioTime(progs[0]['@ft']).date;
+          for (const prog of progs) {
+            let pfm = prog['pfm'];
+            if (pfm === undefined) {
+              pfm = '';
+            }
+            const program: RadikoProgramData = {
+              station: String(stationId),
+              id: stationId + prog['@id'],
+              ft: cnvRadioTime(prog['@ft'], today),
+              tt: cnvRadioTime(prog['@to'], today),
+              title: prog['title'],
+              pfm,
+              img: prog['img'],
+            };
+            programs.push(program);
+            await this.putProgram(program);
+          }
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`JP_Radio::Failed to get station programs for ${stationId}`, error);
+    }
+    return programs;
   }
 
   /**

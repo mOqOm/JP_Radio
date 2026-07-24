@@ -1,11 +1,14 @@
 import type { Response } from 'express';
 import type { ChildProcess } from 'child_process';
 import Radiko from './radiko-service';
+import type { TimefreeQuery } from '@/models/timefree-query-model';
 
 /**
  * 1回分の再生リクエストに対するffmpegプロセスのライフサイクルを管理する。
- * Radiko側のライブHLSプレイリスト更新の都合でffmpegが数十秒おきに正常終了(code=0)してしまうことがあるため、
- * クライアント(MPD)が接続を切っていない限り同じ局へ自動的に繋ぎ直す。
+ * ライブ配信は、Radiko側のライブHLSプレイリスト更新の都合でffmpegが数十秒おきに正常終了(code=0)
+ * してしまうことがあるため、クライアント(MPD)が接続を切っていない限り同じ局へ自動的に繋ぎ直す。
+ * タイムフリー(`timefreeQuery`指定時)は有限のクリップなので、ffmpegが終了したらそこで再生終了とし、
+ * ライブのような自動再接続は行わない。
  */
 export default class StreamSession {
   private stopped = false;
@@ -18,6 +21,7 @@ export default class StreamSession {
     private readonly logger: Console,
     private readonly onFirstStreamStarted: () => void,
     private readonly onStopped: () => void,
+    private readonly timefreeQuery?: TimefreeQuery,
   ) { }
 
   /**
@@ -65,7 +69,7 @@ export default class StreamSession {
     }
 
     try {
-      const ffmpeg = await this.rdk.play(this.station);
+      const ffmpeg = await this.rdk.play(this.station, this.timefreeQuery);
 
       if (ffmpeg === null || ffmpeg.stdout === null) {
         this.logger.error('JP_Radio::StreamSession: ffmpeg start failed or stdout is null');
@@ -79,10 +83,19 @@ export default class StreamSession {
 
       ffmpeg.on('exit', (code, signal) => {
         this.logger.info(`JP_Radio::StreamSession: ffmpeg process ${ffmpeg.pid} exited. code=${code} signal=${signal}`);
-        if (this.stopped === false) {
-          this.logger.info('JP_Radio::StreamSession: stream still connected, restarting ffmpeg');
-          setTimeout(() => this.#spawnFfmpeg(res), 500);
+        if (this.stopped === true) {
+          return;
         }
+        if (this.timefreeQuery !== undefined) {
+          // タイムフリーは有限のクリップなので、ffmpeg終了=再生終了として扱い、ライブのような再接続はしない
+          this.logger.info('JP_Radio::StreamSession: timefree stream finished');
+          this.stopped = true;
+          this.onStopped();
+          res.end();
+          return;
+        }
+        this.logger.info('JP_Radio::StreamSession: stream still connected, restarting ffmpeg');
+        setTimeout(() => this.#spawnFfmpeg(res), 500);
       });
       ffmpeg.stderr?.on('data', (chunk: Buffer) => {
         this.logger.error(`JP_Radio::StreamSession: ffmpeg stderr: ${chunk.toString().trim()}`);

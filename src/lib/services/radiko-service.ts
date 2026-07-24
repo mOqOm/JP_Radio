@@ -13,13 +13,15 @@ import type { LoginAccount, LoginState } from '@/models/auth-model';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
-  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY,
+  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIMEFREE_QUERY,
   AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL,
   RADIKO_APP_HEADERS
 } from '@/consts/radiko-urls';
 
 import { AREA_KANJI } from '@/consts/area-name';
 import { selectLiveEntry } from '@/logic/live-entry-selector';
+import { revCnvRadioTime } from '@/utils/radio-time';
+import type { TimefreeQuery } from '@/models/timefree-query-model';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -310,8 +312,9 @@ export default class Radiko {
    * 指定局のライブストリームURLを解決し、ffmpegでAAC(ADTS)に変換しながらstdoutへ流すプロセスを起動する。
    * トークン取得・プレイリスト解決に失敗した場合は`MAX_RETRY_COUNT`回までトークンを取り直して再試行する。
    * @returns 起動したffmpegの{@link ChildProcess}。局が存在しない/解決失敗の場合はnull。
+   * @param timefreeQuery 指定するとタイムフリー再生(過去の番組)を、指定しなければライブ再生を行う。
    */
-  async play(station: string): Promise<ChildProcess | null> {
+  async play(station: string, timefreeQuery?: TimefreeQuery): Promise<ChildProcess | null> {
     this.logger.info(`JP_Radio::Radiko.play station=>${station}`);
     if (this.stations?.has(station) === false) {
       this.logger.warn(`JP_Radio::Station not found: ${station}`);
@@ -323,7 +326,12 @@ export default class Radiko {
       if (this.token === null) {
         [this.token, this.areaId] = await this.getToken();
       }
-      const playlistUrl = await this.getLivePlaylistUrl(station);
+      let playlistUrl: string | null;
+      if (timefreeQuery !== undefined) {
+        playlistUrl = await this.getTimefreePlaylistUrl(station, timefreeQuery);
+      } else {
+        playlistUrl = await this.getLivePlaylistUrl(station);
+      }
       if (playlistUrl !== null) {
         m3u8 = await this.genTempChunkM3u8URL(playlistUrl, this.token);
       }
@@ -399,6 +407,34 @@ export default class Radiko {
       return createUrl + format(PLAY_LIVE_QUERY, station, lsid);
     } catch (error: any) {
       this.logger.error('JP_Radio::getLivePlaylistUrl error', error);
+      return null;
+    }
+  }
+
+  /**
+   * 局ごとのstream XML(`STATION_STREAM_XML_URL`)からタイムフリー配信用`playlist_create_url`を選び、
+   * lsidと再生区間(`start_at`/`ft`/`end_at`/`to`)を付与したURLを組み立てる。
+   * Radiko APIには実時刻表記が必要なため、ラジオ時間(24-29時表記)は{@link revCnvRadioTime}で実時刻に戻す。
+   */
+  private async getTimefreePlaylistUrl(station: string, query: TimefreeQuery): Promise<string | null> {
+    try {
+      const res = await got(format(STATION_STREAM_XML_URL, station));
+      const parsed = xmlParser.parse(res.body);
+      const rawEntries = parsed?.urls?.url;
+      const chosen = selectLiveEntry(rawEntries, this.loginState !== null, '1');
+
+      const createUrl = chosen?.playlist_create_url;
+      if (createUrl === undefined) {
+        this.logger.error(`JP_Radio::getTimefreePlaylistUrl: no playlist_create_url found for ${station}`);
+        return null;
+      }
+
+      const lsid = randomBytes(16).toString('hex');
+      const ft = revCnvRadioTime(query.ft);
+      const to = revCnvRadioTime(query.to);
+      return createUrl + format(PLAY_TIMEFREE_QUERY, station, ft, ft, to, to, lsid);
+    } catch (error: any) {
+      this.logger.error('JP_Radio::getTimefreePlaylistUrl error', error);
       return null;
     }
   }
