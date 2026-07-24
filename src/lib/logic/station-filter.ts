@@ -1,4 +1,4 @@
-import type { StationInfo } from '../models/station-model';
+import type { StationInfo } from '@/models/station-model';
 
 /**
  * 指定エリアの番組表取得において、この局を処理対象とすべきかを判定する。

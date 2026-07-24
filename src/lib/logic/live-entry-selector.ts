@@ -1,4 +1,4 @@
-import { toArray } from '../utils/xml';
+import { toArray } from '@/utils/xml';
 
 /**
  * 局ごとのstream XMLから得られる配信エントリ一覧(単一オブジェクト/配列/未定義のいずれか)から、

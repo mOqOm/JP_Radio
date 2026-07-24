@@ -8,18 +8,18 @@ import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 
-import type { StationInfo, RegionData } from '../models/station-model';
-import type { LoginAccount, LoginState } from '../models/auth-model';
+import type { StationInfo, RegionData } from '@/models/station-model';
+import type { LoginAccount, LoginState } from '@/models/auth-model';
 import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
   STATION_STREAM_XML_URL, PLAY_LIVE_QUERY,
   AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL,
   RADIKO_APP_HEADERS
-} from '../consts/radiko-urls';
+} from '@/consts/radiko-urls';
 
-import { AREA_KANJI } from '../consts/area-name';
-import { selectLiveEntry } from '../logic/live-entry-selector';
+import { AREA_KANJI } from '@/consts/area-name';
+import { selectLiveEntry } from '@/logic/live-entry-selector';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',

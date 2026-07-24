@@ -1,8 +1,8 @@
 import libQ from 'kew';
 import VConf from 'v-conf';
-import JpRadio from './lib/controllers/radio-controller';
-import { BrowseResult } from './lib/models/browse-result-model';
-import { createLoginAccount } from './lib/logic/auth';
+import JpRadio from '@/controllers/radio-controller';
+import { BrowseResult } from '@/models/browse-result-model';
+import { createLoginAccount } from '@/logic/auth';
 
 export = ControllerJpRadio;
 

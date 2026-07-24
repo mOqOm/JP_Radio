@@ -1,4 +1,4 @@
-import type { LoginAccount } from '../models/auth-model';
+import type { LoginAccount } from '@/models/auth-model';
 
 /**
  * UI設定画面のRadikoアカウント情報からログインアカウントを構築する。

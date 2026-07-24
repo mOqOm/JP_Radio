@@ -1,10 +1,21 @@
 #!/bin/bash
+
+PLUGIN_DIR="/data/plugins/music_service/jp_radio"
+
+# 旧バージョンがあれば削除
+if [ -d "$PLUGIN_DIR" ]; then
+    rm -rf "$PLUGIN_DIR"
+fi
+
+# 親ディレクトリがなければ作成
+mkdir -p "$PLUGIN_DIR"
+
 cat >dist/package.json <<!EOF
 {
   "type": "commonjs"
 }
 !EOF
 
-cp -r src/UIConfig.json dist/
-cp -r src/i18n dist/
-cp -r src/assets dist/
+cp -r UIConfig.json /
+cp -r i18n /
+cp -r assets /

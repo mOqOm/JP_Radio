@@ -4,14 +4,14 @@ import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
-import { PROG_DATE_AREA_URL } from '../consts/radiko-urls';
-import type { RadikoProgramData } from '../models/radiko-program-model';
-import type { RadikoXMLData } from '../models/radiko-xml-station-model';
-import type { StationInfo } from '../models/station-model';
+import { PROG_DATE_AREA_URL } from '@/consts/radiko-urls';
+import type { RadikoProgramData } from '@/models/radiko-program-model';
+import type { RadikoXMLData } from '@/models/radiko-xml-station-model';
+import type { StationInfo } from '@/models/station-model';
 
-import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, toMinutePrecision } from '../utils/radio-time';
-import { toArray } from '../utils/xml';
-import { isStationRelevantForArea, isDuplicateAreaFreeStation } from '../logic/station-filter';
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, toMinutePrecision } from '@/utils/radio-time';
+import { toArray } from '@/utils/xml';
+import { isStationRelevantForArea, isDuplicateAreaFreeStation } from '@/logic/station-filter';
 
 const EMPTY_PROGRAM: RadikoProgramData = {
   station: '',

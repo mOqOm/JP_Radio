@@ -1,15 +1,15 @@
 import express, { Application, Request, Response } from 'express';
 import cron from 'node-cron';
-import RdkProg from '../services/prog-service';
-import Radiko from '../services/radiko-service';
-import StreamSession from '../services/stream-session-service';
-import type { BrowseItem, BrowseList, BrowseResult } from '../models/browse-result-model';
-import type { StationInfo } from '../models/station-model';
-import type { LoginAccount } from '../models/auth-model';
-import type { TrackMeta } from '../models/track-meta-model';
+import RdkProg from '@/services/prog-service';
+import Radiko from '@/services/radiko-service';
+import StreamSession from '@/services/stream-session-service';
+import type { BrowseItem, BrowseList, BrowseResult } from '@/models/browse-result-model';
+import type { StationInfo } from '@/models/station-model';
+import type { LoginAccount } from '@/models/auth-model';
+import type { TrackMeta } from '@/models/track-meta-model';
 
-import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan } from '../utils/radio-time';
-import { resolveAreaIdArray } from '../logic/area-resolver';
+import { DELAY_SEC, getCurrentRadioTime, formatTimeString, formatHourMinute, getTimeSpan } from '@/utils/radio-time';
+import { resolveAreaIdArray } from '@/logic/area-resolver';
 
 
 /**
