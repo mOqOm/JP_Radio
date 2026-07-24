@@ -202,9 +202,9 @@ class ControllerJpRadio {
     const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
 
     this.commandRouter.i18nJson(
-      `${__dirname}/i18n/strings_${langCode}.json`,
-      `${__dirname}/i18n/strings_en.json`,
-      `${__dirname}/UIConfig.json`
+      `${__dirname}/../i18n/strings_${langCode}.json`,
+      `${__dirname}/../i18n/strings_en.json`,
+      `${__dirname}/../UIConfig.json`
     )
       .then((uiconf: any) => {
         const servicePort = this.config!.get('servicePort');
@@ -248,7 +248,7 @@ class ControllerJpRadio {
       uri: 'radiko',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
-      albumart: '/albumart?sourceicon=music_service/jp_radio/dist/assets/images/app_radiko.svg'
+      albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
     });
   }
 

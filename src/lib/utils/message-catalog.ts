@@ -7,14 +7,15 @@ const CATALOG_NAMES = ['push_messages', 'browse_texts'] as const;
 
 /**
  * `i18n`ディレクトリの場所を解決する。
- * 本番ビルド後は`dist/i18n/`(このファイルから見て`../../i18n`)に配置されるが、
- * ts-node実行時(テスト等)は`src/lib/utils/`から見てプロジェクトルート直下の`i18n/`
- * (`../../../i18n`)を参照する必要があるため、両方を候補として実在する方を採用する。
+ * `i18n/`はプラグインルート(`$PLUGIN_DIR`、`dist/`と同階層)に配置される。
+ * 本番ビルド後は`dist/lib/utils/`から見て`../../../i18n`が該当し、
+ * ts-node実行時(テスト等)は`src/lib/utils/`から見た同じ`../../../i18n`(プロジェクトルート直下)が該当するため、
+ * どちらも同じ相対階層で解決できる。念のため`dist/i18n`(`../../i18n`)も候補に含めておく。
  */
 function resolveBaseDir(): string {
   const candidates = [
-    path.join(__dirname, '..', '..', 'i18n'),
     path.join(__dirname, '..', '..', '..', 'i18n'),
+    path.join(__dirname, '..', '..', 'i18n'),
   ];
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
