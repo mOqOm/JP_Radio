@@ -69,7 +69,7 @@ export default class RdkProg {
         if (result !== null) {
           this.cachedProgram = result;
         } else {
-          this.logger.error('PRG_E001', station, currentTime);
+          this.logger.warn('PRG_W001', station, currentTime);
           this.cachedProgram = { ...EMPTY_PROGRAM };
         }
 

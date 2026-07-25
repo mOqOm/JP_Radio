@@ -381,6 +381,9 @@ class ControllerJpRadio {
    * Volumio起動時に最初に呼ばれるライフサイクルメソッド。config.jsonを読み込む。
    * また、この時点で初めてVolumioの`language_code`が分かるため、messageCatalogの表示言語も
    * ここで確定させる(ブラウズラベル・トースト通知・ログメッセージがVolumioのUI言語に追従するように)。
+   * 以降、設定画面で言語が変更された場合もVolumio再起動なしに追従できるよう、
+   * `sharedVars`の`language_code`変更コールバックも登録する(Volumioコア自身が
+   * `appearance`プラグインの言語切り替え時に使っているのと同じ仕組み)。
    */
   onVolumioStart(): Promise<void> {
     this.logger.info('IDX_I035');
@@ -388,6 +391,9 @@ class ControllerJpRadio {
     try {
       const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
       messageCatalog.setLanguage(langCode);
+      this.commandRouter.sharedVars.registerCallback('language_code', (newLangCode: string) => {
+        messageCatalog.setLanguage(newLangCode || 'en');
+      });
 
       const configFile = this.commandRouter.pluginManager.getConfigurationFile(this.context, 'config.json');
       this.config = new VConf();
