@@ -3,6 +3,8 @@ Japanese radio relay server for Volumio4
 
 > **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
 
+📖 See the [Wiki](https://github.com/mOqOm/JP_Radio/wiki) for installation instructions and developer information.
+
 ## Change log
 ### version 4.1.0(2026/07/25)
 + 2026/07/25 Grouped the Time-Free timetable by date, with prev-week/prev-day/next-day/next-week navigation and on-air status icons (★on air/⬜︎not yet aired/▷playable)

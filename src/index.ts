@@ -404,18 +404,22 @@ class ControllerJpRadio {
    * `onStop`はプラグインを無効化した時にしか自動で呼ばれないため、システム終了時にも内部サーバー・
    * cronタスクを確実に停止させ、再生キューの掃除も行うようここから明示的に呼び出す。
    */
-  async onVolumioShutdown(): Promise<void> {
+  onVolumioShutdown(): Promise<void> {
     this.logger.info('IDX_I038');
-    await this.onStop();
+    const defer = libQ.defer();
+    this.onStop().then(() => defer.resolve(), (error: any) => defer.reject(error));
+    return defer.promise;
   }
 
   /**
    * Volumioのシステム再起動時に呼ばれるライフサイクルメソッド。{@link onVolumioShutdown}と同様の理由で
    * `onStop`を明示的に呼び出す。
    */
-  async onVolumioReboot(): Promise<void> {
+  onVolumioReboot(): Promise<void> {
     this.logger.info('IDX_I039');
-    await this.onStop();
+    const defer = libQ.defer();
+    this.onStop().then(() => defer.resolve(), (error: any) => defer.reject(error));
+    return defer.promise;
   }
 
   /**
@@ -498,17 +502,20 @@ class ControllerJpRadio {
    * プラグイン無効化時に呼ばれるライフサイクルメソッド。JpRadioを停止し、ブラウズソースから除去する。
    * アンインストール時もVolumioは無効化(停止)を経由してから削除するため、ここが両方をカバーする。
    */
-  async onStop(): Promise<void> {
+  onStop(): Promise<void> {
     this.logger.info('IDX_I004');
     this.removeOwnQueueItems();
-    try {
-      if (this.appRadio !== null) {
-        await this.appRadio.stop();
-      }
-    } catch (error: any) {
-      this.logger.error('IDX_E004', error);
-    }
-    this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
+    const defer = libQ.defer();
+    const stopPromise = this.appRadio !== null ? this.appRadio.stop() : Promise.resolve();
+    stopPromise
+      .catch((error: any) => {
+        this.logger.error('IDX_E004', error);
+      })
+      .then(() => {
+        this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
+        defer.resolve();
+      });
+    return defer.promise;
   }
 
   /**
