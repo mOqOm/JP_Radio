@@ -521,12 +521,14 @@ class ControllerJpRadio {
 
   /**
    * VolumioのBrowseメニューに「RADIKO」ソースを追加する。
+   * 選択時はカテゴリ選択(ルートメニュー)を挟まず、直接ライブ局一覧({@link JpRadio.radioStations})を表示する
+   * (タイムフリー/お気に入りへは、その一覧の先頭に添えたクイックナビから遷移できる)。
    */
   addToBrowseSources(): void {
     this.logger.info('IDX_I006', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
       name: 'RADIKO',
-      uri: 'radiko',
+      uri: 'radiko/live',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
       albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
