@@ -15,6 +15,16 @@ Japanese radio relay server for Volumio4
 + 2026/07/25 Added "Go to Artist"/"Go to Album" navigation from the playback screen to the timetable
 + 2026/07/25 Added a developer debug page (`/radiko/dev/`)
 + 2026/07/25 Ported Time-Free listening, Favourites, and live playback Seek display from version 3.1.0/3.0.2 (provided by [**@hirokun0413**](https://github.com/hirokun0413)) to the Volumio4 line
++ 2026/07/25 Added station name search support from Volumio's search screen
++ 2026/07/25 Added full metadata (including personality name) when adding tracks to Favourites/playlists
++ 2026/07/25 Added icons and a grid-view toggle to the root menu
++ 2026/07/25 Added program duration display to the timetable
++ 2026/07/25 Fixed station name/time range/personality info disappearing after a few seconds during Time-Free playback
++ 2026/07/25 Added a button to manually clear the station logo cache in settings
++ 2026/07/25 Fixed the play queue to be properly cleared on plugin stop/uninstall and on Volumio system shutdown/reboot
++ 2026/07/25 Made Browse mode, Time-Free playback speed, album art source, timetable display settings, and network delay compensation apply immediately without requiring a restart
++ 2026/07/25 Added automatic switch to catch-up playback of the currently airing program when seeking backward during live playback
++ 2026/07/25 Added the ability to re-register a Favourited Time-Free program for the same time slot on a different week
 ### version 4.0.1(2026/07/24)
 + 2026/07/24 Adapted to Radiko's 2026 streaming API changes, fixing live playback.
 + 2026/07/24 Fixed missing program guide data for neighboring-area stations (BAYFM78/NACK5/YFM/IBS, etc.) on non-AreaFree accounts.
