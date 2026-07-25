@@ -379,11 +379,16 @@ class ControllerJpRadio {
 
   /**
    * Volumio起動時に最初に呼ばれるライフサイクルメソッド。config.jsonを読み込む。
+   * また、この時点で初めてVolumioの`language_code`が分かるため、messageCatalogの表示言語も
+   * ここで確定させる(ブラウズラベル・トースト通知・ログメッセージがVolumioのUI言語に追従するように)。
    */
   onVolumioStart(): Promise<void> {
     this.logger.info('IDX_I035');
     const defer = libQ.defer();
     try {
+      const langCode = this.commandRouter.sharedVars.get('language_code') || 'en';
+      messageCatalog.setLanguage(langCode);
+
       const configFile = this.commandRouter.pluginManager.getConfigurationFile(this.context, 'config.json');
       this.config = new VConf();
       this.config.loadFile(configFile);
@@ -421,35 +426,48 @@ class ControllerJpRadio {
     this.logger.info('IDX_I001');
     const defer = libQ.defer();
 
-    this.mpdPlugin = this.commandRouter.pluginManager.getPlugin('music_service', 'mpd');
-
     if (this.config === null) {
       this.logger.error('IDX_E001');
       defer.reject(new Error('Config not initialized'));
       return defer.promise;
     }
 
-    const radikoUser = this.config.get('radikoUser');
-    const radikoPass = this.config.get('radikoPass');
-    const servicePort = this.config.get('servicePort');
-    const browseMode1 = this.config.get('browseMode1');
-    const browseMode2 = this.config.get('browseMode2');
-    const radikoAreaIdArray = this.getRadikoAreaIdArray();
-    const tempo = this.getConfigNumber('tempo', 1);
-    const programPeriodFrom = this.getConfigNumber('programPeriodFrom', 7);
-    const programPeriodTo = this.getConfigNumber('programPeriodTo', 0);
-    const timeFormat = this.config.get('timeFormat') || 'yyyy/MM/dd HH:mm-HH:mm';
-    const albumartType = this.config.get('albumartType') || 'type3';
-    const networkDelay = this.getConfigNumber('networkDelay', 20);
-    const account = createLoginAccount(radikoUser, radikoPass);
+    // 同期的な初期化処理(設定読み込み・JpRadioの構築)で例外が起きた場合にプラグイン全体が
+    // ハングしたりVolumioをクラッシュさせたりしないよう、try/catchで確実にdeferを解決する。
+    try {
+      this.mpdPlugin = this.commandRouter.pluginManager.getPlugin('music_service', 'mpd');
 
-    setRadioDelay(networkDelay);
+      const radikoUser = this.config.get('radikoUser');
+      const radikoPass = this.config.get('radikoPass');
+      const servicePort = this.config.get('servicePort');
+      const browseMode1 = this.config.get('browseMode1');
+      const browseMode2 = this.config.get('browseMode2');
+      const radikoAreaIdArray = this.getRadikoAreaIdArray();
+      const tempo = this.getConfigNumber('tempo', 1);
+      const programPeriodFrom = this.getConfigNumber('programPeriodFrom', 7);
+      const programPeriodTo = this.getConfigNumber('programPeriodTo', 0);
+      const timeFormat = this.config.get('timeFormat') || 'yyyy/MM/dd HH:mm-HH:mm';
+      const albumartType = this.config.get('albumartType') || 'type3';
+      const networkDelay = this.getConfigNumber('networkDelay', 20);
+      const account = createLoginAccount(radikoUser, radikoPass);
 
-    this.appRadio = new JpRadio(
-      servicePort, this.logger, account, this.commandRouter, this.serviceName,
-      browseMode1, browseMode2, radikoAreaIdArray, tempo,
-      programPeriodFrom, programPeriodTo, timeFormat, albumartType,
-    );
+      setRadioDelay(networkDelay);
+
+      this.appRadio = new JpRadio(
+        servicePort, this.logger, account, this.commandRouter, this.serviceName,
+        browseMode1, browseMode2, radikoAreaIdArray, tempo,
+        programPeriodFrom, programPeriodTo, timeFormat, albumartType,
+      );
+    } catch (error: any) {
+      this.logger.error('IDX_E002', error);
+      this.commandRouter.pushToastMessage(
+        'error',
+        messageCatalog.get('ERROR_BOOT_TITLE'),
+        error?.message || messageCatalog.get('ERROR_UNKNOWN'),
+      );
+      defer.reject(error);
+      return defer.promise;
+    }
 
     this.appRadio.start()
       .then(() => {
@@ -460,7 +478,7 @@ class ControllerJpRadio {
       .catch((error: any) => {
         this.logger.error('IDX_E002', error);
         if (error.code === 'EADDRINUSE') {
-          const message = messageCatalog.get('ERROR_PORT_IN_USE', servicePort);
+          const message = messageCatalog.get('ERROR_PORT_IN_USE', this.config!.get('servicePort'));
           this.logger.error('IDX_E003', message);
           this.commandRouter.pushToastMessage('error', messageCatalog.get('ERROR_BOOT_TITLE'), message);
         } else {
