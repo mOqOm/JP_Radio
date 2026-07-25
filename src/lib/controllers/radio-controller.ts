@@ -704,7 +704,7 @@ export default class JpRadio {
       items: [
         {
           service: this.serviceName,
-          type: 'radio-category',
+          type: 'folder',
           title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
           icon: 'fa fa-clock-o',
           albumart: linkAlbumart,
@@ -712,7 +712,7 @@ export default class JpRadio {
         },
         {
           service: this.serviceName,
-          type: 'radio-category',
+          type: 'folder',
           title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_TODAY'),
           icon: 'fa fa-calendar-check-o',
           albumart: linkAlbumart,

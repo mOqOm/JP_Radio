@@ -425,9 +425,11 @@ class ControllerJpRadio {
 
   /**
    * プラグイン無効化時に呼ばれるライフサイクルメソッド。JpRadioを停止し、ブラウズソースから除去する。
+   * アンインストール時もVolumioは無効化(停止)を経由してから削除するため、ここが両方をカバーする。
    */
   async onStop(): Promise<void> {
     this.logger.info('IDX_I004');
+    this.removeOwnQueueItems();
     try {
       if (this.appRadio !== null) {
         await this.appRadio.stop();
@@ -436,6 +438,22 @@ class ControllerJpRadio {
       this.logger.error('IDX_E004', error);
     }
     this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
+  }
+
+  /**
+   * 再生キューからこのプラグイン(`jp_radio`)が追加した項目を全て取り除く。プラグインを停止・アンインストール
+   * すると局を再生できなくなるため、キューに再生不能な項目を残さないようにする({@link onStop}から呼ばれる)。
+   */
+  private removeOwnQueueItems(): void {
+    const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
+    const filteredQueue = arrayQueue.filter((item: any) => item.service !== this.serviceName);
+    if (filteredQueue.length === arrayQueue.length) {
+      return;
+    }
+    this.logger.info('IDX_I026', arrayQueue.length - filteredQueue.length);
+    this.commandRouter.stateMachine.playQueue.arrayQueue = filteredQueue;
+    this.commandRouter.stateMachine.playQueue.saveQueue();
+    this.commandRouter.volumioPushQueue(filteredQueue);
   }
 
   /**
