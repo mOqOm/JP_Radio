@@ -15,6 +15,7 @@
             <button class="tab-button active" data-tab="stations">放送局一覧</button>
             <button class="tab-button" data-tab="with-program">現在の番組</button>
             <button class="tab-button" data-tab="programs">番組表</button>
+            <button class="tab-button" data-tab="browse">Browse URIテスト</button>
         </nav>
     </header>
 
@@ -60,6 +61,29 @@
             </div>
             <div id="programsList" class="programs-list"></div>
         </div>
+
+        <!-- Browse URIテストタブ -->
+        <div id="browse-tab" class="tab-content">
+            <div class="programs-controls">
+                <div class="station-selector">
+                    <label for="browseUriPreset">よく使うURI:</label>
+                    <select id="browseUriPreset">
+                        <option value="radiko">radiko (ルートメニュー)</option>
+                        <option value="radiko/live" selected>radiko/live</option>
+                        <option value="radiko/live/favourites">radiko/live/favourites</option>
+                        <option value="radiko/timefree">radiko/timefree</option>
+                        <option value="radiko/timefree_today">radiko/timefree_today</option>
+                        <option value="radiko/timefree/favourites">radiko/timefree/favourites</option>
+                    </select>
+                </div>
+                <div class="station-selector">
+                    <label for="browseUriInput">URI(自由入力・優先):</label>
+                    <input type="text" id="browseUriInput" placeholder="例: radiko/timetable/TBS?ft=20260725&amp;to=20260726" style="min-width: 320px;">
+                </div>
+                <button id="runBrowseButton" class="btn-primary">実行</button>
+            </div>
+            <pre id="browseResult" class="programs-list" style="white-space: pre-wrap; word-break: break-all;"></pre>
+        </div>
     </main>
 
     <script>
@@ -67,7 +91,8 @@
         window.API_ENDPOINTS = {
             stations: '/api/radiko/stations',
             withProgram: '/api/radiko/stations/with-program',
-            programs: '/api/radiko/stations/:stationId/programs'
+            programs: '/api/radiko/stations/:stationId/programs',
+            browse: '/api/radiko/browse'
         };
     </script>
     <script src="/assets/js/radiko-stations.js?v=20251112"></script>

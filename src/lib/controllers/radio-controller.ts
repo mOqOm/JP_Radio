@@ -311,6 +311,47 @@ export default class JpRadio {
     this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
       res.render('radiko_dev', { apiEndpoint: '/api/radiko/stations' });
     });
+
+    // Volumioのフロントエンドを介さず、handleBrowseUri相当のルーティングを直接叩いて
+    // 生のBrowseResult(またはProgInfoData)を確認するためのデバッグ用エンドポイント。
+    this.app.get('/api/radiko/browse', async (req: Request, res: Response) => {
+      const uriParam = String(req.query['uri'] || 'radiko/live');
+      try {
+        const [baseUri, queryString] = uriParam.split('?');
+        const segments = baseUri.split('/');
+        const params = queryString !== undefined ? new URLSearchParams(queryString) : null;
+        const ft = params?.get('ft') ?? null;
+        const to = params?.get('to') ?? null;
+        const timeFreeQuery = ft !== null && to !== null ? { ft, to } : undefined;
+
+        let result: unknown;
+        if (segments[0] === 'radiko' && (segments[1] === 'proginfo' || segments[1] === 'progreg') && segments[2] !== undefined) {
+          result = await this.progInfo(segments[2], timeFreeQuery);
+        } else if (baseUri === 'radiko') {
+          result = await this.rootMenu();
+        } else if (baseUri === 'radiko/live') {
+          result = await this.radioStations();
+        } else if (baseUri === 'radiko/live/favourites') {
+          result = await this.radioFavouriteStations('live');
+        } else if (baseUri === 'radiko/timefree') {
+          result = await this.timeFreeStations();
+        } else if (baseUri === 'radiko/timefree_today') {
+          result = await this.timeFreeStations('today');
+        } else if (baseUri === 'radiko/timefree/favourites') {
+          result = await this.radioFavouriteStations('timefree');
+        } else if (segments[0] === 'radiko' && segments[1] === 'timetable_today' && segments[2] !== undefined) {
+          result = await this.stationTimetable(segments[2], { isToday: true });
+        } else if (segments[0] === 'radiko' && segments[1] === 'timetable' && segments[2] !== undefined) {
+          result = await this.stationTimetable(segments[2], timeFreeQuery);
+        } else {
+          res.status(400).json({ error: `Unknown uri: ${uriParam}` });
+          return;
+        }
+        res.json({ uri: uriParam, result });
+      } catch (error: any) {
+        res.status(500).json({ error: error?.message || 'Unknown error', stack: error?.stack });
+      }
+    });
   }
 
   /**
@@ -656,6 +697,7 @@ export default class JpRadio {
       });
     }
 
+    const linkAlbumart = '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg';
     lists.push({
       title: '',
       availableListViews: ['list'],
@@ -665,6 +707,7 @@ export default class JpRadio {
           type: 'radio-category',
           title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
           icon: 'fa fa-clock-o',
+          albumart: linkAlbumart,
           uri: 'radiko/timefree',
         },
         {
@@ -672,6 +715,7 @@ export default class JpRadio {
           type: 'radio-category',
           title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_TODAY'),
           icon: 'fa fa-calendar-check-o',
+          albumart: linkAlbumart,
           uri: 'radiko/timefree_today',
         },
       ],

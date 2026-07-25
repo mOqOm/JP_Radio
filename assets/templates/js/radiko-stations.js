@@ -17,6 +17,7 @@ const state = {
 function initializePage() {
   setupTabNavigation();
   setupProgramsControls();
+  setupBrowseControls();
   loadStations();
 }
 
@@ -50,6 +51,63 @@ function setupProgramsControls() {
 
   // 日付の初期値を今日に設定
   document.getElementById( 'dateInput' ).value = getCurrentDate();
+}
+
+/**
+ * Browse URIテストタブのコントロールをセットアップ
+ * Volumioのフロントエンドを介さず、handleBrowseUri相当のルーティングを直接叩いて
+ * 生のJSONレスポンスを確認できるようにする(ナビゲーション不具合の切り分け用)。
+ */
+function setupBrowseControls() {
+  const presetSelect = document.getElementById( 'browseUriPreset' );
+  const uriInput = document.getElementById( 'browseUriInput' );
+  const runButton = document.getElementById( 'runBrowseButton' );
+
+  presetSelect.addEventListener( 'change', () => {
+    uriInput.value = presetSelect.value;
+  } );
+  uriInput.value = presetSelect.value;
+
+  runButton.addEventListener( 'click', () => {
+    runBrowseTest();
+  } );
+}
+
+/**
+ * Browse URIテストを実行し、結果のJSONを画面に表示する
+ */
+async function runBrowseTest() {
+  const uriInput = document.getElementById( 'browseUriInput' );
+  const resultEl = document.getElementById( 'browseResult' );
+  const runButton = document.getElementById( 'runBrowseButton' );
+
+  const uri = uriInput.value.trim();
+  if ( !uri ) {
+    showError( 'URIを入力してください' );
+    return;
+  }
+
+  try {
+    hideError();
+    runButton.disabled = true;
+    resultEl.textContent = 'Loading...';
+
+    const url = `${ window.API_ENDPOINTS.browse }?uri=${ encodeURIComponent( uri ) }`;
+    const response = await fetch( url );
+    const data = await response.json();
+
+    resultEl.textContent = JSON.stringify( data, null, 2 );
+
+    if ( !response.ok ) {
+      showError( `HTTP error! status: ${ response.status }` );
+    }
+  } catch ( err ) {
+    resultEl.textContent = '';
+    showError( `Failed to run browse test: ${ err.message }` );
+    console.error( 'Error running browse test:', err );
+  } finally {
+    runButton.disabled = false;
+  }
 }
 
 /**
