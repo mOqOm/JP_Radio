@@ -583,7 +583,7 @@ export default class JpRadio {
    */
   async radioStations(): Promise<BrowseResult> {
     this.logger.info('RCT_I005');
-    const extraLists = await this.#homeExtraLists();
+    const extraLists = await this.#liveExtraLists();
 
     if (this.rdk?.stations === undefined) {
       return {
@@ -670,58 +670,23 @@ export default class JpRadio {
   }
 
   /**
-   * ライブ局一覧({@link radioStations})の先頭に添えるセクション群。`radiko/live`をブラウズソースの
-   * 入口にしたことで、通常のカテゴリ選択(旧ルートメニュー)を経由せずに他のセクションへ辿り着けるようにする。
-   * お気に入り(ライブ/タイムフリー)は登録済みの内容をその場に展開し、クリックせずに中身が見えるようにする
-   * (登録が無ければセクション自体を出さない)。タイムフリーは局選択が必須で中身を展開できないため、
-   * 案内リンクのみを置く。
+   * ライブ局一覧({@link radioStations})の先頭に添えるセクション。登録済みのライブお気に入りを
+   * その場に展開し、クリックせずに中身が見えるようにする(登録が無ければ何も返さない)。
+   * ここに置けるのは`song`型の項目のみ({@link radioStations}の局一覧と同じ型)。`radio-category`型の項目を
+   * `song`型のグリッド一覧と混在させると、混在させた側の項目がクリックできなくなる
+   * (このVolumioフロントエンドの制約)ことが判明したため、タイムフリー関連(すべて`radio-category`型)は
+   * ここに置かず、代わりに{@link timeFreeStations}側にまとめている。
    */
-  async #homeExtraLists(): Promise<BrowseList[]> {
-    const lists: BrowseList[] = [];
-
+  async #liveExtraLists(): Promise<BrowseList[]> {
     const [liveFavItems] = await this.#commonRadioFavouriteStations('live');
-    if (liveFavItems.length > 0) {
-      lists.push({
-        title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
-        availableListViews: ['grid', 'list'],
-        items: liveFavItems,
-      });
+    if (liveFavItems.length === 0) {
+      return [];
     }
-
-    const [, timeFreeFavProgramItems] = await this.#commonRadioFavouriteStations('timefree');
-    if (timeFreeFavProgramItems.length > 0) {
-      lists.push({
-        title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
-        availableListViews: ['list'],
-        items: timeFreeFavProgramItems,
-      });
-    }
-
-    const linkAlbumart = '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg';
-    lists.push({
-      title: '',
-      availableListViews: ['list'],
-      items: [
-        {
-          service: this.serviceName,
-          type: 'folder',
-          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
-          icon: 'fa fa-clock-o',
-          albumart: linkAlbumart,
-          uri: 'radiko/timefree',
-        },
-        {
-          service: this.serviceName,
-          type: 'folder',
-          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_TODAY'),
-          icon: 'fa fa-calendar-check-o',
-          albumart: linkAlbumart,
-          uri: 'radiko/timefree_today',
-        },
-      ],
-    });
-
-    return lists;
+    return [{
+      title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
+      availableListViews: ['grid', 'list'],
+      items: liveFavItems,
+    }];
   }
 
   /**
@@ -869,14 +834,32 @@ export default class JpRadio {
     this.logger.info('RCT_I006');
     const resultUri = mode === 'today' ? 'radiko/timefree_today' : 'radiko/timefree';
 
+    // お気に入り登録済みの個別番組をその場に展開する(通常表示時のみ)。ここに置けるのは`radio-category`型の
+    // 項目のみ(このメソッドの局一覧と同じ型)。`song`型のグリッド一覧と混在させると、混在させた側の項目が
+    // クリックできなくなる(このVolumioフロントエンドの制約)ため、必ず同じ型同士でまとめる。
+    const extraLists: BrowseList[] = [];
+    if (mode === 'normal') {
+      const [, timeFreeFavProgramItems] = await this.#commonRadioFavouriteStations('timefree');
+      if (timeFreeFavProgramItems.length > 0) {
+        extraLists.push({
+          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
+          availableListViews: ['list'],
+          items: timeFreeFavProgramItems,
+        });
+      }
+    }
+
     if (this.rdk?.stations === undefined) {
       return {
         navigation: {
-          lists: [{
-            title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
-            availableListViews: ['grid', 'list'],
-            items: []
-          }]
+          lists: [
+            ...extraLists,
+            {
+              title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+              availableListViews: ['grid', 'list'],
+              items: []
+            }
+          ]
         },
         uri: resultUri
       };
@@ -912,7 +895,7 @@ export default class JpRadio {
 
     return {
       navigation: {
-        lists
+        lists: [...extraLists, ...lists]
       },
       uri: resultUri
     };
