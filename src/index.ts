@@ -91,6 +91,13 @@ class ControllerJpRadio {
   }
 
   /**
+   * 再起動不要で即時反映される設定を保存した際に表示する軽量なトースト通知。
+   */
+  private pushSettingsSavedToast(): void {
+    this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('SETTINGS_SAVED'));
+  }
+
+  /**
    * UIConfig.jsonのselect要素(`content.value`/`content.options`)に現在値を反映する。
    * `content.options[].label`はこの時点で既に`i18nJson`によって翻訳済みの文字列になっている。
    * @param content UIConfig.jsonのselect要素(`value`/`options`を持つオブジェクト)。
@@ -181,7 +188,9 @@ class ControllerJpRadio {
   }
 
   /**
-   * UI設定画面で入力されたサービスポート番号・ネットワーク遅延補正値を保存し、変更があれば再起動を促す。
+   * UI設定画面で入力されたサービスポート番号・ネットワーク遅延補正値を保存する。
+   * サービスポートの変更は内部サーバーの再バインドが必要なため再起動を促すが、ネットワーク遅延補正値は
+   * {@link setRadioDelay}で即座に反映できるため、それだけの変更なら再起動は不要。
    * @param data 保存ボタンから渡される入力値。
    */
   async saveNetworkSetting(data: { servicePort: string; networkDelay: string }): Promise<void> {
@@ -191,17 +200,21 @@ class ControllerJpRadio {
     }
     const newPort = Number(data.servicePort);
     const newDelay = Number(data.networkDelay);
-    let updated = false;
+    let portChanged = false;
+    let delayChanged = false;
     if (isNaN(newPort) === false && this.config.get('servicePort') !== newPort) {
       this.config.set('servicePort', newPort);
-      updated = true;
+      portChanged = true;
     }
     if (isNaN(newDelay) === false && this.config.get('networkDelay') !== newDelay) {
       this.config.set('networkDelay', newDelay);
-      updated = true;
+      delayChanged = true;
     }
-    if (updated === true) {
+    if (portChanged === true) {
       this.showRestartModal();
+    } else if (delayChanged === true) {
+      setRadioDelay(newDelay);
+      this.pushSettingsSavedToast();
     }
   }
 
@@ -226,7 +239,8 @@ class ControllerJpRadio {
 
   /**
    * UI設定画面で選択されたブラウズ動作(ライブ/タイムフリー選択時に直接再生するか、
-   * 番組情報モーダルを表示するか)を保存し、変更があれば再起動を促す。
+   * 番組情報モーダルを表示するか)を保存する。ブラウズ時に都度参照される設定のため、
+   * {@link JpRadio.updateBrowseMode}で即座に反映でき、再起動は不要。
    * @param data 保存ボタンから渡される選択値。
    */
   async saveBrowseModeSetting(data: { browseMode1: { value: string }; browseMode2: { value: string } }): Promise<void> {
@@ -244,12 +258,14 @@ class ControllerJpRadio {
     if (updated === true) {
       this.config.set('browseMode1', data.browseMode1.value);
       this.config.set('browseMode2', data.browseMode2.value);
-      this.showRestartModal();
+      this.appRadio?.updateBrowseMode(data.browseMode1.value, data.browseMode2.value);
+      this.pushSettingsSavedToast();
     }
   }
 
   /**
-   * UI設定画面で選択されたタイムフリー再生速度を保存し、変更があれば再起動を促す。
+   * UI設定画面で選択されたタイムフリー再生速度を保存する。再生開始時に都度参照される設定のため、
+   * {@link JpRadio.updateTempo}で即座に反映でき、再起動は不要。
    * @param data 保存ボタンから渡される選択値。
    */
   async saveTempoSetting(data: { tempo: { value: string } }): Promise<void> {
@@ -259,12 +275,14 @@ class ControllerJpRadio {
     }
     if (this.config.get('tempo') !== data.tempo.value) {
       this.config.set('tempo', data.tempo.value);
-      this.showRestartModal();
+      this.appRadio?.updateTempo(Number(data.tempo.value));
+      this.pushSettingsSavedToast();
     }
   }
 
   /**
-   * UI設定画面で選択されたアルバムアート取得方式を保存し、変更があれば再起動を促す。
+   * UI設定画面で選択されたアルバムアート取得方式を保存する。表示時に都度参照される設定のため、
+   * {@link JpRadio.updateAlbumartType}で即座に反映でき、再起動は不要。
    * @param data 保存ボタンから渡される選択値。
    */
   async saveAlbumartSetting(data: { albumartType: { value: string } }): Promise<void> {
@@ -274,7 +292,8 @@ class ControllerJpRadio {
     }
     if (this.config.get('albumartType') !== data.albumartType.value) {
       this.config.set('albumartType', data.albumartType.value);
-      this.showRestartModal();
+      this.appRadio?.updateAlbumartType(data.albumartType.value);
+      this.pushSettingsSavedToast();
     }
   }
 
@@ -298,7 +317,8 @@ class ControllerJpRadio {
   }
 
   /**
-   * UI設定画面で入力/選択された番組表のデフォルト表示期間・日時表示書式を保存し、変更があれば再起動を促す。
+   * UI設定画面で入力/選択された番組表のデフォルト表示期間・日時表示書式を保存する。番組表表示時に
+   * 都度参照される設定のため、{@link JpRadio.updateTimetableDisplay}で即座に反映でき、再起動は不要。
    * @param data 保存ボタンから渡される入力値。
    */
   async saveTimetableDisplaySetting(data: {
@@ -326,7 +346,12 @@ class ControllerJpRadio {
       updated = true;
     }
     if (updated === true) {
-      this.showRestartModal();
+      this.appRadio?.updateTimetableDisplay(
+        this.getConfigNumber('programPeriodFrom', 7),
+        this.getConfigNumber('programPeriodTo', 0),
+        this.config.get('timeFormat') || 'yyyy/MM/dd HH:mm-HH:mm',
+      );
+      this.pushSettingsSavedToast();
     }
   }
 

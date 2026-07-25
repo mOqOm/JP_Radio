@@ -41,18 +41,20 @@ export default class JpRadio {
   private task2Cnt: number = 0;
 
   private readonly serviceName: string;
-  private readonly browseMode1: string;
-  private readonly browseMode2: string;
+  // 以下は設定画面から再起動無しで変更を反映できるよう、あえてreadonlyにしていない
+  // (詳細は末尾のupdate*系メソッド群を参照)。
+  private browseMode1: string;
+  private browseMode2: string;
   private readonly radikoAreaIdArray: string[];
-  private readonly tempo: number;
+  private tempo: number;
   /** タイムフリー番組表のページングのデフォルト範囲(過去方向、日数)。 */
-  private readonly programPeriodFrom: number;
+  private programPeriodFrom: number;
   /** タイムフリー番組表のページングのデフォルト範囲(未来方向、日数)。 */
-  private readonly programPeriodTo: number;
+  private programPeriodTo: number;
   /** 番組表示用の日時フォーマット(`'<日付書式> <開始時刻書式>-<終了時刻書式>'`)。 */
-  private readonly timeFormat: string;
+  private timeFormat: string;
   /** アルバムアート取得方式('type1'=バナー, 'type2'=局ロゴ, 'type3'=番組画像)。 */
-  private readonly albumartType: string;
+  private albumartType: string;
 
   /** タイムフリー再生の途中再開用の進捗(局・番組・再生位置)。同じ番組を選び直した時だけ使う。 */
   private timeFreeProgress: { station: string; ft: string; to: string; positionSec: number } | null = null;
@@ -104,6 +106,44 @@ export default class JpRadio {
     this.app.set('view engine', 'ejs');
 
     this.#setupRoutes();
+  }
+
+  /**
+   * ブラウズ動作(ライブ/タイムフリー選択時の挙動)を再起動無しで更新する。
+   * @param browseMode1 ライブ局選択時の動作('type1'=直接再生、'type2'=番組情報モーダル)。
+   * @param browseMode2 タイムフリー番組選択時の動作。
+   */
+  updateBrowseMode(browseMode1: string, browseMode2: string): void {
+    this.browseMode1 = browseMode1;
+    this.browseMode2 = browseMode2;
+  }
+
+  /**
+   * タイムフリー再生速度を再起動無しで更新する。
+   * @param tempo タイムフリー再生の速度倍率。
+   */
+  updateTempo(tempo: number): void {
+    this.tempo = tempo;
+  }
+
+  /**
+   * アルバムアート取得方式を再起動無しで更新する。
+   * @param albumartType アルバムアート取得方式。
+   */
+  updateAlbumartType(albumartType: string): void {
+    this.albumartType = albumartType;
+  }
+
+  /**
+   * タイムフリー番組表のデフォルト表示期間・日時表示書式を再起動無しで更新する。
+   * @param programPeriodFrom 表示期間(過去方向、日数)。
+   * @param programPeriodTo 表示期間(未来方向、日数)。
+   * @param timeFormat 番組表示用の日時フォーマット。
+   */
+  updateTimetableDisplay(programPeriodFrom: number, programPeriodTo: number, timeFormat: string): void {
+    this.programPeriodFrom = programPeriodFrom;
+    this.programPeriodTo = programPeriodTo;
+    this.timeFormat = timeFormat;
   }
 
   /**
@@ -378,6 +418,7 @@ export default class JpRadio {
 
         state.title = progData.title;
         state.artist = artist;
+        state.album = progData.pfm;
         state.albumart = this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, progData.img);
         // sec
         state.duration = getTimeSpan(t0, t1);
@@ -388,6 +429,7 @@ export default class JpRadio {
         const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
         queueItem.name = state.title;
         queueItem.artist = state.artist;
+        queueItem.album = state.album;
         queueItem.albumart = state.albumart;
         queueItem.duration = state.duration;
 
@@ -515,6 +557,7 @@ export default class JpRadio {
       if (queueItem !== undefined) {
         state.title = queueItem.name;
         state.artist = queueItem.artist;
+        state.album = queueItem.album;
         state.albumart = queueItem.albumart;
         this.commandRouter.servicePushState(state, 'mpd');
       }
