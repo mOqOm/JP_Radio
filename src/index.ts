@@ -1139,12 +1139,34 @@ class ControllerJpRadio {
           title: meta.title,
           name: meta.title,
           artist: meta.artist,
+          album: meta.album,
           albumart: meta.albumart,
           uri,
         });
       })
       .fail((error: any) => {
         this.logger.error('IDX_E009', error);
+        defer.reject(error);
+      });
+
+    return defer.promise;
+  }
+
+  /**
+   * ユーザーが曲をプレイリストやお気に入りに追加した際にVolumioから呼ばれる。{@link explodeUri}と同じ
+   * 情報源(局名・番組情報)を使い、アーティスト名等を含む完全なメタデータを返す
+   * (`explodeUri`は単一オブジェクトを返すが、こちらは配列で返す必要がある)。
+   * @param uri キュー内のURI。
+   */
+  getTrackInfo(uri: string): Promise<any[]> {
+    this.logger.info('IDX_I040', uri);
+    const defer = libQ.defer();
+
+    libQ.resolve()
+      .then(() => this.explodeUri(uri))
+      .then((track: any) => defer.resolve([track]))
+      .fail((error: any) => {
+        this.logger.error('IDX_E014', error);
         defer.reject(error);
       });
 
