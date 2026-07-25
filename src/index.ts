@@ -370,6 +370,25 @@ class ControllerJpRadio {
   }
 
   /**
+   * Volumioのシステムシャットダウン時に呼ばれるライフサイクルメソッド。
+   * `onStop`はプラグインを無効化した時にしか自動で呼ばれないため、システム終了時にも内部サーバー・
+   * cronタスクを確実に停止させ、再生キューの掃除も行うようここから明示的に呼び出す。
+   */
+  async onVolumioShutdown(): Promise<void> {
+    this.logger.info('IDX_I038');
+    await this.onStop();
+  }
+
+  /**
+   * Volumioのシステム再起動時に呼ばれるライフサイクルメソッド。{@link onVolumioShutdown}と同様の理由で
+   * `onStop`を明示的に呼び出す。
+   */
+  async onVolumioReboot(): Promise<void> {
+    this.logger.info('IDX_I039');
+    await this.onStop();
+  }
+
+  /**
    * プラグイン有効化時に呼ばれるライフサイクルメソッド。
    * 設定値からアカウント情報とサービスポートを取り出し、{@link JpRadio}を起動してブラウズソースに登録する。
    */
@@ -1200,6 +1219,21 @@ class ControllerJpRadio {
   }
 
   /**
+   * Volumioのお気に入り機能(`commonAddToPlaylist`)は`title`/`albumart`しか保存できず、アーティスト名を
+   * 保存する仕組みが無い。そのため、Volumio標準の「お気に入り」画面から直接再生すると、アーティスト欄が
+   * 空になりサービス名の「webradio」がそのまま表示されてしまう。この制約はVolumio側のAPI仕様上直せないため、
+   * 代わりに保存する`title`自体に局名・時間帯(`artist`)を含めて、1行で情報が完結するようにする。
+   * @param title 番組タイトル。
+   * @param artist 局名・時間帯などの補足情報(例: `'東京 / TBSラジオ 21:00-21:30'`)。
+   */
+  private buildFavouriteTitle(title: string, artist?: string): string {
+    if (artist === undefined || artist === '') {
+      return title;
+    }
+    return `${title} (${artist})`;
+  }
+
+  /**
    * 番組情報モーダルの「お気に入りに追加」ボタンから呼ばれる。Volumioコアの「radio-favourites」
    * プレイリストへ直接書き込む({@link JpRadio.radioFavouriteStations}が読み出す先と同じ)。
    * @param data {@link showProgInfoModal}のボタンから渡される番組情報。
@@ -1216,7 +1250,7 @@ class ControllerJpRadio {
       'radio-favourites',
       'webradio',
       data.uri,
-      data.title,
+      this.buildFavouriteTitle(data.title, data.artist),
       data.albumart
     );
   }
@@ -1224,16 +1258,16 @@ class ControllerJpRadio {
   /**
    * Browse画面のハートアイコン(お気に入り追加)から、Volumioコアがこのプラグインのサービス名宛てに
    * 呼び出す。{@link addFavouriteFromProgInfoModal}と同じ「radio-favourites」プレイリストへ書き込む。
-   * @param data `uri`/`title`/`albumart`を含むお気に入り登録対象の情報。
+   * @param data `uri`/`title`/`artist`/`albumart`を含むお気に入り登録対象の情報。
    */
-  addToFavourites(data: { uri: string; title?: string; albumart?: string }): Promise<any> {
+  addToFavourites(data: { uri: string; title?: string; artist?: string; albumart?: string }): Promise<any> {
     this.logger.info('IDX_I019', data.uri);
     return this.commandRouter.playListManager.commonAddToPlaylist(
       this.commandRouter.playListManager.favouritesPlaylistFolder,
       'radio-favourites',
       'webradio',
       data.uri,
-      data.title,
+      this.buildFavouriteTitle(data.title ?? '', data.artist),
       data.albumart
     );
   }

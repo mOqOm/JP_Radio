@@ -27,6 +27,8 @@ export interface BrowseItem {
   favourite?: boolean;
   // 番組開始時刻（`'yyyyMMddHHmmss'`、お気に入り一覧のソートに使用）
   time?: string;
+  // 番組の長さ（秒）。番組表・お気に入り一覧で選択前に長さが分かるように使う
+  duration?: number;
 }
 
 /**

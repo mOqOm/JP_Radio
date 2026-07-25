@@ -835,6 +835,7 @@ export default class JpRadio {
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
         uri: `radiko/progreg/${stationId}?ft=${ft}&to=${to}`,
         time: ft,
+        duration: getTimeSpan(formatTimeString(ft), formatTimeString(to)),
         favourite: true,
         samplerate: '',
         bitdepth: 0,
@@ -971,6 +972,7 @@ export default class JpRadio {
             albumart: this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, program.img),
             uri: buildPlayUri(program.ft, program.tt),
             time: program.ft,
+            duration: getTimeSpan(formatTimeString(program.ft), formatTimeString(program.tt)),
             samplerate: '',
             bitdepth: 0,
             channels: 0
