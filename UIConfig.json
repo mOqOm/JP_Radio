@@ -219,6 +219,21 @@
             { "value": "type2", "label": "TRANSLATE.ALBUMART_TYPE2" },
             { "value": "type3", "label": "TRANSLATE.ALBUMART_TYPE3" }
           ]
+        },
+        {
+          "id": "stationLogoCache",
+          "element": "button",
+          "label": "TRANSLATE.STATION_LOGO_LABEL",
+          "doc": "TRANSLATE.STATION_LOGO_DOC",
+          "onClick": {
+            "type": "emit",
+            "message": "callMethod",
+            "data": {
+              "endpoint": "music_service/jp_radio",
+              "method": "clearStationLogoCache",
+              "data": ""
+            }
+          }
         }
       ]
     },

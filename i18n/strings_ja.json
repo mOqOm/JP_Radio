@@ -30,6 +30,8 @@
   "ALBUMART_TYPE1": "局バナー画像",
   "ALBUMART_TYPE2": "局ロゴ画像",
   "ALBUMART_TYPE3": "番組画像優先(無ければ局ロゴ画像)",
+  "STATION_LOGO_LABEL": "局ロゴキャッシュのクリア",
+  "STATION_LOGO_DOC": "ローカルにキャッシュした局ロゴ画像を削除します。プラグイン再起動時に再取得されます。",
   "TIMETABLE_DISPLAY_LABEL": "番組表表示設定",
   "TIMETABLE_DISPLAY_DESC": "タイムフリー番組表のデフォルト表示期間・日時表示書式を設定します。",
   "PROGRAM_PERIOD_FROM_LABEL": "表示期間(過去方向)",

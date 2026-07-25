@@ -30,6 +30,8 @@
   "ALBUMART_TYPE1": "Station banner image",
   "ALBUMART_TYPE2": "Station logo image",
   "ALBUMART_TYPE3": "Program image (fallback to station logo)",
+  "STATION_LOGO_LABEL": "Clear Station Logo Cache",
+  "STATION_LOGO_DOC": "Deletes the locally cached station logo images. They will be re-fetched the next time the plugin restarts.",
   "TIMETABLE_DISPLAY_LABEL": "Timetable Display",
   "TIMETABLE_DISPLAY_DESC": "Configure the default date range and date/time format shown in the Time-Free timetable.",
   "PROGRAM_PERIOD_FROM_LABEL": "Display Range (Past)",

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import libQ from 'kew';
 import VConf from 'v-conf';
@@ -5,12 +6,12 @@ import JpRadio from '@/controllers/radio-controller';
 import { BrowseResult } from '@/models/browse-result-model';
 import { createLoginAccount } from '@/logic/auth';
 import { messageCatalog } from '@/utils/message-catalog';
-import { I18N_DIR, UI_CONFIG_PATH } from '@/utils/plugin-paths';
+import { I18N_DIR, UI_CONFIG_PATH, ASSETS_IMAGES_DIR } from '@/utils/plugin-paths';
 import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
 import { LoggerEx } from '@/utils/logger';
-import { getCurrentRadioTime, getCurrentRadioDate, getProgramTimeStatus, parseRadioTime, addDaysToDateOnly, setRadioDelay } from '@/utils/radio-time';
+import { getCurrentRadioTime, getCurrentRadioDate, getProgramTimeStatus, parseRadioTime, addDaysToDateOnly, addDaysToRadioTime, setRadioDelay } from '@/utils/radio-time';
 
 export = ControllerJpRadio;
 
@@ -268,6 +269,25 @@ class ControllerJpRadio {
     if (this.config.get('albumartType') !== data.albumartType.value) {
       this.config.set('albumartType', data.albumartType.value);
       this.showRestartModal();
+    }
+  }
+
+  /**
+   * UI設定画面の「局ロゴキャッシュのクリア」ボタンから呼ばれる。ローカルにキャッシュした局ロゴ画像
+   * (`assets/images/*_logo.png`)を削除する。既存の`StationInfo.logoUrl`は既にこのファイルを指した
+   * 状態でメモリ上に残るため、再取得させるためプラグインの再起動を促す。
+   */
+  async clearStationLogoCache(): Promise<void> {
+    this.logger.info('IDX_I021');
+    try {
+      const files: string[] = await fs.promises.readdir(ASSETS_IMAGES_DIR).catch(() => [] as string[]);
+      const logoFiles = files.filter((file: string) => file.endsWith('_logo.png'));
+      await Promise.all(logoFiles.map((file: string) => fs.promises.unlink(path.join(ASSETS_IMAGES_DIR, file))));
+      this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('STATION_LOGO_CLEAR'));
+      this.showRestartModal();
+    } catch (error: any) {
+      this.logger.error('IDX_E012', error);
+      this.commandRouter.pushToastMessage('error', messageCatalog.get('APP_TITLE'), messageCatalog.get('ERROR_GENERIC'));
     }
   }
 
@@ -562,6 +582,35 @@ class ControllerJpRadio {
       return defer.promise;
     }
 
+    if (segments[0] === 'radiko' && segments[1] === 'progreg' && segments[2] !== undefined) {
+      const stationId = segments[2];
+      let timeFreeQuery: TimeFreeQuery | undefined;
+      if (queryString !== undefined) {
+        const params = new URLSearchParams(queryString);
+        const ft = params.get('ft');
+        const to = params.get('to');
+        if (ft !== null && to !== null) {
+          timeFreeQuery = { ft, to };
+        }
+      }
+
+      libQ.resolve()
+        .then(() => appRadio.progInfo(stationId, timeFreeQuery))
+        .then((data: ProgInfoData | null) => {
+          if (data !== null) {
+            // お気に入り一覧から開いた直後は、まだ日付をずらしていないので oldUri === uri
+            this.showProgRegModal({ ...data, oldUri: data.uri });
+          }
+          defer.resolve({});
+        })
+        .fail((error: any) => {
+          this.logger.error('IDX_E007', error);
+          defer.reject(error);
+        });
+
+      return defer.promise;
+    }
+
     let task: Promise<BrowseResult> | null;
     if (baseUri === 'radiko') {
       task = appRadio.rootMenu();
@@ -686,6 +735,156 @@ class ControllerJpRadio {
   }
 
   /**
+   * お気に入り一覧から個別番組を選択した際に表示する「登録済みお気に入りの管理」モーダル。
+   * 「翌日」「翌週」「翌々週」ボタンで同じ時間帯の別の日の番組に表示を切り替えながら、最終的に
+   * 「お気に入りを更新」(表示中の番組で置き換え)または「お気に入りから削除」を選べる。
+   * `data.oldUri`が実際に登録されているお気に入りのURI、`data.uri`が現在モーダルに表示中の番組のURIで、
+   * 両者が一致する間は「更新」を、日付をずらして一致しなくなったら「削除」を隠す({@link showProgInfoModal}とは
+   * 独立したモーダルにしているのは、通常のブラウズ再生と競合させないため)。
+   * @param data 表示中の番組情報+`oldUri`(実際に登録されているお気に入りのURI)。
+   */
+  private showProgRegModal(data: ProgInfoData & { oldUri: string }): void {
+    let message = `<div>${data.artist}</div>`;
+    if (data.album !== '') {
+      message += `<div>${messageCatalog.get('PROGINFO_PERFORMER')}${data.album}</div>`;
+    }
+    const modalMessage = {
+      title: messageCatalog.get('PROGINFO_PROG_INFO') + data.title,
+      message,
+      size: 'lg',
+      buttons: [
+        {
+          name: messageCatalog.get('PROGREG_NEXT_DAY'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'changeDateFromProgRegModal',
+            data: { ...data, days: 1 }
+          }
+        },
+        {
+          name: messageCatalog.get('PROGREG_NEXT_WEEK'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'changeDateFromProgRegModal',
+            data: { ...data, days: 7 }
+          }
+        },
+        {
+          name: messageCatalog.get('PROGREG_NEXT_2WEEK'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'changeDateFromProgRegModal',
+            data: { ...data, days: 14 }
+          }
+        },
+        {
+          name: messageCatalog.get('PROGREG_UPDATE_FAVOURITES'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'updateFavouriteFromProgRegModal',
+            data
+          }
+        },
+        {
+          name: messageCatalog.get('PROGREG_REMOVE_FROM_FAVOURITES'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'removeFavouriteFromProgRegModal',
+            data
+          }
+        },
+        {
+          name: this.commandRouter.getI18nString('COMMON.CLOSE'),
+          class: 'btn btn-warning',
+          emit: 'closeModals',
+          payload: ''
+        }
+      ]
+    };
+
+    if (data.oldUri === data.uri) {
+      // まだ日付をずらしていない(登録済みのまま) → 「更新」ボタンは無意味なので消す
+      modalMessage.buttons.splice(3, 1);
+    } else {
+      // 日付をずらした(別の番組に切り替えた) → 「削除」ボタンは無意味なので消す
+      modalMessage.buttons.splice(4, 1);
+    }
+
+    this.commandRouter.broadcastMessage('openModal', modalMessage);
+  }
+
+  /**
+   * {@link showProgRegModal}の「翌日」「翌週」「翌々週」ボタンから呼ばれる。表示中の番組の`ft`/`to`を
+   * 指定日数分シフトした番組情報を取得し直し、同じモーダルを再表示する(`oldUri`は元の登録URIのまま引き継ぐ)。
+   * @param data 表示中の番組情報+`oldUri`+シフトする日数(`days`)。
+   */
+  async changeDateFromProgRegModal(data: ProgInfoData & { oldUri: string; days: number }): Promise<void> {
+    this.logger.info('IDX_I022', data.days);
+
+    const [liveUri, queryStr] = data.uri.split('?');
+    if (queryStr === undefined) {
+      return;
+    }
+    const params = new URLSearchParams(queryStr);
+    const ft = params.get('ft');
+    const to = params.get('to');
+    const stationId = liveUri.split('/').pop();
+    if (ft === null || to === null || stationId === undefined) {
+      return;
+    }
+
+    const newFt = addDaysToRadioTime(ft, data.days);
+    const newTo = addDaysToRadioTime(to, data.days);
+
+    const appRadio = this.appRadio;
+    if (appRadio === null) {
+      return;
+    }
+    const newData = await appRadio.progInfo(stationId, { ft: newFt, to: newTo });
+    if (newData !== null) {
+      this.showProgRegModal({ ...newData, oldUri: data.oldUri });
+    }
+  }
+
+  /**
+   * {@link showProgRegModal}の「お気に入りを更新」ボタンから呼ばれる。元のお気に入り登録(`oldUri`)を削除し、
+   * 現在表示中の番組(`uri`)を新たに登録する。
+   * @param data 表示中の番組情報+`oldUri`(削除対象の旧登録URI)。
+   */
+  async updateFavouriteFromProgRegModal(data: ProgInfoData & { oldUri: string }): Promise<void> {
+    this.logger.info('IDX_I023', data.uri);
+    await this.commandRouter.playListManager.commonRemoveFromPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri
+    );
+    await this.commandRouter.playListManager.commonAddToPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.uri, data.title, data.albumart
+    );
+    this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('FAVOURITE_UPDATED', data.title));
+  }
+
+  /**
+   * {@link showProgRegModal}の「お気に入りから削除」ボタンから呼ばれる。
+   * @param data `oldUri`(削除対象の登録URI)を含む番組情報。
+   */
+  async removeFavouriteFromProgRegModal(data: ProgInfoData & { oldUri: string }): Promise<void> {
+    this.logger.info('IDX_I024', data.oldUri);
+    await this.commandRouter.playListManager.commonRemoveFromPlaylist(
+      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri
+    );
+    this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('FAVOURITE_REMOVED', data.title));
+  }
+
+  /**
    * 番組情報モーダルの「再生」ボタンから呼ばれる。対象トラックを再生キューの先頭に追加して即再生する。
    * @param data {@link showProgInfoModal}のボタンから渡されるトラック情報。
    */
@@ -755,9 +954,10 @@ class ControllerJpRadio {
   }
 
   /**
-   * タイムフリー再生中のみシークに対応する。再生中の項目をシーク位置付きの新URIに差し替える
-   * (`add`でキュー末尾に追加後、再生中だった項目を`delete 0`で削除すると、mpdは残った項目の再生へ自動的に進む)。
-   * ライブ再生はシーク非対応のため、{@link JpRadio.forcePushSongState}でタイムバーを元の位置に戻してrejectする。
+   * タイムフリー再生中はシーク位置付きの新URIに差し替える(`add`でキュー末尾に追加後、再生中だった項目を
+   * `delete 0`で削除すると、mpdは残った項目の再生へ自動的に進む)。
+   * ライブ再生中は、過去方向へのシークのみ現在放送中の番組の「追っかけ再生」(タイムフリー相当)に切り替える。
+   * 未来方向のシークは不可能なため、{@link JpRadio.forcePushSongState}でタイムバーを元の位置に戻してrejectする。
    * @param timepos シーク先の再生位置(ミリ秒)。
    */
   seek(timepos: number): Promise<any> {
@@ -773,6 +973,19 @@ class ControllerJpRadio {
 
       const [liveUri, queryStr] = uri.split('?');
       if (queryStr === undefined || queryStr === '') {
+        // ライブ：過去方向のシークのみ、現在放送中の番組を追っかけ再生に切り替える
+        const currentState = this.commandRouter.stateMachine.getState();
+        const stationId = liveUri.split('/').pop();
+        if (typeof currentState?.seek === 'number' && timepos < currentState.seek && stationId !== undefined) {
+          const program = await this.appRadio?.getCurrentProgramWindow(stationId);
+          if (program !== null && program !== undefined) {
+            const seekSec = Math.round(timepos / 1000);
+            const catchUpUri = `${liveUri}?ft=${program.ft}&to=${program.tt}&seek=${seekSec}`;
+            await this.mpdPlugin.sendMpdCommand(`add "${catchUpUri}"`, []);
+            await this.mpdPlugin.sendMpdCommand('delete 0', []);
+            return;
+          }
+        }
         await this.appRadio?.forcePushSongState();
         throw new Error('Seek is not supported for live playback');
       }

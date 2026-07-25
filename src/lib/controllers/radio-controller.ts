@@ -331,7 +331,7 @@ export default class JpRadio {
         const t0 = formatTimeString(progData.ft);
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
-        const artist = `${stationName} / ${formatRadioTimeRange(progData.ft, progData.tt, this.timeFormat)}`;
+        const artist = `${stationName} / ${formatRadioTimeRange(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
         this.logger.info('RCT_I003', t0, t1);
         this.logger.info('RCT_I004', artist, now);
 
@@ -392,7 +392,7 @@ export default class JpRadio {
       }
       const stationInfo = this.rdk?.stations.get(stationId);
       const stationName = stationInfo?.name ?? stationId;
-      const artist = `${stationName} / ${formatHourMinute(progData.ft)}-${formatHourMinute(progData.tt)}`;
+      const artist = `${stationName} / ${formatHourMinute(progData.ft)}-${formatHourMinute(progData.tt)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
 
       if (queueItem.artist !== artist) {
         queueItem.name = progData.title;
@@ -720,24 +720,22 @@ export default class JpRadio {
         return;
       }
       const program = await this.prg?.findProgram(stationId, ft);
+      // お気に入り一覧からの選択は常に、日付ずらし更新・削除ができる番組登録モーダル(progreg)を開く
+      // (直接再生ではなく、お気に入りの管理操作を優先する)
       const item: BrowseItem = {
         service: this.serviceName,
-        type: 'song',
+        type: 'radio-category',
         title: program?.title ?? '?',
         album: program?.pfm,
         artist: `${stationInfo.name} ${formatHourMinute(ft)}-${formatHourMinute(to)}`,
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
-        uri: uriStr,
+        uri: `radiko/progreg/${stationId}?ft=${ft}&to=${to}`,
         time: ft,
         favourite: true,
         samplerate: '',
         bitdepth: 0,
         channels: 0,
       };
-      if (this.browseMode2 === 'type2') {
-        item.type = 'radio-category';
-        item.uri = `radiko/proginfo/${stationId}?ft=${ft}&to=${to}`;
-      }
       programItems.push(item);
     });
 
@@ -969,6 +967,21 @@ export default class JpRadio {
   }
 
   /**
+   * 指定局の現在放送中の番組の放送区間(ft/tt)を返す。ライブ再生中に過去方向へシークされた際、
+   * 「追っかけ再生」(現在放送中の番組をタイムフリー相当でその時点から再生)に切り替えるためのURIを
+   * 組み立てるのに使う(`index.ts`の`seek()`から呼ばれる)。
+   * @param stationId 局ID。
+   * @returns 番組情報が取得できない場合はnull。
+   */
+  async getCurrentProgramWindow(stationId: string): Promise<{ ft: string; tt: string } | null> {
+    const progData = await this.prg?.getCurProgram(stationId);
+    if (progData === undefined) {
+      return null;
+    }
+    return { ft: progData.ft, tt: progData.tt };
+  }
+
+  /**
    * 自身のエリアID・会員種別を`'JP13/premium'`形式で返す(`Radiko.getMyAreaId()`のパススルー)。
    * エリア選択設定画面で「自分のエリア」を示すために使う。
    */
@@ -1012,7 +1025,7 @@ export default class JpRadio {
     const t0 = formatHourMinute(query.ft);
     const t1 = formatHourMinute(query.to);
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, img);
-    const artist = `${areaName} / ${stationInfo.name} ${t0}-${t1}`;
+    const artist = `${areaName} / ${stationInfo.name} ${t0}-${t1} ${messageCatalog.get('PLAYBACK_STATUS_TIMEFREE')}`;
     return { title, album, artist, albumart };
   }
 
@@ -1039,7 +1052,7 @@ export default class JpRadio {
     const areaName = stationInfo.areaKanji || stationInfo.areaName;
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, progImg);
     const stationAndTime = `${stationInfo.name} ${t0}-${t1}`;
-    const artist = `${areaName} / ${stationAndTime}`;
+    const artist = `${areaName} / ${stationAndTime} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
     return { title, album, artist, albumart };
   }
 
