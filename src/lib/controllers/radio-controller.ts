@@ -476,7 +476,6 @@ export default class JpRadio {
 
   /**
    * タイムフリー再生開始直後に1回だけ、番組の長さと再生位置(途中再開時のみ0以外)をVolumioへ反映する。
-   * ライブと異なり、以降は自然に増えていくmpd側の再生位置をそのまま使うため、継続的な上書きは行わない。
    * @param query 再生中の番組の放送区間。
    * @param resumePositionSec 途中再開の場合の再生位置(秒)。先頭からの場合は0。
    */
@@ -496,8 +495,10 @@ export default class JpRadio {
   }
 
   /**
-   * タイムフリー再生中、`this.timeFreeProgress.positionSec`を定期的に更新する。
-   * ストリームが停止した後も最後の値が残るため、次に同じ番組を選んだ時の途中再開に使える。
+   * タイムフリー再生中、`this.timeFreeProgress.positionSec`を定期的に更新する(次に同じ番組を選んだ時の
+   * 途中再開に使う)のに加え、タイトル・アーティスト・アルバムアートも定期的に再送信する。
+   * mpd自身の周期的なステータス更新でこれらの情報がリセットされてしまうことがあるため、
+   * ライブ再生の`#pushSongState`と同様、継続的に上書きし直して情報が消えないようにしている。
    */
   #startTimeFreeProgressTracking(): void {
     this.#stopTimeFreeProgressTracking();
@@ -508,6 +509,14 @@ export default class JpRadio {
       const state = this.commandRouter.stateMachine.getState();
       if (typeof state.seek === 'number') {
         this.timeFreeProgress.positionSec = Math.floor(state.seek / 1000);
+      }
+
+      const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
+      if (queueItem !== undefined) {
+        state.title = queueItem.name;
+        state.artist = queueItem.artist;
+        state.albumart = queueItem.albumart;
+        this.commandRouter.servicePushState(state, 'mpd');
       }
     }, 5000);
   }
