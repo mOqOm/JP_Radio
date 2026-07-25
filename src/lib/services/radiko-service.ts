@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { format } from 'util';
 import { randomBytes } from 'crypto';
-import got, { OptionsOfJSONResponseBody, Response } from 'got';
+import { httpClient } from '@/utils/http-client';
 import { spawn, ChildProcess } from 'child_process';
 import * as tough from 'tough-cookie';
 import { CookieJar } from 'tough-cookie';
@@ -98,7 +98,7 @@ export default class Radiko {
     this.logger.info('RDK_I002');
     const jar = new tough.CookieJar();
     try {
-      await got.post(LOGIN_URL, {
+      await httpClient.post(LOGIN_URL, {
         cookieJar: jar,
         form: { mail: acct.mail, pass: acct.pass },
       });
@@ -118,13 +118,10 @@ export default class Radiko {
   private async checkLogin(): Promise<LoginState | null> {
     this.logger.info('RDK_I003');
     try {
-      const options: OptionsOfJSONResponseBody = {
+      const response = await httpClient.get(CHECK_URL, {
         cookieJar: this.cookieJar,
-        method: 'GET',
-        responseType: 'json'
-      };
-
-      const response: Response<any> = await got(CHECK_URL, options);
+        responseType: 'json',
+      });
       const body = response.body as LoginState;
 
       this.logger.info('RDK_I004', body.member_type.type);
@@ -161,11 +158,11 @@ export default class Radiko {
    */
   private async auth1(): Promise<Record<string, string>> {
     this.logger.info('RDK_I008');
-    const res = await got.get(AUTH1_URL, {
+    const res = await httpClient.get(AUTH1_URL, {
       cookieJar: this.cookieJar,
       headers: RADIKO_APP_HEADERS,
     });
-    return res.headers as Record<string, string>;
+    return res.headers;
   }
 
   /**
@@ -189,7 +186,7 @@ export default class Radiko {
    */
   private async auth2(token: string, partialKey: string): Promise<string> {
     this.logger.info('RDK_I010');
-    const res = await got.get(AUTH2_URL, {
+    const res = await httpClient.get(AUTH2_URL, {
       cookieJar: this.cookieJar,
       headers: {
         'X-Radiko-AuthToken': token,
@@ -211,7 +208,7 @@ export default class Radiko {
     this.areaData = new Map();
 
     // 1. フル局データを取得・パース
-    const fullRes = await got(STATION_FULL_URL);
+    const fullRes = await httpClient.get(STATION_FULL_URL);
     const fullParsed = xmlParser.parse(fullRes.body);
 
     const regionData: RegionData[] = fullParsed.region.stations.map((region: any) => ({
@@ -238,7 +235,7 @@ export default class Radiko {
     await Promise.all(
       areaIDs.map((areaId) =>
         limit(async () => {
-          const res = await got(format(STATION_AREA_URL, areaId));
+          const res = await httpClient.get(format(STATION_AREA_URL, areaId));
           const parsed = xmlParser.parse(res.body);
           const stations = parsed.stations.station.map((s: any) => s.id);
           this.areaData.set(areaId, {
@@ -493,7 +490,7 @@ export default class Radiko {
    * @param token 付与する`X-Radiko-AuthToken`。
    */
   async fetchMedialist(upstreamUrl: string, token: string): Promise<{ contentType: string; body: Buffer }> {
-    const res = await got(upstreamUrl, {
+    const res = await httpClient.get(upstreamUrl, {
       headers: { 'X-Radiko-AuthToken': token, ...RADIKO_APP_HEADERS },
       responseType: 'buffer',
     });
@@ -509,7 +506,7 @@ export default class Radiko {
    */
   private async getLivePlaylistUrl(station: string): Promise<string | null> {
     try {
-      const res = await got(format(STATION_STREAM_XML_URL, station));
+      const res = await httpClient.get(format(STATION_STREAM_XML_URL, station));
       const parsed = xmlParser.parse(res.body);
       const rawEntries = parsed?.urls?.url;
       const chosen = selectLiveEntry(rawEntries, this.loginState !== null);
@@ -538,7 +535,7 @@ export default class Radiko {
    */
   private async getTimeFreePlaylistUrl(station: string, query: TimeFreeQuery, resumeSeek?: string): Promise<string | null> {
     try {
-      const res = await got(format(STATION_STREAM_XML_URL, station));
+      const res = await httpClient.get(format(STATION_STREAM_XML_URL, station));
       const parsed = xmlParser.parse(res.body);
       const rawEntries = parsed?.urls?.url;
       const chosen = selectLiveEntry(rawEntries, this.loginState !== null, '1');
@@ -570,16 +567,16 @@ export default class Radiko {
    */
   private async genTempChunkM3u8URL(url: string, token: string): Promise<string | null> {
     try {
-      const res = await got(url, {
+      const res = await httpClient.get(url, {
         headers: { 'X-Radiko-AuthToken': token, ...RADIKO_APP_HEADERS },
       });
 
       // HLSマスタープレイリストから#で始まらない最初の行(メディアプレイリストURI)を取得
       // 新方式では variant URL が「.m3u8」で終わらない(例: /medialist?session=...)ことがあるため拡張子では判定しない
-      const chunkUrl = res.body
+      const chunkUrl = (res.body as string)
         .split('\n')
-        .map(line => line.trim())
-        .find(line => line.startsWith('http') && !line.startsWith('#'));
+        .map((line: string) => line.trim())
+        .find((line: string) => line.startsWith('http') && !line.startsWith('#'));
       if (chunkUrl === undefined) {
         this.logger.error('RDK_E008', url, String(res.statusCode), res.body.slice(0, 500));
         return null;
@@ -601,7 +598,7 @@ export default class Radiko {
    * @param date 対象日(`'yyyyMMdd'`)。
    */
   async getProgramDaily(station: string, date: string): Promise<any> {
-    const res = await got(format(PROG_DAILY_STATION_URL, station, date));
+    const res = await httpClient.get(format(PROG_DAILY_STATION_URL, station, date));
     return xmlParser.parse(res.body);
   }
 }

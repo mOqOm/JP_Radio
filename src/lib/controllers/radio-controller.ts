@@ -17,7 +17,6 @@ import {
 } from '@/utils/radio-time';
 import { resolveAreaIdArray } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
-import { ASSETS_TEMPLATES_DIR } from '@/utils/plugin-paths';
 import type { LoggerEx } from '@/utils/logger';
 
 
@@ -99,11 +98,6 @@ export default class JpRadio {
     this.task2 = cron.schedule(`${(getRadioDelay() + 1) % 60} * * * * *`, this.#pushSongState.bind(this), {
       scheduled: false
     });
-
-    // デバッグ用ページ(/radiko/dev/)の静的アセット配信・テンプレートエンジン設定
-    this.app.use('/assets', express.static(ASSETS_TEMPLATES_DIR));
-    this.app.set('views', ASSETS_TEMPLATES_DIR);
-    this.app.set('view engine', 'ejs');
 
     this.#setupRoutes();
   }
@@ -263,134 +257,6 @@ export default class JpRadio {
 
     this.app.get('/radiko/', (_req: Request, res: Response) => {
       res.send("Hello, world. You're at the radiko_app index.");
-    });
-
-    // ##### デバッグ/開発用エンドポイント #####
-
-    this.app.get('/api/radiko/stations', (_req: Request, res: Response) => {
-      const stations = this.rdk?.stations;
-      if (stations === undefined) {
-        res.status(500).json({ error: 'Radiko service not initialized' });
-        return;
-      }
-      const rows = Array.from(stations.entries()).map(([stationId, info]) => ({
-        stationId,
-        name: info.name,
-        region: info.regionName || '-',
-        area: info.areaKanji || info.areaName || '-',
-      }));
-      res.json({ stations: rows });
-    });
-
-    this.app.get('/api/radiko/stations/with-program', async (_req: Request, res: Response) => {
-      if (this.rdk === null || this.prg === null) {
-        res.status(500).json({ error: 'Service not initialized' });
-        return;
-      }
-      try {
-        const stations = this.rdk.stations;
-        const rows = await Promise.all(
-          Array.from(stations.entries()).map(async ([stationId, info]) => {
-            const progData = await this.prg?.getCurProgram(stationId);
-            return {
-              stationId,
-              name: info.name,
-              region: info.regionName || '-',
-              area: info.areaKanji || info.areaName || '-',
-              program: progData !== undefined
-                ? {
-                  title: progData.title,
-                  pfm: progData.pfm || '',
-                  ft: formatTimeString(progData.ft),
-                  to: formatTimeString(progData.tt),
-                  img: progData.img || null,
-                }
-                : null,
-            };
-          })
-        );
-        res.json({ stations: rows });
-      } catch (error: any) {
-        res.status(500).json({ error: error?.message || 'Unknown error' });
-      }
-    });
-
-    this.app.get('/api/radiko/stations/:stationId/programs', async (req: Request, res: Response) => {
-      if (this.rdk === null || this.prg === null) {
-        res.status(500).json({ error: 'Service not initialized' });
-        return;
-      }
-      const stationId = String(req.params['stationId']);
-      if (this.rdk.stations.has(stationId) === false) {
-        res.status(404).json({ error: 'Unknown stationId' });
-        return;
-      }
-      const dateStr = String(req.query['date'] || '');
-      if (/^\d{8}$/.test(dateStr) === false) {
-        res.status(400).json({ error: 'Invalid date format. Use yyyyMMdd.' });
-        return;
-      }
-      try {
-        const programs = (await this.prg.getStationPrograms(stationId))
-          .filter((program) => parseRadioTime(program.ft).date === dateStr)
-          .sort((a, b) => (a.ft < b.ft ? -1 : 1))
-          .map((program) => ({
-            ft: formatHourMinute(program.ft),
-            to: formatHourMinute(program.tt),
-            dur: getTimeSpan(formatTimeString(program.ft), formatTimeString(program.tt)),
-            title: program.title,
-            pfm: program.pfm || '',
-            img: program.img || null,
-          }));
-        res.json({ stationId, date: dateStr, programs });
-      } catch (error: any) {
-        res.status(500).json({ error: error?.message || 'Failed to read programs' });
-      }
-    });
-
-    this.app.get('/radiko/dev/', (_req: Request, res: Response) => {
-      res.render('radiko_dev', { apiEndpoint: '/api/radiko/stations' });
-    });
-
-    // Volumioのフロントエンドを介さず、handleBrowseUri相当のルーティングを直接叩いて
-    // 生のBrowseResult(またはProgInfoData)を確認するためのデバッグ用エンドポイント。
-    this.app.get('/api/radiko/browse', async (req: Request, res: Response) => {
-      const uriParam = String(req.query['uri'] || 'radiko/live');
-      try {
-        const [baseUri, queryString] = uriParam.split('?');
-        const segments = baseUri.split('/');
-        const params = queryString !== undefined ? new URLSearchParams(queryString) : null;
-        const ft = params?.get('ft') ?? null;
-        const to = params?.get('to') ?? null;
-        const timeFreeQuery = ft !== null && to !== null ? { ft, to } : undefined;
-
-        let result: unknown;
-        if (segments[0] === 'radiko' && (segments[1] === 'proginfo' || segments[1] === 'progreg') && segments[2] !== undefined) {
-          result = await this.progInfo(segments[2], timeFreeQuery);
-        } else if (baseUri === 'radiko') {
-          result = await this.rootMenu();
-        } else if (baseUri === 'radiko/live') {
-          result = await this.radioStations();
-        } else if (baseUri === 'radiko/live/favourites') {
-          result = await this.radioFavouriteStations('live');
-        } else if (baseUri === 'radiko/timefree') {
-          result = await this.timeFreeStations();
-        } else if (baseUri === 'radiko/timefree_today') {
-          result = await this.timeFreeStations('today');
-        } else if (baseUri === 'radiko/timefree/favourites') {
-          result = await this.radioFavouriteStations('timefree');
-        } else if (segments[0] === 'radiko' && segments[1] === 'timetable_today' && segments[2] !== undefined) {
-          result = await this.stationTimetable(segments[2], { isToday: true });
-        } else if (segments[0] === 'radiko' && segments[1] === 'timetable' && segments[2] !== undefined) {
-          result = await this.stationTimetable(segments[2], timeFreeQuery);
-        } else {
-          res.status(400).json({ error: `Unknown uri: ${uriParam}` });
-          return;
-        }
-        res.json({ uri: uriParam, result });
-      } catch (error: any) {
-        res.status(500).json({ error: error?.message || 'Unknown error', stack: error?.stack });
-      }
     });
   }
 

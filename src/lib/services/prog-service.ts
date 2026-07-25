@@ -1,4 +1,4 @@
-import got from 'got';
+import { httpClient } from '@/utils/http-client';
 import Datastore from 'nedb-promises';
 import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
@@ -160,7 +160,7 @@ export default class RdkProg {
       limit(async () => {
         const url = utilFormat(PROG_DATE_AREA_URL, currentDate, areaId);
         try {
-          const response = await got(url);
+          const response = await httpClient.get(url);
           const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
           const stations = toArray(xmlData?.radiko?.stations?.station);
 
@@ -231,7 +231,7 @@ export default class RdkProg {
     const url = utilFormat(PROG_WEEKLY_STATION_URL, stationId);
     const programs: RadikoProgramData[] = [];
     try {
-      const response = await got(url);
+      const response = await httpClient.get(url);
       const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
       const stations = toArray(xmlData?.radiko?.stations?.station);
 

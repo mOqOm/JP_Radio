@@ -1,9 +1,89 @@
-import { format } from 'date-fns-tz';
-import { parse, addDays, addSeconds, format as formatDate } from 'date-fns';
-import { ja } from 'date-fns/locale';
+/**
+ * Radikoの番組表・配信はJST基準のため、サーバのシステムタイムゾーンによらずJSTで統一する。
+ * JSTは夏時間を持たない固定UTC+9のため、IANAタイムゾーンDB(date-fns-tz等)を使わずオフセット加算のみで求められる。
+ */
+const JST_OFFSET_MSEC = 9 * 3600 * 1000;
 
-/** Radikoの番組表・配信はJST基準のため、サーバのシステムタイムゾーンによらずJSTで統一する。 */
-const TIME_ZONE = 'Asia/Tokyo';
+/** 日本語の曜日名(`Date#getUTCDay()`の0=日曜始まりに対応)。書式トークン`E`で使う。 */
+const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * 日時の各要素。{@link formatFields}に渡してユーザー設定の書式文字列に整形する。
+ */
+interface DateFields {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  weekday: number;
+}
+
+/**
+ * `Date`のUTCフィールドをそのまま{@link DateFields}として取り出す。
+ * このモジュールでは常に「UTCフィールド=JSTの壁時計表記」となるよう`Date`を構築するため、
+ * ここでタイムゾーン変換は行わない。
+ * @param d 対象の`Date`。
+ */
+function fieldsFromDate(d: Date): DateFields {
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    second: d.getUTCSeconds(),
+    weekday: d.getUTCDay(),
+  };
+}
+
+/**
+ * {@link DateFields}を書式文字列に従って整形する。対応トークンは`yyyy`/`MM`/`M`/`dd`/`d`/`HH`/`mm`/`ss`/`E`
+ * (`E`は日本語の曜日1文字)のみ。UIConfig上の`timeFormat`選択肢および`'M月d日(E)'`表記をカバーする。
+ * @param f 整形対象の日時要素。
+ * @param pattern 書式文字列。
+ */
+function formatFields(f: DateFields, pattern: string): string {
+  return pattern.replace(/yyyy|MM|dd|HH|mm|ss|M|d|E/g, (token) => {
+    switch (token) {
+      case 'yyyy': return String(f.year);
+      case 'MM': return pad2(f.month);
+      case 'M': return String(f.month);
+      case 'dd': return pad2(f.day);
+      case 'd': return String(f.day);
+      case 'HH': return pad2(f.hour);
+      case 'mm': return pad2(f.minute);
+      case 'ss': return pad2(f.second);
+      case 'E': return WEEKDAY_JA[f.weekday];
+      default: return token;
+    }
+  });
+}
+
+/**
+ * `'yyyyMMddHHmmss'`形式の文字列を`Date`に変換する。フィールドはUTCとして格納する
+ * (実際の意味はJSTの壁時計表記だが、このモジュール内で一貫していれば変換は不要)。
+ * @param s 変換対象の`'yyyyMMddHHmmss'`形式の文字列。
+ */
+function parseYyyyMMddHHmmss(s: string): Date {
+  return new Date(Date.UTC(
+    Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)),
+    Number(s.slice(8, 10)), Number(s.slice(10, 12)), Number(s.slice(12, 14)),
+  ));
+}
+
+/**
+ * `'yyyyMMdd'`形式の文字列を`Date`に変換する({@link parseYyyyMMddHHmmss}参照)。
+ * @param s 変換対象の`'yyyyMMdd'`形式の文字列。
+ */
+function parseYyyyMMdd(s: string): Date {
+  return new Date(Date.UTC(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8))));
+}
 
 /**
  * Radikoのライブ配信遅延(実測、約20s)。ラジオ時間の算出時にこの分だけ巻き戻す。
@@ -33,7 +113,7 @@ const RADIO_DAY_START_MSEC = 5 * 3600 * 1000;
  * 実時間の今日の日付を`yyyyMMdd`形式で返す。
  */
 export function getCurrentDate(): string {
-  return format(new Date(), 'yyyyMMdd', { timeZone: TIME_ZONE });
+  return formatFields(fieldsFromDate(new Date(Date.now() + JST_OFFSET_MSEC)), 'yyyyMMdd');
 }
 
 /**
@@ -43,8 +123,8 @@ export function getCurrentDate(): string {
  */
 export function getCurrentRadioTime(): string {
   const adjustedNow = Date.now() - radioDelaySec * 1000;
-  const src = format(adjustedNow, 'yyyyMMddHHmmss', { timeZone: TIME_ZONE });
-  const today = format(adjustedNow - RADIO_DAY_START_MSEC, 'yyyyMMdd', { timeZone: TIME_ZONE });
+  const src = formatFields(fieldsFromDate(new Date(adjustedNow + JST_OFFSET_MSEC)), 'yyyyMMddHHmmss');
+  const today = formatFields(fieldsFromDate(new Date(adjustedNow - RADIO_DAY_START_MSEC + JST_OFFSET_MSEC)), 'yyyyMMdd');
   return cnvRadioTime(src, today);
 }
 
@@ -52,7 +132,8 @@ export function getCurrentRadioTime(): string {
  * 深夜0:00～5:00は前日として扱う「ラジオ日付」を`yyyyMMdd`形式で返す。
  */
 export function getCurrentRadioDate(): string {
-  return format(Date.now() - radioDelaySec * 1000 - RADIO_DAY_START_MSEC, 'yyyyMMdd', { timeZone: TIME_ZONE });
+  const adjustedNow = Date.now() - radioDelaySec * 1000 - RADIO_DAY_START_MSEC + JST_OFFSET_MSEC;
+  return formatFields(fieldsFromDate(new Date(adjustedNow)), 'yyyyMMdd');
 }
 
 /**
@@ -118,8 +199,8 @@ export function revCnvRadioTime(src: string): string {
   if (hourNum < 24) {
     return src;
   }
-  const baseDate = parse(parts.date, 'yyyyMMdd', new Date());
-  const nextDate = formatDate(addDays(baseDate, 1), 'yyyyMMdd');
+  const nextDay = new Date(parseYyyyMMdd(parts.date).getTime() + 24 * 3600 * 1000);
+  const nextDate = formatFields(fieldsFromDate(nextDay), 'yyyyMMdd');
   const hour = String(hourNum - 24).padStart(2, '0');
   return nextDate + hour + parts.minute + parts.second;
 }
@@ -131,8 +212,8 @@ export function revCnvRadioTime(src: string): string {
  * @param seconds 加算する秒数。
  */
 export function addSecondsToTimeString(src: string, seconds: number): string {
-  const date = parse(src, 'yyyyMMddHHmmss', new Date());
-  return formatDate(addSeconds(date, seconds), 'yyyyMMddHHmmss');
+  const date = new Date(parseYyyyMMddHHmmss(src).getTime() + seconds * 1000);
+  return formatFields(fieldsFromDate(date), 'yyyyMMddHHmmss');
 }
 
 /**
@@ -218,7 +299,7 @@ export function getProgramTimeStatus(ft: string, tt: string, currentRadioTime: s
  * `'<日付書式> <開始時刻書式>-<終了時刻書式>'`の3ブロックとして解釈する
  * (例: `'yyyy/MM/dd HH:mm-HH:mm'` => `'2026/07/25 12:00-13:00'`)。
  * `ft`/`tt`はラジオ時間表記(`24:00`~`29:00`表記を含みうる)のため、{@link revCnvRadioTime}で
- * 実時刻に戻してから`date-fns`でフォーマットする。
+ * 実時刻に戻してからフォーマットする。
  * @param ft 番組の放送開始時刻(ラジオ時間表記)。
  * @param tt 番組の放送終了時刻(ラジオ時間表記)。
  * @param pattern 表示書式。
@@ -227,12 +308,12 @@ export function formatRadioTimeRange(ft: string, tt: string, pattern: string): s
   const [datePattern, timePattern = 'HH:mm-HH:mm'] = pattern.split(' ');
   const [startTimePattern, endTimePattern = 'HH:mm'] = timePattern.split('-');
 
-  const ftDate = parse(revCnvRadioTime(ft), 'yyyyMMddHHmmss', new Date());
-  const ttDate = parse(revCnvRadioTime(tt), 'yyyyMMddHHmmss', new Date());
+  const ftFields = fieldsFromDate(parseYyyyMMddHHmmss(revCnvRadioTime(ft)));
+  const ttFields = fieldsFromDate(parseYyyyMMddHHmmss(revCnvRadioTime(tt)));
 
-  const datePart = formatDate(ftDate, datePattern, { locale: ja });
-  const startTimePart = formatDate(ftDate, startTimePattern, { locale: ja });
-  const endTimePart = formatDate(ttDate, endTimePattern, { locale: ja });
+  const datePart = formatFields(ftFields, datePattern);
+  const startTimePart = formatFields(ftFields, startTimePattern);
+  const endTimePart = formatFields(ttFields, endTimePattern);
 
   return `${datePart} ${startTimePart}-${endTimePart}`;
 }
@@ -240,10 +321,10 @@ export function formatRadioTimeRange(ft: string, tt: string, pattern: string): s
 /**
  * `'yyyyMMdd'`形式の日付文字列を任意の書式(曜日を含む書式も可)に整形する。
  * @param dateOnly `'yyyyMMdd'`形式の日付文字列。
- * @param pattern date-fnsの書式(例: `'M月d日(E)'`)。
+ * @param pattern 書式文字列(例: `'M月d日(E)'`)。対応トークンは{@link formatFields}参照。
  */
 export function formatDateOnly(dateOnly: string, pattern: string): string {
-  return formatDate(parse(dateOnly, 'yyyyMMdd', new Date()), pattern, { locale: ja });
+  return formatFields(fieldsFromDate(parseYyyyMMdd(dateOnly)), pattern);
 }
 
 /**
@@ -252,7 +333,8 @@ export function formatDateOnly(dateOnly: string, pattern: string): string {
  * @param days 加算する日数。
  */
 export function addDaysToDateOnly(dateOnly: string, days: number): string {
-  return formatDate(addDays(parse(dateOnly, 'yyyyMMdd', new Date()), days), 'yyyyMMdd');
+  const shifted = new Date(parseYyyyMMdd(dateOnly).getTime() + days * 24 * 3600 * 1000);
+  return formatFields(fieldsFromDate(shifted), 'yyyyMMdd');
 }
 
 /**
