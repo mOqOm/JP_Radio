@@ -47,6 +47,7 @@ class ControllerJpRadio {
    * UI設定画面の「再起動」操作から呼ばれる。onStop→onStartの順に再実行してプラグインを再起動する。
    */
   async restartPlugin(): Promise<void> {
+    this.logger.info('IDX_I027');
     try {
       await this.onStop();
       await this.onStart();
@@ -184,6 +185,7 @@ class ControllerJpRadio {
    * @param data 保存ボタンから渡される入力値。
    */
   async saveNetworkSetting(data: { servicePort: string; networkDelay: string }): Promise<void> {
+    this.logger.info('IDX_I028');
     if (this.config === null) {
       return;
     }
@@ -208,6 +210,7 @@ class ControllerJpRadio {
    * @param data 保存ボタンから渡される入力値。
    */
   async saveRadikoAccount(data: { radikoUser: string; radikoPass: string }): Promise<void> {
+    this.logger.info('IDX_I029');
     if (this.config === null) {
       return;
     }
@@ -227,6 +230,7 @@ class ControllerJpRadio {
    * @param data 保存ボタンから渡される選択値。
    */
   async saveBrowseModeSetting(data: { browseMode1: { value: string }; browseMode2: { value: string } }): Promise<void> {
+    this.logger.info('IDX_I030');
     if (this.config === null) {
       return;
     }
@@ -249,6 +253,7 @@ class ControllerJpRadio {
    * @param data 保存ボタンから渡される選択値。
    */
   async saveTempoSetting(data: { tempo: { value: string } }): Promise<void> {
+    this.logger.info('IDX_I031');
     if (this.config === null) {
       return;
     }
@@ -263,6 +268,7 @@ class ControllerJpRadio {
    * @param data 保存ボタンから渡される選択値。
    */
   async saveAlbumartSetting(data: { albumartType: { value: string } }): Promise<void> {
+    this.logger.info('IDX_I032');
     if (this.config === null) {
       return;
     }
@@ -300,6 +306,7 @@ class ControllerJpRadio {
     programPeriodTo: string;
     timeFormat: { value: string };
   }): Promise<void> {
+    this.logger.info('IDX_I033');
     if (this.config === null) {
       return;
     }
@@ -328,6 +335,7 @@ class ControllerJpRadio {
    * @param data キーがエリアID(例: 'JP13')、値がそのエリアを取得対象にするかどうかの真偽値。
    */
   async saveRadikoAreasSetting(data: Record<string, boolean>): Promise<void> {
+    this.logger.info('IDX_I034');
     if (this.config === null) {
       return;
     }
@@ -348,6 +356,7 @@ class ControllerJpRadio {
    * Volumio起動時に最初に呼ばれるライフサイクルメソッド。config.jsonを読み込む。
    */
   onVolumioStart(): Promise<void> {
+    this.logger.info('IDX_I035');
     const defer = libQ.defer();
     try {
       const configFile = this.commandRouter.pluginManager.getConfigurationFile(this.context, 'config.json');
@@ -534,6 +543,7 @@ class ControllerJpRadio {
    * このプラグインが使用する設定ファイル名の一覧をVolumioに伝える。
    */
   getConfigurationFiles(): string[] {
+    this.logger.info('IDX_I036');
     return ['config.json'];
   }
 
@@ -1125,7 +1135,8 @@ class ControllerJpRadio {
   /**
    * 検索機能は未実装。呼び出し元がエラー扱いしないよう空のresolveを返す。
    */
-  search(_query: any): Promise<any> {
+  search(query: any): Promise<any> {
+    this.logger.info('IDX_I037', JSON.stringify(query));
     return libQ.resolve();
   }
 
