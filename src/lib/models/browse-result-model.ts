@@ -10,6 +10,8 @@ export interface BrowseItem {
   title: string;
   // 表示用の画像 URL（例: 局のロゴや番組アートワーク）
   albumart?: string;
+  // 表示用アイコン(Font Awesomeクラス、例: 'fa fa-microphone')。albumart未設定時の代わりに使う。
+  icon?: string;
   // 選択時に再生や遷移に使用される URI
   uri: string;
   // プレイヤー内部で使われる任意の名前（未使用でも可）

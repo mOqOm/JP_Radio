@@ -492,30 +492,35 @@ export default class JpRadio {
         service: this.serviceName,
         type: 'radio-category',
         title: messageCatalog.get('BROWSE_LABEL_LIVE'),
+        icon: 'fa fa-microphone',
         uri: 'radiko/live',
       },
       {
         service: this.serviceName,
         type: 'radio-favourites',
         title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
+        icon: 'fa fa-heart',
         uri: 'radiko/live/favourites',
       },
       {
         service: this.serviceName,
         type: 'radio-category',
         title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+        icon: 'fa fa-clock-o',
         uri: 'radiko/timefree',
       },
       {
         service: this.serviceName,
         type: 'radio-category',
         title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_TODAY'),
+        icon: 'fa fa-calendar-check-o',
         uri: 'radiko/timefree_today',
       },
       {
         service: this.serviceName,
         type: 'radio-favourites',
         title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
+        icon: 'fa fa-heartbeat',
         uri: 'radiko/timefree/favourites',
       },
     ];
@@ -524,7 +529,7 @@ export default class JpRadio {
       navigation: {
         lists: [{
           title: messageCatalog.get('APP_TITLE'),
-          availableListViews: ['list'],
+          availableListViews: ['grid', 'list'],
           items
         }]
       },
