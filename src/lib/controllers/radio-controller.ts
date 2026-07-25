@@ -670,23 +670,40 @@ export default class JpRadio {
   }
 
   /**
-   * ライブ局一覧({@link radioStations})の先頭に添えるセクション。登録済みのライブお気に入りを
-   * その場に展開し、クリックせずに中身が見えるようにする(登録が無ければ何も返さない)。
-   * ここに置けるのは`song`型の項目のみ({@link radioStations}の局一覧と同じ型)。`radio-category`型の項目を
-   * `song`型のグリッド一覧と混在させると、混在させた側の項目がクリックできなくなる
-   * (このVolumioフロントエンドの制約)ことが判明したため、タイムフリー関連(すべて`radio-category`型)は
-   * ここに置かず、代わりに{@link timeFreeStations}側にまとめている。
+   * ライブ局一覧({@link radioStations})の先頭に添えるセクション群。登録済みのライブお気に入りをその場に
+   * 展開し(登録が無ければ出さない)、タイムフリーへの案内リンクを置く。
+   * 検証中: `radio-category`型の項目を`song`型のグリッド一覧と混在させるとクリックできなくなる不具合が
+   * あったが、原因が`type`の違いではなく`availableListViews`の不一致(このリストだけ`['list']`単独だった)
+   * だった可能性があるため、他の一覧と揃えて`['grid', 'list']`にして再検証している。
    */
   async #liveExtraLists(): Promise<BrowseList[]> {
+    const lists: BrowseList[] = [];
+
     const [liveFavItems] = await this.#commonRadioFavouriteStations('live');
-    if (liveFavItems.length === 0) {
-      return [];
+    if (liveFavItems.length > 0) {
+      lists.push({
+        title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
+        availableListViews: ['grid', 'list'],
+        items: liveFavItems,
+      });
     }
-    return [{
-      title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
+
+    lists.push({
+      title: '',
       availableListViews: ['grid', 'list'],
-      items: liveFavItems,
-    }];
+      items: [
+        {
+          service: this.serviceName,
+          type: 'radio-category',
+          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+          icon: 'fa fa-clock-o',
+          albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg',
+          uri: 'radiko/timefree',
+        },
+      ],
+    });
+
+    return lists;
   }
 
   /**

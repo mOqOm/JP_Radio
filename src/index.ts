@@ -438,7 +438,6 @@ class ControllerJpRadio {
       this.logger.error('IDX_E004', error);
     }
     this.commandRouter.volumioRemoveToBrowseSources('RADIKO');
-    this.commandRouter.volumioRemoveToBrowseSources('RADIKO (タイムフリー)');
   }
 
   /**
@@ -539,23 +538,14 @@ class ControllerJpRadio {
   }
 
   /**
-   * VolumioのBrowseメニューに「ライブ」「タイムフリー」を別々のソースとして追加する。
-   * `radio-category`型の項目を`song`型のグリッド一覧(局アイテム)と同じブラウズ結果に混在させると、
-   * 混在させた側の項目がクリックできなくなる(このVolumioフロントエンドの制約)ことが判明したため、
-   * 両者を1画面にまとめず、入口の時点で完全に分離している。
+   * VolumioのBrowseメニューに「RADIKO」ソースを追加する。選択時は直接ライブ局一覧
+   * ({@link JpRadio.radioStations})を表示する(タイムフリーへはその先頭の案内リンクから遷移)。
    */
   addToBrowseSources(): void {
     this.logger.info('IDX_I006', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
       name: 'RADIKO',
       uri: 'radiko/live',
-      plugin_type: 'music_service',
-      plugin_name: this.serviceName,
-      albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
-    });
-    this.commandRouter.volumioAddToBrowseSources({
-      name: 'RADIKO (タイムフリー)',
-      uri: 'radiko/timefree',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
       albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
