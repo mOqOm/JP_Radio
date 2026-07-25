@@ -583,19 +583,15 @@ export default class JpRadio {
    */
   async radioStations(): Promise<BrowseResult> {
     this.logger.info('RCT_I005');
-    const extraLists = await this.#liveExtraLists();
 
     if (this.rdk?.stations === undefined) {
       return {
         navigation: {
-          lists: [
-            ...extraLists,
-            {
-              title: messageCatalog.get('BROWSE_LABEL_LIVE'),
-              availableListViews: ['grid', 'list'],
-              items: []
-            }
-          ]
+          lists: [{
+            title: messageCatalog.get('BROWSE_LABEL_LIVE'),
+            availableListViews: ['grid', 'list'],
+            items: []
+          }]
         },
         uri: 'radiko/live'
       };
@@ -663,47 +659,61 @@ export default class JpRadio {
 
     return {
       navigation: {
-        lists: [...extraLists, ...lists]
+        lists
       },
       uri: 'radiko/live'
     };
   }
 
   /**
-   * ライブ局一覧({@link radioStations})の先頭に添えるセクション群。登録済みのライブお気に入りをその場に
-   * 展開し(登録が無ければ出さない)、タイムフリーへの案内リンクを置く。
-   * 検証中: `radio-category`型の項目を`song`型のグリッド一覧と混在させるとクリックできなくなる不具合が
-   * あったが、原因が`type`の違いではなく`availableListViews`の不一致(このリストだけ`['list']`単独だった)
-   * だった可能性があるため、他の一覧と揃えて`['grid', 'list']`にして再検証している。
+   * 局名・ローマ字局名にキーワードを含む局を検索し、Volumioの検索結果画面用データを返す。
+   * ライブの局一覧と同じ`song`型の項目(直接再生)を返す。
+   * @param keyword 検索キーワード(前後の空白を除いたもの)。
    */
-  async #liveExtraLists(): Promise<BrowseList[]> {
-    const lists: BrowseList[] = [];
+  async searchStations(keyword: string): Promise<BrowseList[]> {
+    this.logger.info('RCT_I015', keyword);
 
-    const [liveFavItems] = await this.#commonRadioFavouriteStations('live');
-    if (liveFavItems.length > 0) {
-      lists.push({
-        title: messageCatalog.get('BROWSE_LABEL_LIVE_FAVOURITES'),
-        availableListViews: ['grid', 'list'],
-        items: liveFavItems,
-      });
+    if (this.rdk?.stations === undefined) {
+      return [];
     }
 
-    lists.push({
-      title: '',
-      availableListViews: ['grid', 'list'],
-      items: [
-        {
-          service: this.serviceName,
-          type: 'radio-category',
-          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
-          icon: 'fa fa-clock-o',
-          albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg',
-          uri: 'radiko/timefree',
-        },
-      ],
+    const lowerKeyword = keyword.toLowerCase();
+    const matchedEntries = Array.from(this.rdk.stations.entries()).filter(([, stationInfo]) => {
+      return stationInfo.name.toLowerCase().includes(lowerKeyword)
+        || stationInfo.asciiName.toLowerCase().includes(lowerKeyword);
     });
 
-    return lists;
+    if (matchedEntries.length === 0) {
+      return [];
+    }
+
+    const items = await Promise.all(matchedEntries.map(async ([stationId, stationInfo]) => {
+      const meta = await this.#buildTrackMeta(stationId, stationInfo);
+      const uri = `http://localhost:${this.port}/radiko/play/${stationId}`;
+      const item: BrowseItem = {
+        service: this.serviceName,
+        type: 'song',
+        title: meta.title,
+        album: meta.album,
+        artist: meta.artist,
+        albumart: meta.albumart,
+        uri,
+        samplerate: '',
+        bitdepth: 0,
+        channels: 0
+      };
+      if (this.browseMode1 === 'type2') {
+        item.type = 'radio-category';
+        item.uri = `radiko/proginfo/${stationId}`;
+      }
+      return item;
+    }));
+
+    return [{
+      title: messageCatalog.get('BROWSE_LABEL_LIVE'),
+      availableListViews: ['grid', 'list'],
+      items
+    }];
   }
 
   /**
@@ -851,32 +861,14 @@ export default class JpRadio {
     this.logger.info('RCT_I006');
     const resultUri = mode === 'today' ? 'radiko/timefree_today' : 'radiko/timefree';
 
-    // お気に入り登録済みの個別番組をその場に展開する(通常表示時のみ)。ここに置けるのは`radio-category`型の
-    // 項目のみ(このメソッドの局一覧と同じ型)。`song`型のグリッド一覧と混在させると、混在させた側の項目が
-    // クリックできなくなる(このVolumioフロントエンドの制約)ため、必ず同じ型同士でまとめる。
-    const extraLists: BrowseList[] = [];
-    if (mode === 'normal') {
-      const [, timeFreeFavProgramItems] = await this.#commonRadioFavouriteStations('timefree');
-      if (timeFreeFavProgramItems.length > 0) {
-        extraLists.push({
-          title: messageCatalog.get('BROWSE_LABEL_TIMEFREE_FAVOURITES'),
-          availableListViews: ['list'],
-          items: timeFreeFavProgramItems,
-        });
-      }
-    }
-
     if (this.rdk?.stations === undefined) {
       return {
         navigation: {
-          lists: [
-            ...extraLists,
-            {
-              title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
-              availableListViews: ['grid', 'list'],
-              items: []
-            }
-          ]
+          lists: [{
+            title: messageCatalog.get('BROWSE_LABEL_TIMEFREE'),
+            availableListViews: ['grid', 'list'],
+            items: []
+          }]
         },
         uri: resultUri
       };
@@ -912,7 +904,7 @@ export default class JpRadio {
 
     return {
       navigation: {
-        lists: [...extraLists, ...lists]
+        lists
       },
       uri: resultUri
     };

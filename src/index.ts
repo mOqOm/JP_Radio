@@ -548,14 +548,14 @@ class ControllerJpRadio {
   }
 
   /**
-   * VolumioのBrowseメニューに「RADIKO」ソースを追加する。選択時は直接ライブ局一覧
-   * ({@link JpRadio.radioStations})を表示する(タイムフリーへはその先頭の案内リンクから遷移)。
+   * VolumioのBrowseメニューに「RADIKO」ソースを追加する。選択時はカテゴリ選択のルートメニュー
+   * ({@link JpRadio.rootMenu})を表示する。
    */
   addToBrowseSources(): void {
     this.logger.info('IDX_I006', this.serviceName);
     this.commandRouter.volumioAddToBrowseSources({
       name: 'RADIKO',
-      uri: 'radiko/live',
+      uri: 'radiko',
       plugin_type: 'music_service',
       plugin_name: this.serviceName,
       albumart: '/albumart?sourceicon=music_service/jp_radio/assets/images/app_radiko.svg'
@@ -1133,11 +1133,29 @@ class ControllerJpRadio {
   }
 
   /**
-   * 検索機能は未実装。呼び出し元がエラー扱いしないよう空のresolveを返す。
+   * Volumioの検索画面から呼ばれる。局名・ローマ字局名にキーワードを含む局を検索結果として返す。
+   * @param query `value`に検索キーワードを含むオブジェクト。
    */
-  search(query: any): Promise<any> {
+  search(query: { value?: string }): Promise<any> {
     this.logger.info('IDX_I037', JSON.stringify(query));
-    return libQ.resolve();
+    const defer = libQ.defer();
+
+    const appRadio = this.appRadio;
+    const keyword = query?.value?.trim();
+    if (appRadio === null || keyword === undefined || keyword === '') {
+      defer.resolve([]);
+      return defer.promise;
+    }
+
+    libQ.resolve()
+      .then(() => appRadio.searchStations(keyword))
+      .then((result: any) => defer.resolve(result))
+      .fail((error: any) => {
+        this.logger.error('IDX_E013', error);
+        defer.reject(error);
+      });
+
+    return defer.promise;
   }
 
   /**
