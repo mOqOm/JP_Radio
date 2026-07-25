@@ -471,7 +471,17 @@ export default class Radiko {
       '-i', proxyUrl, ...codecArgs, '-f', 'adts', 'pipe:1'
     ];
 
-    this.logger.info('RDK_I014', args.join(' '));
+    // ログに認証トークンをそのまま残さないよう、-headers(Authtoken)と-i(プロキシURLのtoken=)をマスクする
+    const redactedArgs = args.map((arg) => {
+      if (arg === streamHeaders) {
+        return 'X-Radiko-Authtoken:***REDACTED***';
+      }
+      if (arg === proxyUrl) {
+        return arg.replace(/token=[^&]+/, 'token=***REDACTED***');
+      }
+      return arg;
+    });
+    this.logger.info('RDK_I014', redactedArgs.join(' '));
 
     return spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], detached: true });
   }
