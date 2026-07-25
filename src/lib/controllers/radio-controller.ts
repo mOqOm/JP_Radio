@@ -556,7 +556,7 @@ export default class JpRadio {
             }
           ]
         },
-        uri: 'radiko'
+        uri: 'radiko/live'
       };
     }
 
@@ -607,17 +607,24 @@ export default class JpRadio {
 
     await Promise.all(stationPromises);
 
-    const lists: BrowseList[] = Object.entries(grouped).map(([regionName, items]) => ({
-      title: regionName,
-      availableListViews: ['grid', 'list'],
-      items
-    }));
+    const lists: BrowseList[] = Object.entries(grouped)
+      // 全国広域局(regionName === '全国')は地域別一覧の最後に表示する
+      .sort(([a], [b]) => {
+        if (a === '全国') return 1;
+        if (b === '全国') return -1;
+        return 0;
+      })
+      .map(([regionName, items]) => ({
+        title: regionName,
+        availableListViews: ['grid', 'list'],
+        items
+      }));
 
     return {
       navigation: {
         lists: [...extraLists, ...lists]
       },
-      uri: 'radiko'
+      uri: 'radiko/live'
     };
   }
 
@@ -816,6 +823,7 @@ export default class JpRadio {
    */
   async timeFreeStations(mode: 'normal' | 'today' = 'normal'): Promise<BrowseResult> {
     this.logger.info('RCT_I006');
+    const resultUri = mode === 'today' ? 'radiko/timefree_today' : 'radiko/timefree';
 
     if (this.rdk?.stations === undefined) {
       return {
@@ -826,7 +834,7 @@ export default class JpRadio {
             items: []
           }]
         },
-        uri: 'radiko'
+        uri: resultUri
       };
     }
 
@@ -862,7 +870,7 @@ export default class JpRadio {
       navigation: {
         lists
       },
-      uri: 'radiko'
+      uri: resultUri
     };
   }
 
