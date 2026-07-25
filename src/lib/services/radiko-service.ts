@@ -216,8 +216,11 @@ export default class Radiko {
       region_id: region['@region_id'],
       ascii_name: region['@ascii_name'],
       stations: region.station.map((s: any) => ({
-        // FM802対策
-        id: String(s.id),
+        // FM802対策: フル局データでは id が'FM802'という英数字表記だが、エリア別フィード
+        // (STATION_AREA_URL)では802という数値表記で返るため、ここで合わせておかないと
+        // 非プレミアムユーザーのエリア判定(allowedStations.includes(id))が一致しなくなる
+        // (GitHub issue #21)。
+        id: (s.id === 'FM802' ? '802' : String(s.id)),
         name: s.name,
         ascii_name: s.ascii_name,
         areafree: s.areafree,
