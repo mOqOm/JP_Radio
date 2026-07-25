@@ -544,6 +544,7 @@ class ControllerJpRadio {
    * @param curUri 選択されたURI。
    */
   handleBrowseUri(curUri: string): Promise<BrowseResult | Record<string, never>> {
+    this.logger.info('IDX_I025', curUri);
     const defer = libQ.defer();
     const [baseUri, queryString] = curUri.split('?');
 
