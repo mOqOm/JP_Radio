@@ -27,6 +27,9 @@ Japanese radio relay server for Volumio4
 + 2026/07/25 Made Browse mode, Time-Free playback speed, album art source, timetable display settings, and network delay compensation apply immediately without requiring a restart
 + 2026/07/25 Added automatic switch to catch-up playback of the currently airing program when seeking backward during live playback
 + 2026/07/25 Added the ability to re-register a Favourited Time-Free program for the same time slot on a different week
++ 2026/07/28 Fixed FM802 not appearing in the station list for non-premium users: its station ID was inconsistently formatted (`FM802` vs `802`) between the full station data feed and the per-area feed, causing area matching to fail ([Issue #21](https://github.com/mOqOm/JP_Radio/issues/21))
++ 2026/07/28 Fixed the timetable showing "No items" for dates more than 7 days in the past when the "Program period (past)" setting is 8 days or more, since the weekly program API only covers about ±1 week
++ 2026/07/28 Fixed the "Area Selection" setting (for AreaFree members) not being applied to the live station list, Time-Free station list, or search results — all areas' stations were always shown regardless of the selection
 ### version 4.0.1(2026/07/24)
 + 2026/07/24 Adapted to Radiko's 2026 streaming API changes, fixing live playback.
 + 2026/07/24 Fixed missing program guide data for neighboring-area stations (BAYFM78/NACK5/YFM/IBS, etc.) on non-AreaFree accounts.
