@@ -4,7 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
-import { PROG_DATE_AREA_URL, PROG_WEEKLY_STATION_URL } from '@/consts/radiko-urls';
+import { PROG_DATE_AREA_URL, PROG_WEEKLY_STATION_URL, PROG_DAILY_STATION_URL } from '@/consts/radiko-urls';
 import type { RadikoProgramData } from '@/models/radiko-program-model';
 import type { RadikoXMLData } from '@/models/radiko-xml-station-model';
 import type { StationInfo } from '@/models/station-model';
@@ -266,6 +266,66 @@ export default class RdkProg {
       this.logger.error('PRG_E007', stationId, error);
     }
     return programs;
+  }
+
+  /**
+   * 指定局・指定日の番組表XML(`PROG_DAILY_STATION_URL`)を取得し、DBへ保存した上で配列として返す。
+   * `getStationPrograms`(前後1週間分)ではカバーできない、7日より前/後の日付を個別に補うために使う。
+   * @param stationId 局ID。
+   * @param date 対象日(`'yyyyMMdd'`)。
+   */
+  async getStationProgramsForDate(stationId: string, date: string): Promise<RadikoProgramData[]> {
+    const url = utilFormat(PROG_DAILY_STATION_URL, date, stationId);
+    const programs: RadikoProgramData[] = [];
+    try {
+      const response = await httpClient.get(url);
+      const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
+      const stations = toArray(xmlData?.radiko?.stations?.station);
+
+      for (const stationData of stations) {
+        const progsBlocks = toArray(stationData.progs);
+        for (const block of progsBlocks) {
+          const progs = toArray(block?.prog);
+          if (progs.length === 0) {
+            continue;
+          }
+          const today = parseRadioTime(progs[0]['@ft']).date;
+          for (const prog of progs) {
+            let pfm = prog['pfm'];
+            if (pfm === undefined) {
+              pfm = '';
+            }
+            const program: RadikoProgramData = {
+              station: String(stationId),
+              id: stationId + prog['@id'],
+              ft: cnvRadioTime(prog['@ft'], today),
+              tt: cnvRadioTime(prog['@to'], today),
+              title: prog['title'],
+              pfm,
+              img: prog['img'],
+            };
+            programs.push(program);
+            await this.putProgram(program);
+          }
+        }
+      }
+    } catch (error: any) {
+      this.logger.error('PRG_E008', stationId, date, error);
+    }
+    return programs;
+  }
+
+  /**
+   * 指定局について、複数日分の番組表(`getStationProgramsForDate`)を並列(最大5並列)で取得する。
+   * @param stationId 局ID。
+   * @param dates 対象日(`'yyyyMMdd'`)の配列。
+   */
+  async getStationProgramsForDates(stationId: string, dates: string[]): Promise<RadikoProgramData[]> {
+    const limit = pLimit(5);
+    const results = await Promise.all(
+      dates.map((date) => limit(() => this.getStationProgramsForDate(stationId, date)))
+    );
+    return results.flat();
   }
 
   /**

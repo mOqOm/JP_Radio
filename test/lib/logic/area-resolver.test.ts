@@ -1,4 +1,4 @@
-import { resolveAreaIdArray } from '@/logic/area-resolver';
+import { resolveAreaIdArray, resolveAreaFilter } from '@/logic/area-resolver';
 
 describe('resolveAreaIdArray', () => {
   it('AreaFree会員なら全国47エリアを返す', () => {
@@ -33,5 +33,24 @@ describe('resolveAreaIdArray', () => {
   it('AreaFree会員でも選択エリアが空なら全国47エリアを返す', () => {
     const result = resolveAreaIdArray('JP13/AreaFree', [], []);
     expect(result).toHaveLength(47);
+  });
+});
+
+describe('resolveAreaFilter', () => {
+  it('AreaFree会員がエリアを選択していれば、そのエリアID集合を返す(局一覧を絞り込む)', () => {
+    const result = resolveAreaFilter('JP13/AreaFree', ['JP27']);
+    expect(result).toEqual(new Set(['JP27']));
+  });
+
+  it('AreaFree会員でも選択エリアが空なら絞り込みなし(null)を返す', () => {
+    expect(resolveAreaFilter('JP13/AreaFree', [])).toBeNull();
+  });
+
+  it('AreaFree会員でなければ、選択エリアがあっても絞り込みなし(null)を返す', () => {
+    expect(resolveAreaFilter('JP13/premium', ['JP27'])).toBeNull();
+  });
+
+  it('myAreaIdが未指定でも選択エリアがあれば無視して絞り込みなし(null)を返す', () => {
+    expect(resolveAreaFilter(undefined, ['JP27'])).toBeNull();
   });
 });

@@ -15,7 +15,7 @@ import {
   revCnvRadioTime, addSecondsToTimeString, parseRadioTime, getProgramTimeStatus, formatDateOnly, addDaysToDateOnly,
   formatRadioTimeRange,
 } from '@/utils/radio-time';
-import { resolveAreaIdArray } from '@/logic/area-resolver';
+import { resolveAreaIdArray, resolveAreaFilter } from '@/logic/area-resolver';
 import { messageCatalog } from '@/utils/message-catalog';
 import type { LoggerEx } from '@/utils/logger';
 
@@ -515,7 +515,9 @@ export default class JpRadio {
       };
     }
 
-    const entries = Array.from(this.rdk.stations.entries());
+    const areaFilter = await this.#getSelectedAreaFilter();
+    const entries = Array.from(this.rdk.stations.entries())
+      .filter(([, stationInfo]) => areaFilter === null || areaFilter.has(stationInfo.areaId));
     // 地域名ごとにグループ化
     const grouped: Record<string, BrowseItem[]> = {};
 
@@ -595,8 +597,12 @@ export default class JpRadio {
       return [];
     }
 
+    const areaFilter = await this.#getSelectedAreaFilter();
     const lowerKeyword = keyword.toLowerCase();
     const matchedEntries = Array.from(this.rdk.stations.entries()).filter(([, stationInfo]) => {
+      if (areaFilter !== null && areaFilter.has(stationInfo.areaId) === false) {
+        return false;
+      }
       return stationInfo.name.toLowerCase().includes(lowerKeyword)
         || stationInfo.asciiName.toLowerCase().includes(lowerKeyword);
     });
@@ -794,8 +800,12 @@ export default class JpRadio {
     }
 
     const timetableSegment = mode === 'today' ? 'timetable_today' : 'timetable';
+    const areaFilter = await this.#getSelectedAreaFilter();
     const grouped: Record<string, BrowseItem[]> = {};
     for (const [stationId, stationInfo] of this.rdk.stations.entries()) {
+      if (areaFilter !== null && areaFilter.has(stationInfo.areaId) === false) {
+        continue;
+      }
       const areaName = stationInfo.areaKanji || stationInfo.areaName;
       const item: BrowseItem = {
         service: this.serviceName,
@@ -861,6 +871,21 @@ export default class JpRadio {
     }
 
     const programs = await this.prg?.getStationPrograms(stationId) ?? [];
+
+    // getStationPrograms(週次API)は前後1週間分しか返らないため、表示期間設定(最大30日)で
+    // それより外側の日付を指定された場合は、日別APIで個別に補う(GitHub issue #21関連の追加報告)。
+    const coveredDates = new Set(programs.map((program) => parseRadioTime(program.ft).date));
+    const missingDates: string[] = [];
+    for (let dateOnly = fromDateOnly; dateOnly <= toDateOnly; dateOnly = addDaysToDateOnly(dateOnly, 1)) {
+      if (coveredDates.has(dateOnly) === false) {
+        missingDates.push(dateOnly);
+      }
+    }
+    if (missingDates.length > 0) {
+      const extraPrograms = await this.prg?.getStationProgramsForDates(stationId, missingDates) ?? [];
+      programs.push(...extraPrograms);
+    }
+
     const currentRadioTime = getCurrentRadioTime();
 
     const buildPlayUri = (ft: string, tt: string): string => {
@@ -1170,6 +1195,14 @@ export default class JpRadio {
 
       this.commandRouter.pushToastMessage('info', messageCatalog.get('APP_TITLE'), messageCatalog.get('STOPPED'));
     }
+  }
+
+  /**
+   * 「エリア選択」設定による局一覧の絞り込み対象エリアID集合を返す({@link resolveAreaFilter}参照)。
+   */
+  async #getSelectedAreaFilter(): Promise<Set<string> | null> {
+    const myAreaId = await this.rdk?.getMyAreaId();
+    return resolveAreaFilter(myAreaId, this.radikoAreaIdArray);
   }
 
   /**

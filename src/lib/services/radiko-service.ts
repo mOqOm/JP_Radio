@@ -15,7 +15,7 @@ import {
   LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
   STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIME_FREE_QUERY,
-  AUTH_KEY, MAX_RETRY_COUNT, PROG_DAILY_STATION_URL,
+  AUTH_KEY, MAX_RETRY_COUNT,
   RADIKO_APP_HEADERS
 } from '@/consts/radiko-urls';
 
@@ -593,15 +593,5 @@ export default class Radiko {
       this.logger.error('RDK_E009', url, String(error?.response?.statusCode), String(bodyOrMessage));
       return null;
     }
-  }
-
-  /**
-   * 指定局・指定日の番組表XMLを取得してパースする。
-   * @param station 局ID。
-   * @param date 対象日(`'yyyyMMdd'`)。
-   */
-  async getProgramDaily(station: string, date: string): Promise<any> {
-    const res = await httpClient.get(format(PROG_DAILY_STATION_URL, station, date));
-    return xmlParser.parse(res.body);
   }
 }
