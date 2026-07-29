@@ -18,7 +18,7 @@
   "BROWSE_MODE_TYPE1": "Play",
   "BROWSE_MODE_TYPE2": "Show program info",
   "RADIKO_AREAS_LABEL": "Area Selection",
-  "RADIKO_AREAS_DESC": "For AreaFree members. Choose which areas to fetch program listings for. If none are selected, all 47 areas nationwide are fetched.",
+  "RADIKO_AREAS_DESC": "Choose which areas' stations to show in the live/time-free station lists and search results. Selecting one or more areas restricts the lists to those areas' stations plus nationwide network stations (e.g. NHK Radio). If none are selected, all areas are shown. Whether a selected area's stations can actually be played depends on Radiko's own membership restrictions (non-AreaFree members may be unable to play stations outside their area).",
   "TEMPO_LABEL": "Playback Speed",
   "TEMPO_DOC": "Sets the playback speed for Time-Free programs. Does not affect live playback.",
   "TEMPO_DESC": "Sets the playback speed for Time-Free programs. Does not affect live playback.",

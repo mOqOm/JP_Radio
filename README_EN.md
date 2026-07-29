@@ -30,6 +30,10 @@ Japanese radio relay server for Volumio4
 + 2026/07/28 Fixed FM802 not appearing in the station list for non-premium users: its station ID was inconsistently formatted (`FM802` vs `802`) between the full station data feed and the per-area feed, causing area matching to fail ([Issue #21](https://github.com/mOqOm/JP_Radio/issues/21))
 + 2026/07/28 Fixed the timetable showing "No items" for dates more than 7 days in the past when the "Program period (past)" setting is 8 days or more, since the weekly program API only covers about ±1 week
 + 2026/07/28 Fixed the "Area Selection" setting (for AreaFree members) not being applied to the live station list, Time-Free station list, or search results — all areas' stations were always shown regardless of the selection
++ 2026/07/29 Fixed the "Area Selection" setting not applying at all for non-AreaFree members (e.g. the Free plan). It now restricts the live/time-free station lists and search results to the selected area(s) plus nationwide network stations (e.g. NHK Radio), regardless of membership type
++ 2026/07/29 Made changes to the "Area Selection" setting apply immediately without requiring a restart
++ 2026/07/29 When one or more areas are selected, program listing fetches are now also scoped to just those areas (plus nationwide network stations), regardless of membership type, reducing unnecessary fetching
++ 2026/07/29 Fixed an issue where, when not logged in (station list restricted to your own area only), selecting other areas in "Area Selection" would hide even your own area's stations from the list and program fetches. Your own area is now always included only when not logged in; once logged in, the list strictly follows the selected area(s) regardless of membership type
 ### version 4.0.1(2026/07/24)
 + 2026/07/24 Adapted to Radiko's 2026 streaming API changes, fixing live playback.
 + 2026/07/24 Fixed missing program guide data for neighboring-area stations (BAYFM78/NACK5/YFM/IBS, etc.) on non-AreaFree accounts.

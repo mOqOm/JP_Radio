@@ -44,7 +44,7 @@ export default class JpRadio {
   // (詳細は末尾のupdate*系メソッド群を参照)。
   private browseMode1: string;
   private browseMode2: string;
-  private readonly radikoAreaIdArray: string[];
+  private radikoAreaIdArray: string[];
   private tempo: number;
   /** タイムフリー番組表のページングのデフォルト範囲(過去方向、日数)。 */
   private programPeriodFrom: number;
@@ -110,6 +110,16 @@ export default class JpRadio {
   updateBrowseMode(browseMode1: string, browseMode2: string): void {
     this.browseMode1 = browseMode1;
     this.browseMode2 = browseMode2;
+  }
+
+  /**
+   * 「エリア選択」設定を再起動無しで更新する。番組表取得対象エリアが変わりうるため、
+   * 反映と合わせてバックグラウンドで番組表を再取得する(完了を待たずに返る)。
+   * @param radikoAreaIdArray 設定画面で選択されたエリアIDの一覧。
+   */
+  updateRadikoAreaIdArray(radikoAreaIdArray: string[]): void {
+    this.radikoAreaIdArray = radikoAreaIdArray;
+    void this.#pgupdate();
   }
 
   /**
@@ -517,7 +527,7 @@ export default class JpRadio {
 
     const areaFilter = await this.#getSelectedAreaFilter();
     const entries = Array.from(this.rdk.stations.entries())
-      .filter(([, stationInfo]) => areaFilter === null || areaFilter.has(stationInfo.areaId));
+      .filter(([, stationInfo]) => this.#isStationInAreaFilter(stationInfo, areaFilter));
     // 地域名ごとにグループ化
     const grouped: Record<string, BrowseItem[]> = {};
 
@@ -600,7 +610,7 @@ export default class JpRadio {
     const areaFilter = await this.#getSelectedAreaFilter();
     const lowerKeyword = keyword.toLowerCase();
     const matchedEntries = Array.from(this.rdk.stations.entries()).filter(([, stationInfo]) => {
-      if (areaFilter !== null && areaFilter.has(stationInfo.areaId) === false) {
+      if (this.#isStationInAreaFilter(stationInfo, areaFilter) === false) {
         return false;
       }
       return stationInfo.name.toLowerCase().includes(lowerKeyword)
@@ -803,7 +813,7 @@ export default class JpRadio {
     const areaFilter = await this.#getSelectedAreaFilter();
     const grouped: Record<string, BrowseItem[]> = {};
     for (const [stationId, stationInfo] of this.rdk.stations.entries()) {
-      if (areaFilter !== null && areaFilter.has(stationInfo.areaId) === false) {
+      if (this.#isStationInAreaFilter(stationInfo, areaFilter) === false) {
         continue;
       }
       const areaName = stationInfo.areaKanji || stationInfo.areaName;
@@ -1199,10 +1209,38 @@ export default class JpRadio {
 
   /**
    * 「エリア選択」設定による局一覧の絞り込み対象エリアID集合を返す({@link resolveAreaFilter}参照)。
+   * 未ログイン時(局一覧自体が自エリアの局のみに制限され、選択エリアと無関係に自エリアの局しか
+   * 存在しない)は、自エリアの局まで隠れてしまわないよう自エリアのIDを絞り込み対象に加える。
+   * ログイン済み(会員種別を問わず)の場合は、選択したエリアだけに厳密に絞り込む
+   * (自エリアを強制的には含めない)。
    */
   async #getSelectedAreaFilter(): Promise<Set<string> | null> {
-    const myAreaId = await this.rdk?.getMyAreaId();
-    return resolveAreaFilter(myAreaId, this.radikoAreaIdArray);
+    const areaFilter = resolveAreaFilter(this.radikoAreaIdArray);
+    if (areaFilter === null) {
+      return null;
+    }
+    const [myArea, memberType] = (await this.rdk?.getMyAreaId())?.split('/') ?? [];
+    if (memberType === '' && myArea !== undefined) {
+      areaFilter.add(myArea);
+    }
+    return areaFilter;
+  }
+
+  /**
+   * 指定局を、現在の「エリア選択」絞り込みの表示対象に含めるべきかを判定する。
+   * 絞り込みなし(null)、選択エリアに一致、または全国ネット局(regionName === '全国'、
+   * JOAK-FM/RN1/RN2など。エリアを問わず受信可能なため常に対象に含める)のいずれかならtrue。
+   * @param stationInfo 判定対象の局情報。
+   * @param areaFilter {@link #getSelectedAreaFilter}が返す絞り込み対象エリアID集合。
+   */
+  #isStationInAreaFilter(stationInfo: StationInfo, areaFilter: Set<string> | null): boolean {
+    if (areaFilter === null) {
+      return true;
+    }
+    if (stationInfo.regionName === '全国') {
+      return true;
+    }
+    return areaFilter.has(stationInfo.areaId);
   }
 
   /**
@@ -1217,8 +1255,11 @@ export default class JpRadio {
   }
 
   /**
-   * 番組表を最新化する。エリアフリーでない場合も、局一覧に実際に含まれる全エリア分を対象にする
-   * ことで、隣接エリア局(BAYFM78/NACK5/YFMなど)の番組情報が欠落しないようにしている。
+   * 番組表を最新化する。「エリア選択」設定で1つ以上選択している場合は、会員種別によらずその
+   * エリア(+全国ネット局分の'JP13')分だけを対象にする(選択エリア以外はBrowse表示からも
+   * 絞り込まれ表示されないため)。未選択の場合、エリアフリーでない会員も局一覧に実際に含まれる
+   * 全エリア分を対象にすることで、隣接エリア局(BAYFM78/NACK5/YFMなど)の番組情報が
+   * 欠落しないようにしている({@link resolveAreaIdArray}参照)。
    * @param whenBoot trueの場合は起動時呼び出しとしてトースト通知を出す。
    */
   async #pgupdate(whenBoot = false): Promise<void> {

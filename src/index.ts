@@ -356,7 +356,8 @@ class ControllerJpRadio {
   }
 
   /**
-   * UI設定画面で選択されたエリア選択(`radikoAreas.<areaId>`)を保存し、変更があれば再起動を促す。
+   * UI設定画面で選択されたエリア選択(`radikoAreas.<areaId>`)を保存する。ブラウズ時に都度参照される
+   * 設定のため、{@link JpRadio.updateRadikoAreaIdArray}で即座に反映でき、再起動は不要。
    * @param data キーがエリアID(例: 'JP13')、値がそのエリアを取得対象にするかどうかの真偽値。
    */
   async saveRadikoAreasSetting(data: Record<string, boolean>): Promise<void> {
@@ -373,7 +374,8 @@ class ControllerJpRadio {
       }
     }
     if (updated === true) {
-      this.showRestartModal();
+      this.appRadio?.updateRadikoAreaIdArray(this.getRadikoAreaIdArray());
+      this.pushSettingsSavedToast();
     }
   }
 
