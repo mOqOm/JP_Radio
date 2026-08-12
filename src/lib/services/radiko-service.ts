@@ -315,7 +315,9 @@ export default class Radiko {
   }
 
   /**
-   * XMLからパースした`logo`要素(単一または配列)から、最大幅のロゴ画像URLを選択する。
+   * XMLからパースした`logo`要素(単一または配列)から、最も正方形に近いロゴ画像URLを選択する。
+   * Radikoのロゴは448x200(2.24:1)と688x160(4.3:1)のように幅優先だと縦横比が極端なものが混ざっており、
+   * albumart表示で縦伸びが目立つため、縦横比が1:1に最も近いもの(同率なら解像度が大きい方)を選ぶ。
    * @param logo `fast-xml-parser`でパースした`<logo>`要素(単一オブジェクトまたは配列)。
    */
   static #pickLogoUrl(logo: any): string {
@@ -326,12 +328,23 @@ export default class Radiko {
     if (logos.length === 0) {
       return '';
     }
-    const widest = logos.reduce((best, current) => {
-      const bestWidth = Number(best?.['@width']) || 0;
-      const currentWidth = Number(current?.['@width']) || 0;
-      return currentWidth > bestWidth ? current : best;
+    const score = (item: any): { ratio: number; area: number } => {
+      const width = Number(item?.['@width']) || 0;
+      const height = Number(item?.['@height']) || 0;
+      if (width <= 0 || height <= 0) {
+        return { ratio: Infinity, area: 0 };
+      }
+      return { ratio: Math.max(width, height) / Math.min(width, height), area: width * height };
+    };
+    const squarest = logos.reduce((best, current) => {
+      const bestScore = score(best);
+      const currentScore = score(current);
+      if (currentScore.ratio !== bestScore.ratio) {
+        return currentScore.ratio < bestScore.ratio ? current : best;
+      }
+      return currentScore.area > bestScore.area ? current : best;
     });
-    return widest?.['#text'] || '';
+    return squarest?.['#text'] || '';
   }
 
   /**
