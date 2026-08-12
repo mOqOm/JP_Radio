@@ -38,6 +38,12 @@ export default class JpRadio {
   private rdk: Radiko | null = null;
   private station: string = '';
   private task2Cnt: number = 0;
+  /**
+   * ライブ再生の直近の再生位置(msec)。Volumioの`stateMachine`側は`consumeUpdateService('mpd')`により
+   * mpd自身の生ストリームポーリングで不定期に上書きされ信頼できないため、`seek()`での過去/未来判定は
+   * こちら(`#pushSongState`で計算した値)を参照する(v3.1.xの`playing.lastpos`相当)。
+   */
+  private liveSeekMsec = 0;
 
   private readonly serviceName: string;
   // 以下は設定画面から再起動無しで変更を反映できるよう、あえてreadonlyにしていない
@@ -277,8 +283,10 @@ export default class JpRadio {
    */
   async #pushSongState(forceUpdate = false): Promise<void> {
     const state = this.commandRouter.stateMachine.getState();
-    // 番組の切り替わりで更新
-    if (state.seek >= state.duration * 1000 || --this.task2Cnt <= 0 || forceUpdate === true) {
+    // mpd自身の周期ポーリングでdurationが不正な値(0/undefined)に上書きされることがあり、
+    // 10分間隔の強制更新を待たずにここで検知して毎回自己修復する(v3.1.x同様)。
+    // 番組の切り替わりでも更新
+    if (state.duration === undefined || state.duration <= 0 || state.seek >= state.duration * 1000 || --this.task2Cnt <= 0 || forceUpdate === true) {
       // 念のため10分間隔で強制更新
       this.task2Cnt = 10;
       const stationInfo = this.rdk?.stations.get(this.station);
@@ -300,6 +308,7 @@ export default class JpRadio {
         state.duration = getTimeSpan(t0, t1);
         // msec
         state.seek = getTimeSpan(t0, now) * 1000;
+        this.liveSeekMsec = state.seek;
 
         // workaround to allow state to be pushed when not in a volatile state
         const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
@@ -417,6 +426,8 @@ export default class JpRadio {
    * 途中再開に使う)のに加え、タイトル・アーティスト・アルバムアートも定期的に再送信する。
    * mpd自身の周期的なステータス更新でこれらの情報がリセットされてしまうことがあるため、
    * ライブ再生の`#pushSongState`と同様、継続的に上書きし直して情報が消えないようにしている。
+   * durationについても同様で、`#pushTimeFreeState`は再生開始直後に1回しか呼ばれないため、その後mpdに
+   * 不正な値(0/undefined)で上書きされるとシークバーが機能しなくなる。ここで毎回検知して補正する。
    */
   #startTimeFreeProgressTracking(): void {
     this.#stopTimeFreeProgressTracking();
@@ -425,7 +436,14 @@ export default class JpRadio {
         return;
       }
       const state = this.commandRouter.stateMachine.getState();
-      if (typeof state.seek === 'number') {
+      if (typeof state.duration !== 'number' || state.duration <= 0) {
+        const t0 = formatTimeString(this.timeFreeProgress.ft);
+        const t1 = formatTimeString(this.timeFreeProgress.to);
+        state.duration = getTimeSpan(t0, t1);
+        state.seek = this.timeFreeProgress.positionSec * 1000;
+        this.commandRouter.stateMachine.currentSeek = state.seek;
+        this.commandRouter.stateMachine.currentSongDuration = state.duration;
+      } else if (typeof state.seek === 'number') {
         this.timeFreeProgress.positionSec = Math.floor(state.seek / 1000);
       }
 
@@ -1040,6 +1058,14 @@ export default class JpRadio {
       return null;
     }
     return { ft: progData.ft, tt: progData.tt };
+  }
+
+  /**
+   * ライブ再生の直近の再生位置(msec)を返す。`index.ts`の`seek()`が過去/未来方向を判定する際、
+   * 信頼できない`stateMachine`側の値の代わりに参照する({@link liveSeekMsec}参照)。
+   */
+  getLiveSeekMsec(): number {
+    return this.liveSeekMsec;
   }
 
   /**

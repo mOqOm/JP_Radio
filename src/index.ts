@@ -1081,9 +1081,11 @@ class ControllerJpRadio {
       const [liveUri, queryStr] = uri.split('?');
       if (queryStr === undefined || queryStr === '') {
         // ライブ：過去方向のシークのみ、現在放送中の番組を追っかけ再生に切り替える
-        const currentState = this.commandRouter.stateMachine.getState();
+        // (stateMachine側の`seek`はconsumeUpdateService('mpd')によりmpd自身の生ストリームポーリングで
+        //  不定期に上書きされ信頼できないため、代わりにプラグイン内部で保持している値を参照する)
+        const currentSeekMsec = this.appRadio?.getLiveSeekMsec() ?? 0;
         const stationId = liveUri.split('/').pop();
-        if (typeof currentState?.seek === 'number' && timepos < currentState.seek && stationId !== undefined) {
+        if (timepos < currentSeekMsec && stationId !== undefined) {
           const program = await this.appRadio?.getCurrentProgramWindow(stationId);
           if (program !== null && program !== undefined) {
             const seekSec = Math.round(timepos / 1000);
