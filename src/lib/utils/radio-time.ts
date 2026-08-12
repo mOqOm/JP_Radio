@@ -265,8 +265,7 @@ export function getTimeSpan(begin: string, end: string): number {
  * 番組がタイムフリーで再生可能(=既に放送開始済み)かどうかを判定する。
  * `ft`/`currentRadioTime`はどちらも{@link cnvRadioTime}で正規化された`'yyyyMMddHHmmss'`文字列
  * (日付+時刻が矛盾なく連動している)なので、単純な文字列比較で時系列の前後関係を判定できる。
- * 「タイムフリーとして古すぎないか(7日以内か)」は、番組データの取得元である
- * `PROG_WEEKLY_STATION_URL`自体が前後1週間分しか返さないため、ここでは判定しない。
+ * 「タイムフリーとして古すぎないか(保持期間内か)」はここでは判定しない(Radiko側APIの応答に委ねる)。
  * @param ft 判定対象の番組の放送開始時刻。
  * @param currentRadioTime 現在時刻(`getCurrentRadioTime`の戻り値)。
  */

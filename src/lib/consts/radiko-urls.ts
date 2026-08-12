@@ -83,7 +83,3 @@ export const PROG_TODAY_AREA_URL = 'http://radiko.jp/v3/program/today/%s.xml';
  * 指定局・指定日の番組表XML。例: `20250831/TBS.xml`
  */
 export const PROG_DAILY_STATION_URL = 'http://radiko.jp/v3/program/station/date/%s/%s.xml';
-/**
- * 指定局の前後1週間(-7~+6)分の番組表XML。例: `TBS.xml`
- */
-export const PROG_WEEKLY_STATION_URL = 'http://radiko.jp/v3/program/station/weekly/%s.xml';

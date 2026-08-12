@@ -880,10 +880,11 @@ export default class JpRadio {
       toDateOnly = addDaysToDateOnly(today, this.programPeriodTo);
     }
 
-    const programs = await this.prg?.getStationPrograms(stationId) ?? [];
+    // まずDBキャッシュを検索し、サーバーへは足りない日付分だけ問い合わせる(v3.1.x同様、
+    // 表示のたびに毎回サーバーへ問い合わせていた挙動(表示が遅い原因)を避ける)。
+    const programs = await this.prg?.findProgramsInRange(stationId, fromDateOnly, toDateOnly) ?? [];
 
-    // getStationPrograms(週次API)は前後1週間分しか返らないため、表示期間設定(最大30日)で
-    // それより外側の日付を指定された場合は、日別APIで個別に補う(GitHub issue #21関連の追加報告)。
+    // DBにない日付(未取得、またはGitHub issue #21関連の30日超過分)を日別APIで個別に補う。
     const coveredDates = new Set(programs.map((program) => parseRadioTime(program.ft).date));
     const missingDates: string[] = [];
     for (let dateOnly = fromDateOnly; dateOnly <= toDateOnly; dateOnly = addDaysToDateOnly(dateOnly, 1)) {

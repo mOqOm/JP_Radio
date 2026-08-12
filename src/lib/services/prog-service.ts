@@ -4,12 +4,12 @@ import { XMLParser } from 'fast-xml-parser';
 import { format as utilFormat } from 'util';
 import pLimit from 'p-limit';
 
-import { PROG_DATE_AREA_URL, PROG_WEEKLY_STATION_URL, PROG_DAILY_STATION_URL } from '@/consts/radiko-urls';
+import { PROG_DATE_AREA_URL, PROG_DAILY_STATION_URL } from '@/consts/radiko-urls';
 import type { RadikoProgramData } from '@/models/radiko-program-model';
 import type { RadikoXMLData } from '@/models/radiko-xml-station-model';
 import type { StationInfo } from '@/models/station-model';
 
-import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, toMinutePrecision } from '@/utils/radio-time';
+import { getCurrentDate, getCurrentRadioTime, getCurrentRadioDate, cnvRadioTime, parseRadioTime, addDaysToDateOnly, toMinutePrecision } from '@/utils/radio-time';
 import { toArray } from '@/utils/xml';
 import { isStationRelevantForArea, isDuplicateAreaFreeStation } from '@/logic/station-filter';
 import type { LoggerEx } from '@/utils/logger';
@@ -198,11 +198,13 @@ export default class RdkProg {
               if (pfm === undefined) {
                 pfm = '';
               }
+              const ft = cnvRadioTime(prog['@ft'], today);
               const program: RadikoProgramData = {
                 // FM802対策
                 station: String(stationId),
-                id: stationId + prog['@id'],
-                ft: cnvRadioTime(prog['@ft'], today),
+                // 同一progId対策(TBS等の長時間番組は1時間ごとに区切られるが@idが同一のため、放送開始時刻(HHmm)を付加して一意にする)
+                id: stationId + prog['@id'] + ft.slice(8, 12),
+                ft,
                 tt: cnvRadioTime(prog['@to'], today),
                 title: prog['title'],
                 pfm,
@@ -221,56 +223,30 @@ export default class RdkProg {
   }
 
   /**
-   * 指定局の前後1週間分(`PROG_WEEKLY_STATION_URL`)の番組表を取得し、DBへ保存した上で配列として返す。
-   * タイムフリーのブラウズ一覧を組み立てるために使う。
-   * 週次レスポンスは日ごとに`progs`ブロックが分かれているため、`updatePrograms`と同様に
-   * 各ブロックの先頭番組の日付をその日の基準日として個別に`cnvRadioTime`で正規化する。
-   * @param stationId 局ID。
+   * 指定局・指定日付範囲(`'yyyyMMdd'`、両端含む)に該当する番組をDBから検索する。サーバーへは問い合わせない。
+   * タイムフリー番組表の表示時、まずDBキャッシュを優先して参照することで、閲覧のたびに毎回サーバーへ
+   * 問い合わせていた従来の挙動(表示が遅い原因)を避けるために使う。DBにない日付は`getStationProgramsForDates`
+   * で個別に補う。
+   * @param station 局ID。
+   * @param fromDateOnly 範囲開始日(`'yyyyMMdd'`)。
+   * @param toDateOnly 範囲終了日(`'yyyyMMdd'`、この日を含む)。
    */
-  async getStationPrograms(stationId: string): Promise<RadikoProgramData[]> {
-    const url = utilFormat(PROG_WEEKLY_STATION_URL, stationId);
-    const programs: RadikoProgramData[] = [];
+  async findProgramsInRange(station: string, fromDateOnly: string, toDateOnly: string): Promise<RadikoProgramData[]> {
     try {
-      const response = await httpClient.get(url);
-      const xmlData: RadikoXMLData = this.xmlParser.parse(response.body);
-      const stations = toArray(xmlData?.radiko?.stations?.station);
-
-      for (const stationData of stations) {
-        const progsBlocks = toArray(stationData.progs);
-        for (const block of progsBlocks) {
-          const progs = toArray(block?.prog);
-          if (progs.length === 0) {
-            continue;
-          }
-          const today = parseRadioTime(progs[0]['@ft']).date;
-          for (const prog of progs) {
-            let pfm = prog['pfm'];
-            if (pfm === undefined) {
-              pfm = '';
-            }
-            const program: RadikoProgramData = {
-              station: String(stationId),
-              id: stationId + prog['@id'],
-              ft: cnvRadioTime(prog['@ft'], today),
-              tt: cnvRadioTime(prog['@to'], today),
-              title: prog['title'],
-              pfm,
-              img: prog['img'],
-            };
-            programs.push(program);
-            await this.putProgram(program);
-          }
-        }
-      }
+      const exclusiveEnd = addDaysToDateOnly(toDateOnly, 1);
+      return await this.db.find({
+        station,
+        ft: { $gte: fromDateOnly + '000000', $lt: exclusiveEnd + '000000' },
+      });
     } catch (error: any) {
-      this.logger.error('PRG_E007', stationId, error);
+      this.logger.error('PRG_E007', station, fromDateOnly, toDateOnly, error);
+      return [];
     }
-    return programs;
   }
 
   /**
    * 指定局・指定日の番組表XML(`PROG_DAILY_STATION_URL`)を取得し、DBへ保存した上で配列として返す。
-   * `getStationPrograms`(前後1週間分)ではカバーできない、7日より前/後の日付を個別に補うために使う。
+   * `findProgramsInRange`でDBに見つからなかった日付を個別に補うために使う。
    * @param stationId 局ID。
    * @param date 対象日(`'yyyyMMdd'`)。
    */
@@ -295,10 +271,12 @@ export default class RdkProg {
             if (pfm === undefined) {
               pfm = '';
             }
+            const ft = cnvRadioTime(prog['@ft'], today);
             const program: RadikoProgramData = {
               station: String(stationId),
-              id: stationId + prog['@id'],
-              ft: cnvRadioTime(prog['@ft'], today),
+              // 同一progId対策(TBS等の長時間番組は1時間ごとに区切られるが@idが同一のため、放送開始時刻(HHmm)を付加して一意にする)
+              id: stationId + prog['@id'] + ft.slice(8, 12),
+              ft,
               tt: cnvRadioTime(prog['@to'], today),
               title: prog['title'],
               pfm,
