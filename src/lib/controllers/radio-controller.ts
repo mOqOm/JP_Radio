@@ -235,6 +235,10 @@ export default class JpRadio {
           // 明示的なシーク指定(index.tsのseek()から)。#resolveResumeによる自動再開より優先する。
           resumePositionSec = Number(seekParam);
           resumeSeek = addSecondsToTimeString(revCnvRadioTime(timeFreeQuery.ft), resumePositionSec);
+          // timeFreeProgressを即座に同期しておく。ストリーム開始直後はmpdのduration/seek報告が
+          // 安定するまで数秒かかることがあり、その間に#startTimeFreeProgressTrackingの自己修復が
+          // 発火すると、ここを更新しないままだと古い(シーク前の)位置にタイムバーが巻き戻ってしまう。
+          this.timeFreeProgress = { station: this.station, ft: timeFreeQuery.ft, to: timeFreeQuery.to, positionSec: resumePositionSec };
         } else {
           const resume = this.#resolveResume(this.station, timeFreeQuery);
           resumeSeek = resume.seek;
@@ -331,6 +335,16 @@ export default class JpRadio {
   }
 
   /**
+   * ライブ再生中に過去方向へシークして追っかけ再生(タイムフリー相当)へ切り替える際、
+   * `index.ts`の`seek()`から呼ばれる。旧セッションの終了(mpdの接続close)を待って
+   * `task2.stop()`が呼ばれるのを待つと、その間に#pushSongState(ライブ用)のcronが1回発火して
+   * 新セッションのduration/曲情報を上書きしてしまうことがあるため、切替と同時に即座に停止する。
+   */
+  stopLiveTracking(): void {
+    this.task2.stop();
+  }
+
+  /**
    * ライブ再生中にシーク操作(非対応)された場合に、Volumio側のタイムバーを正しい位置へ戻すため、
    * 通常の更新条件を無視して強制的に再生状態を再送信する。
    */
@@ -402,19 +416,35 @@ export default class JpRadio {
   }
 
   /**
-   * タイムフリー再生開始直後に1回だけ、番組の長さと再生位置(途中再開時のみ0以外)をVolumioへ反映する。
+   * タイムフリー再生開始直後に1回だけ、番組の長さ・再生位置(途中再開時のみ0以外)・曲情報をVolumioへ反映する。
+   * ライブ再生中に過去方向へシークして追っかけ再生(=内部的にはタイムフリー)へ切り替わった場合、
+   * `queueItem`はライブ再生時のまま更新されていない(mpdへ直接add/deleteするだけでexplodeUriを経由しない)ため、
+   * ここで改めて番組情報を取得してタイトル・アーティスト・アルバムアートを反映する。
    * @param query 再生中の番組の放送区間。
    * @param resumePositionSec 途中再開の場合の再生位置(秒)。先頭からの場合は0。
    */
-  #pushTimeFreeState(query: TimeFreeQuery, resumePositionSec: number): void {
+  async #pushTimeFreeState(query: TimeFreeQuery, resumePositionSec: number): Promise<void> {
     const state = this.commandRouter.stateMachine.getState();
     const t0 = formatTimeString(query.ft);
     const t1 = formatTimeString(query.to);
     state.duration = getTimeSpan(t0, t1);
     state.seek = resumePositionSec * 1000;
 
+    const stationInfo = this.rdk?.stations.get(this.station);
+    if (stationInfo !== undefined) {
+      const meta = await this.#buildTimeFreeTrackMeta(this.station, stationInfo, query);
+      state.title = meta.title;
+      state.artist = meta.artist;
+      state.album = meta.album;
+      state.albumart = meta.albumart;
+    }
+
     const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
     queueItem.duration = state.duration;
+    queueItem.name = state.title;
+    queueItem.artist = state.artist;
+    queueItem.album = state.album;
+    queueItem.albumart = state.albumart;
 
     this.commandRouter.stateMachine.currentSeek = state.seek;
     this.commandRouter.stateMachine.currentSongDuration = state.duration;
@@ -903,16 +933,24 @@ export default class JpRadio {
     const programs = await this.prg?.findProgramsInRange(stationId, fromDateOnly, toDateOnly) ?? [];
 
     // DBにない日付(未取得、またはGitHub issue #21関連の30日超過分)を日別APIで個別に補う。
+    // 「今日」はclearOldProgram(6h間隔)により終了済みの番組が随時削除され、DBの内容が
+    // 部分的(未来分の番組しか残っていない等)になり得るため、1件でも見つかれば「取得済み」と
+    // みなす通常の判定では過去分の欠落を検知できない。今日については常に再取得して補う。
     const coveredDates = new Set(programs.map((program) => parseRadioTime(program.ft).date));
     const missingDates: string[] = [];
     for (let dateOnly = fromDateOnly; dateOnly <= toDateOnly; dateOnly = addDaysToDateOnly(dateOnly, 1)) {
-      if (coveredDates.has(dateOnly) === false) {
+      if (coveredDates.has(dateOnly) === false || dateOnly === today) {
         missingDates.push(dateOnly);
       }
     }
     if (missingDates.length > 0) {
       const extraPrograms = await this.prg?.getStationProgramsForDates(stationId, missingDates) ?? [];
-      programs.push(...extraPrograms);
+      const programById = new Map(programs.map((program) => [program.id, program]));
+      for (const program of extraPrograms) {
+        programById.set(program.id, program);
+      }
+      programs.length = 0;
+      programs.push(...programById.values());
     }
 
     const currentRadioTime = getCurrentRadioTime();

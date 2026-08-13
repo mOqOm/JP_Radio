@@ -1088,8 +1088,20 @@ class ControllerJpRadio {
         if (timepos < currentSeekMsec && stationId !== undefined) {
           const program = await this.appRadio?.getCurrentProgramWindow(stationId);
           if (program !== null && program !== undefined) {
+            // 旧セッションのclose待ち(task2.stop()は onStop コールバック経由)だと、その間に
+            // ライブ用cronが1回発火して新セッションのduration/曲情報を上書きすることがあるため、
+            // 切替と同時に即座に止める
+            this.appRadio?.stopLiveTracking();
             const seekSec = Math.round(timepos / 1000);
             const catchUpUri = `${liveUri}?ft=${program.ft}&to=${program.tt}&seek=${seekSec}`;
+            // mpdへは直接add/deleteするだけでVolumio自身のarrayQueueは更新されないため、ここで
+            // 明示的にuriを追っかけ再生用に差し替える。しないと#updateQueueInfo(ライブ局は'?'なしURIと
+            // みなして定期更新する処理)がこのアイテムを"ライブ局のまま"と誤認識し、切替後もライブの
+            // duration/曲情報で上書きし続けてしまう。
+            const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[this.commandRouter.stateMachine.getState().position];
+            if (queueItem !== undefined) {
+              queueItem.uri = catchUpUri;
+            }
             await this.mpdPlugin.sendMpdCommand(`add "${catchUpUri}"`, []);
             await this.mpdPlugin.sendMpdCommand('delete 0', []);
             return;
