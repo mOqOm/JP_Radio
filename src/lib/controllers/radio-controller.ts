@@ -1118,15 +1118,20 @@ export default class JpRadio {
   }
 
   /**
-   * 指定エリアIDに属する局のID一覧を返す(エリア選択設定画面の説明表示に使う)。
+   * 指定エリアIDを選択した場合にBrowse局一覧へ実際に表示される局名の一覧を返す
+   * (エリア選択設定画面の説明表示に使う)。`areaData`(Radikoの受信可能局一覧、県域局に加えて
+   * 受信できる広域局・全国ネット局も含む)をそのまま使うと、Browse側の絞り込み
+   * ({@link #isStationInAreaFilter}、自局のareaIdが一致 or 全国ネット局のみを表示)と食い違い、
+   * 設定画面の説明とBrowseの表示局が一致しなくなるため、同じ基準で揃える。
    * @param areaId エリアID(例: 'JP13')。
    */
   getAreaStations(areaId: string): string[] {
-    const stations = this.rdk?.areaData.get(areaId)?.stations;
-    if (stations === undefined) {
+    if (this.rdk === null) {
       return [];
     }
-    return stations;
+    return Array.from(this.rdk.stations.values())
+      .filter((stationInfo) => stationInfo.areaId === areaId || stationInfo.regionName === '全国')
+      .map((stationInfo) => stationInfo.name);
   }
 
   /**
