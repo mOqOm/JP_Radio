@@ -61,12 +61,20 @@ export default class Radiko {
   async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<void> {
     if (acct !== null) {
       this.logger.info('RDK_I001');
-      let loginOK = await this.checkLogin();
-      if (loginOK === null) {
-        this.cookieJar = await this.login(acct);
-        loginOK = await this.checkLogin();
+      try {
+        let loginOK = await this.checkLogin();
+        if (loginOK === null) {
+          this.cookieJar = await this.login(acct);
+          loginOK = await this.checkLogin();
+        }
+        this.loginState = loginOK;
+      } catch (error: any) {
+        // アカウント情報の誤り等でログインに失敗しても、局一覧取得以降の処理まで止めてしまうと
+        // プラグイン全体が使えなくなる(起動のたびに再試行して繰り返し失敗し続ける)ため、
+        // 未ログイン状態として処理を継続する。
+        this.logger.error('RDK_E011', error);
+        this.loginState = null;
       }
-      this.loginState = loginOK;
     }
 
     if (forceGetStations === true || this.areaId === null) {

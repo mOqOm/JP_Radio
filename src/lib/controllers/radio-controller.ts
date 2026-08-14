@@ -1230,7 +1230,18 @@ export default class JpRadio {
     // って怒られるので，awaitを外してみた。
     // BOOTは早くなるし問題なさそうなのでこれでいいんじゃない？
     //await this.#init();
-    this.#init();
+    // catchを付けないと、内部で例外(誤ったRadikoアカウント情報でのログイン失敗等)が起きた際に
+    // 未処理のPromise rejectionとなり、Node.jsのデフォルト挙動でVolumioプロセス全体がクラッシュする。
+    // 誤ったアカウント情報は設定に保存されたままのため、次回起動時も同じ場所でクラッシュを繰り返し、
+    // 最悪の場合OS再インストールが必要になるレベルの被害に繋がるため、必ず捕捉する。
+    this.#init().catch((error: any) => {
+      this.logger.error('RCT_E006', error);
+      this.commandRouter.pushToastMessage(
+        'error',
+        messageCatalog.get('APP_TITLE'),
+        error?.message || messageCatalog.get('ERROR_GENERIC'),
+      );
+    });
 
     return new Promise((resolve, reject) => {
       this.server = this.app
