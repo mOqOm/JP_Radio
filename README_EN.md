@@ -15,6 +15,7 @@ Japanese radio relay server for Volumio4
 + 2026/08/13 Fixed duration and track info not being reflected, or being overwritten with stale live info, right after switching from live to catch-up playback
 + 2026/08/13 Fixed the seek bar briefly jumping back to its previous position right after seeking during Time-Free playback
 + 2026/08/13 Fixed the station list shown in the "Area Selection" settings screen not matching what Browse actually displays (local stations only, excluding wide-area stations)
++ 2026/08/14 【Important】Fixed a critical bug where saving an incorrect Radiko account would crash the entire Volumio process (due to an unhandled login-failure exception), causing it to crash again at the same point on every subsequent boot and leaving the settings screen unusable. Login failures are now handled gracefully and playback continues in a not-logged-in state
 ### version 4.1.0(2026/07/25)
 + 2026/07/25 Grouped the Time-Free timetable by date, with prev-week/prev-day/next-day/next-week navigation and on-air status icons (★on air/⬜︎not yet aired/▷playable)
 + 2026/07/25 Added a "Time-Free (Today)" shortcut
