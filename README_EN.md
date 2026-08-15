@@ -16,6 +16,9 @@ Japanese radio relay server for Volumio4
 + 2026/08/13 Fixed the seek bar briefly jumping back to its previous position right after seeking during Time-Free playback
 + 2026/08/13 Fixed the station list shown in the "Area Selection" settings screen not matching what Browse actually displays (local stations only, excluding wide-area stations)
 + 2026/08/14 【Important】Fixed a critical bug where saving an incorrect Radiko account would crash the entire Volumio process (due to an unhandled login-failure exception), causing it to crash again at the same point on every subsequent boot and leaving the settings screen unusable. Login failures are now handled gracefully and playback continues in a not-logged-in state
++ 2026/08/15 Added "全国" (Nationwide) as a selectable area. Nationwide network stations (Radio NIKKEI, NHK FM, etc.) are now opt-in just like any prefecture, instead of always showing unconditionally, so the settings screen matches what Browse displays
++ 2026/08/15 Restored the detailed program description (in addition to the performer info) in the program info modal
++ 2026/08/15 Added the broadcast date to the Time-Free playback screen and the "Favourite Programs (Time-Free)" list. Conversely, removed the now-redundant date from the live playback screen
 ### version 4.1.0(2026/07/25)
 + 2026/07/25 Grouped the Time-Free timetable by date, with prev-week/prev-day/next-day/next-week navigation and on-air status icons (★on air/⬜︎not yet aired/▷playable)
 + 2026/07/25 Added a "Time-Free (Today)" shortcut
