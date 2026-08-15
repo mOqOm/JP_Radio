@@ -1,9 +1,13 @@
+import { NATIONWIDE_AREA_ID } from '@/consts/area-name';
+
 /**
  * 自身のエリア情報文字列(`Radiko.getMyAreaId()`の戻り値、`'JP13/AreaFree'`形式)と
  * 局一覧に実際に含まれる全エリアIDから、番組表取得対象のエリアID配列を決定する。
- * 設定画面(`radikoAreas`)でエリアを選択していれば、原則としてそのエリア(+全国ネット局分の
- * 番組表取得に必要な`'JP13'`)だけを対象にする(選択エリア以外はBrowse表示自体が
- * {@link resolveAreaFilter}で絞り込まれ表示されなくなるため、番組表を取得する必要がない)。
+ * 設定画面(`radikoAreas`)でエリアを選択していれば、原則としてそのエリア(+`NATIONWIDE_AREA_ID`が
+ * 選択されている場合のみ、全国ネット局分の番組表取得に必要な`'JP13'`)だけを対象にする
+ * (選択エリア以外はBrowse表示自体が{@link resolveAreaFilter}で絞り込まれ表示されなくなるため、
+ * 番組表を取得する必要がない)。`NATIONWIDE_AREA_ID`自体はRadiko側の実エリアIDではなく番組表
+ * 取得には使えないため、戻り値には含めない。
  * ただし未ログイン時は局一覧自体が自エリアの局のみに制限され、選択エリアと無関係に自エリアの
  * 局しか存在しないため、自エリアの番組表が欠落しないよう自エリアのIDも対象に加える
  * (ログイン済みの場合は会員種別を問わず自エリアを強制的には含めない)。
@@ -13,14 +17,19 @@
  * @param myAreaId `Radiko.getMyAreaId()`の戻り値(`'JP13/AreaFree'`形式、未ログイン時は`'JP13/'`)。
  *   未初期化の場合はundefined。
  * @param stationAreaIdArray 局一覧に実際に含まれる全エリアIDの一覧。
- * @param selectedAreaIdArray 設定画面で選択したエリアIDの一覧。未指定/空なら未選択時の既定動作にフォールバックする。
- * @returns 番組表取得対象とすべきエリアIDの配列。
+ * @param selectedAreaIdArray 設定画面で選択したエリアIDの一覧(`NATIONWIDE_AREA_ID`を含みうる)。
+ *   未指定/空なら未選択時の既定動作にフォールバックする。
+ * @returns 番組表取得対象とすべき実エリアIDの配列。
  */
 export function resolveAreaIdArray(myAreaId: string | undefined, stationAreaIdArray: readonly string[], selectedAreaIdArray: readonly string[] = []): string[] {
   if (selectedAreaIdArray.length > 0) {
     const areaSet = new Set(selectedAreaIdArray);
-    // 全国ネット局(regionName === '全国')の番組表は'JP13'取得時にしか含まれないため、常に加える
-    areaSet.add('JP13');
+    if (areaSet.has(NATIONWIDE_AREA_ID)) {
+      // 全国ネット局(regionName === '全国')の番組表は'JP13'取得時にしか含まれないため、
+      // 選択されている場合のみ'JP13'を加える(NATIONWIDE_AREA_ID自体は実エリアIDではないため除く)
+      areaSet.delete(NATIONWIDE_AREA_ID);
+      areaSet.add('JP13');
+    }
     if (myAreaId !== undefined) {
       const [myArea, memberType] = myAreaId.split('/');
       if (memberType === '') {
@@ -50,10 +59,9 @@ export function resolveAreaIdArray(myAreaId: string | undefined, stationAreaIdAr
 /**
  * 局一覧のBrowse表示(ライブ/タイムフリー/検索)を「エリア選択」設定で絞り込むべきエリアID集合を返す。
  * 設定画面で1つ以上エリアを選択していれば会員種別によらず絞り込みを行い、未選択(空配列)ならnull
- * (絞り込みなし=全局対象)を返す。絞り込み適用時も、全国ネット局(regionName === '全国')は
- * エリアを問わず受信可能なため、呼び出し側でこの集合とは別に常に含めること
- * ({@link JpRadio.radioStations}などの`'全国'`除外ロジックを参照)。
- * @param selectedAreaIdArray 設定画面で選択したエリアIDの一覧。
+ * (絞り込みなし=全局対象)を返す。全国ネット局(regionName === '全国')も他の局と同様に扱われ、
+ * `NATIONWIDE_AREA_ID`が選択されている場合のみ表示対象になる({@link JpRadio.#isStationInAreaFilter}参照)。
+ * @param selectedAreaIdArray 設定画面で選択したエリアIDの一覧(`NATIONWIDE_AREA_ID`を含みうる)。
  * @returns 絞り込み対象のエリアID集合。絞り込み不要ならnull。
  */
 export function resolveAreaFilter(selectedAreaIdArray: readonly string[]): Set<string> | null {

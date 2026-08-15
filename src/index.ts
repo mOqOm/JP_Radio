@@ -126,7 +126,8 @@ class ControllerJpRadio {
   }
 
   /**
-   * 設定画面(`radikoAreas.JP1`~`radikoAreas.JP47`)で選択済みのエリアIDの一覧を返す。
+   * 設定画面(`radikoAreas.<areaId>`、`AREA_REGIONS`に含まれる全エリアID。都道府県の`JP1`~`JP47`に
+   * 加え、全国ネット局用の`NATIONWIDE_AREA_ID`も含む)で選択済みのエリアIDの一覧を返す。
    * 何も選択されていなければ空配列(→全国47エリアを取得するデフォルト動作)。
    */
   private getRadikoAreaIdArray(): string[] {
@@ -134,10 +135,11 @@ class ControllerJpRadio {
       return [];
     }
     const areaIdArray: string[] = [];
-    for (let i = 1; i <= 47; i++) {
-      const areaId = `JP${i}`;
-      if (this.config.get(`radikoAreas.${areaId}`) === true) {
-        areaIdArray.push(areaId);
+    for (const region of AREA_REGIONS) {
+      for (const areaId of region.areaIdArray) {
+        if (this.config.get(`radikoAreas.${areaId}`) === true) {
+          areaIdArray.push(areaId);
+        }
       }
     }
     return areaIdArray;
@@ -774,6 +776,9 @@ class ControllerJpRadio {
     let message = `<div>${data.artist}</div>`;
     if (data.album !== '') {
       message += `<div>${messageCatalog.get('PROGINFO_PERFORMER')}${data.album}</div>`;
+    }
+    if (data.info !== '') {
+      message += data.info;
     }
     const modalMessage = {
       title: messageCatalog.get('PROGINFO_PROG_INFO') + data.title,

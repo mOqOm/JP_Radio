@@ -318,6 +318,26 @@ export function formatRadioTimeRange(ft: string, tt: string, pattern: string): s
 }
 
 /**
+ * {@link formatRadioTimeRange}から日付部分を省いた、時刻のみの書式(ユーザー設定の時刻書式は反映する)。
+ * ライブ再生は「今」放送中であることが自明で日付を示す意味がないため、再生画面等で使う。
+ * @param ft 番組の放送開始時刻(ラジオ時間表記)。
+ * @param tt 番組の放送終了時刻(ラジオ時間表記)。
+ * @param pattern 表示書式({@link formatRadioTimeRange}と同じ、日付部分は無視する)。
+ */
+export function formatRadioTimeRangeTimeOnly(ft: string, tt: string, pattern: string): string {
+  const [, timePattern = 'HH:mm-HH:mm'] = pattern.split(' ');
+  const [startTimePattern, endTimePattern = 'HH:mm'] = timePattern.split('-');
+
+  const ftFields = fieldsFromDate(parseYyyyMMddHHmmss(revCnvRadioTime(ft)));
+  const ttFields = fieldsFromDate(parseYyyyMMddHHmmss(revCnvRadioTime(tt)));
+
+  const startTimePart = formatFields(ftFields, startTimePattern);
+  const endTimePart = formatFields(ttFields, endTimePattern);
+
+  return `${startTimePart}-${endTimePart}`;
+}
+
+/**
  * `'yyyyMMdd'`形式の日付文字列を任意の書式(曜日を含む書式も可)に整形する。
  * @param dateOnly `'yyyyMMdd'`形式の日付文字列。
  * @param pattern 書式文字列(例: `'M月d日(E)'`)。対応トークンは{@link formatFields}参照。

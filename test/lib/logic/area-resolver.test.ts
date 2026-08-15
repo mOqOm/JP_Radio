@@ -1,4 +1,5 @@
 import { resolveAreaIdArray, resolveAreaFilter } from '@/logic/area-resolver';
+import { NATIONWIDE_AREA_ID } from '@/consts/area-name';
 
 describe('resolveAreaIdArray', () => {
   it('AreaFree会員なら全国47エリアを返す', () => {
@@ -35,20 +36,24 @@ describe('resolveAreaIdArray', () => {
     expect(result).toHaveLength(47);
   });
 
-  it('非AreaFree会員(無料プランなど)でもエリアを選択していれば、そのエリア+JP13(全国ネット局分)を返す', () => {
-    expect(resolveAreaIdArray('JP13/Free', ['JP1', 'JP2', 'JP13'], ['JP1', 'JP2'])).toEqual(['JP1', 'JP2', 'JP13']);
+  it('非AreaFree会員(無料プランなど)でもエリアを選択していれば、そのエリアのみを返す(NATIONWIDE_AREA_ID未選択ならJP13は加えない)', () => {
+    expect(resolveAreaIdArray('JP13/Free', ['JP1', 'JP2', 'JP13'], ['JP1', 'JP2'])).toEqual(['JP1', 'JP2']);
   });
 
-  it('選択エリアにJP13が含まれていなければ、末尾にJP13を加える', () => {
-    expect(resolveAreaIdArray('JP13/Free', [], ['JP1', 'JP27'])).toEqual(['JP1', 'JP27', 'JP13']);
+  it('選択エリアにNATIONWIDE_AREA_IDが含まれていなければ、JP13は加えない', () => {
+    expect(resolveAreaIdArray('JP13/Free', [], ['JP1', 'JP27'])).toEqual(['JP1', 'JP27']);
+  });
+
+  it('選択エリアにNATIONWIDE_AREA_ID(「全国」)が含まれていれば、それを除いてJP13を加える', () => {
+    expect(resolveAreaIdArray('JP13/Free', [], ['JP1', NATIONWIDE_AREA_ID])).toEqual(['JP1', 'JP13']);
   });
 
   it('未ログイン(myAreaIdの会員種別が空文字列)時は、選択エリアに自エリアが含まれていなくても自エリアを加える(局一覧が自エリアのみのケース対応)', () => {
-    expect(resolveAreaIdArray('JP27/', [], ['JP1'])).toEqual(['JP1', 'JP13', 'JP27']);
+    expect(resolveAreaIdArray('JP27/', [], ['JP1'])).toEqual(['JP1', 'JP27']);
   });
 
-  it('ログイン済みなら会員種別を問わず自エリアを強制的には加えない(選択したエリア+JP13のみ)', () => {
-    expect(resolveAreaIdArray('JP27/premium', [], ['JP1'])).toEqual(['JP1', 'JP13']);
+  it('ログイン済みなら会員種別を問わず自エリアを強制的には加えない', () => {
+    expect(resolveAreaIdArray('JP27/premium', [], ['JP1'])).toEqual(['JP1']);
   });
 });
 
@@ -60,5 +65,10 @@ describe('resolveAreaFilter', () => {
 
   it('選択エリアが空なら絞り込みなし(null)を返す', () => {
     expect(resolveAreaFilter([])).toBeNull();
+  });
+
+  it('NATIONWIDE_AREA_ID(「全国」)も他のエリアIDと同様にそのまま集合に含める', () => {
+    const result = resolveAreaFilter(['JP27', NATIONWIDE_AREA_ID]);
+    expect(result).toEqual(new Set(['JP27', NATIONWIDE_AREA_ID]));
   });
 });

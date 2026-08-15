@@ -1,7 +1,16 @@
 /**
- * エリアID(`JP1`~`JP47`)から都道府県名(漢字)を引くためのマップ。
+ * 全国ネット局(regionName === '全国'、RN1/RN2/JOAK-FM等)専用の疑似エリアID。
+ * Radiko側の実際のエリアID(`JP1`~`JP47`)とは異なり、番組表取得等では意味を持たない
+ * (エリア選択設定・局一覧の絞り込み専用)ため、`AREA_KANJI`/`AREA_REGIONS`以外の場所で
+ * 実エリアIDと同様に扱わないよう注意する({@link resolveAreaIdArray}等を参照)。
+ */
+export const NATIONWIDE_AREA_ID = 'ZENKOKU';
+
+/**
+ * エリアID(`JP1`~`JP47`、および{@link NATIONWIDE_AREA_ID})から表示名(漢字)を引くためのマップ。
  */
 export const AREA_KANJI = new Map([
+  [NATIONWIDE_AREA_ID, '全国'],
   // 北海道・東北
   ['JP1', '北海道'], ['JP2', '青森'], ['JP3', '岩手'],
   ['JP4', '宮城'], ['JP5', '秋田'], ['JP6', '山形'], ['JP7', '福島'],
@@ -30,6 +39,7 @@ export const AREA_KANJI = new Map([
  * エリア選択設定画面で地域ごとにグループ化して表示するための一覧。
  */
 export const AREA_REGIONS: Array<{ name: string; areaIdArray: string[] }> = [
+  { name: '全国', areaIdArray: [NATIONWIDE_AREA_ID] },
   { name: '北海道・東北', areaIdArray: ['JP1', 'JP2', 'JP3', 'JP4', 'JP5', 'JP6', 'JP7'] },
   { name: '関東', areaIdArray: ['JP8', 'JP9', 'JP10', 'JP11', 'JP12', 'JP13', 'JP14'] },
   { name: '北陸・甲信越', areaIdArray: ['JP15', 'JP16', 'JP17', 'JP18', 'JP19', 'JP20'] },

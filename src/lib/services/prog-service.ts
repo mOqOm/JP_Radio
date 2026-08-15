@@ -22,6 +22,7 @@ const EMPTY_PROGRAM: RadikoProgramData = {
   title: '',
   pfm: '',
   img: '',
+  info: '',
 };
 
 /**
@@ -209,6 +210,7 @@ export default class RdkProg {
                 title: prog['title'],
                 pfm,
                 img: prog['img'],
+                info: prog['info'] ?? '',
               };
               await this.putProgram(program);
             }
@@ -281,6 +283,7 @@ export default class RdkProg {
               title: prog['title'],
               pfm,
               img: prog['img'],
+              info: prog['info'] ?? '',
             };
             programs.push(program);
             await this.putProgram(program);

@@ -13,9 +13,10 @@ import type { ProgInfoData } from '@/models/prog-info-model';
 import {
   getRadioDelay, getCurrentRadioTime, getCurrentDate, formatTimeString, formatHourMinute, getTimeSpan,
   revCnvRadioTime, addSecondsToTimeString, parseRadioTime, getProgramTimeStatus, formatDateOnly, addDaysToDateOnly,
-  formatRadioTimeRange,
+  formatRadioTimeRange, formatRadioTimeRangeTimeOnly,
 } from '@/utils/radio-time';
 import { resolveAreaIdArray, resolveAreaFilter } from '@/logic/area-resolver';
+import { NATIONWIDE_AREA_ID } from '@/consts/area-name';
 import { messageCatalog } from '@/utils/message-catalog';
 import type { LoggerEx } from '@/utils/logger';
 
@@ -300,7 +301,7 @@ export default class JpRadio {
         const t0 = formatTimeString(progData.ft);
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
-        const artist = `${stationName} / ${formatRadioTimeRange(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
+        const artist = `${stationName} / ${formatRadioTimeRangeTimeOnly(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
         this.logger.info('RCT_I003', t0, t1);
         this.logger.info('RCT_I004', artist, now);
 
@@ -374,7 +375,7 @@ export default class JpRadio {
       }
       const stationInfo = this.rdk?.stations.get(stationId);
       const stationName = stationInfo?.name ?? stationId;
-      const artist = `${stationName} / ${formatHourMinute(progData.ft)}-${formatHourMinute(progData.tt)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
+      const artist = `${stationName} / ${formatRadioTimeRangeTimeOnly(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
 
       if (queueItem.artist !== artist) {
         queueItem.name = progData.title;
@@ -813,7 +814,7 @@ export default class JpRadio {
         type: 'radio-category',
         title: program?.title ?? '?',
         album: program?.pfm,
-        artist: `${stationInfo.name} ${formatHourMinute(ft)}-${formatHourMinute(to)}`,
+        artist: `${stationInfo.name} ${formatRadioTimeRange(ft, to, this.timeFormat)}`,
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
         uri: `radiko/progreg/${stationId}?ft=${ft}&to=${to}`,
         time: ft,
@@ -1071,6 +1072,16 @@ export default class JpRadio {
       playUrl.searchParams.set('ft', timeFreeQuery.ft);
       playUrl.searchParams.set('to', timeFreeQuery.to);
     }
+    // 番組詳細(HTML)はBrowse一覧等では使わない大きめのデータのため、TrackMetaには含めず
+    // モーダル表示用にここだけで個別に取得する。
+    let info = '';
+    if (timeFreeQuery !== undefined) {
+      const program = await this.prg?.findProgram(stationId, timeFreeQuery.ft);
+      info = program?.info ?? '';
+    } else {
+      const progData = await this.prg?.getCurProgram(stationId);
+      info = progData?.info ?? '';
+    }
     return {
       service: this.serviceName,
       type: 'song',
@@ -1080,6 +1091,7 @@ export default class JpRadio {
       artist: meta.artist,
       albumart: meta.albumart,
       uri: playUrl.toString(),
+      info,
     };
   }
 
@@ -1121,17 +1133,20 @@ export default class JpRadio {
    * 指定エリアIDを選択した場合にBrowse局一覧へ実際に表示される局名の一覧を返す
    * (エリア選択設定画面の説明表示に使う)。`areaData`(Radikoの受信可能局一覧、県域局に加えて
    * 受信できる広域局・全国ネット局も含む)をそのまま使うと、Browse側の絞り込み
-   * ({@link #isStationInAreaFilter}、自局のareaIdが一致 or 全国ネット局のみを表示)と食い違い、
-   * 設定画面の説明とBrowseの表示局が一致しなくなるため、同じ基準で揃える。
-   * @param areaId エリアID(例: 'JP13')。
+   * ({@link #isStationInAreaFilter}、自局のareaIdが一致、または全国ネット局は`NATIONWIDE_AREA_ID`
+   * 選択時のみ表示)と食い違い、設定画面の説明とBrowseの表示局が一致しなくなるため、同じ基準で揃える。
+   * `NATIONWIDE_AREA_ID`指定時は全国ネット局(regionName === '全国')の一覧を返す。
+   * @param areaId エリアID(例: 'JP13')、または{@link NATIONWIDE_AREA_ID}。
    */
   getAreaStations(areaId: string): string[] {
     if (this.rdk === null) {
       return [];
     }
-    return Array.from(this.rdk.stations.values())
-      .filter((stationInfo) => stationInfo.areaId === areaId || stationInfo.regionName === '全国')
-      .map((stationInfo) => stationInfo.name);
+    const stations = Array.from(this.rdk.stations.values());
+    if (areaId === NATIONWIDE_AREA_ID) {
+      return stations.filter((stationInfo) => stationInfo.regionName === '全国').map((stationInfo) => stationInfo.name);
+    }
+    return stations.filter((stationInfo) => stationInfo.areaId === areaId).map((stationInfo) => stationInfo.name);
   }
 
   /**
@@ -1152,10 +1167,8 @@ export default class JpRadio {
       img = program.img;
     }
     const areaName = stationInfo.areaKanji || stationInfo.areaName;
-    const t0 = formatHourMinute(query.ft);
-    const t1 = formatHourMinute(query.to);
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, img);
-    const artist = `${areaName} / ${stationInfo.name} ${t0}-${t1} ${messageCatalog.get('PLAYBACK_STATUS_TIMEFREE')}`;
+    const artist = `${areaName} / ${stationInfo.name} ${formatRadioTimeRange(query.ft, query.to, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_TIMEFREE')}`;
     return { title, album, artist, albumart };
   }
 
@@ -1309,8 +1322,9 @@ export default class JpRadio {
 
   /**
    * 指定局を、現在の「エリア選択」絞り込みの表示対象に含めるべきかを判定する。
-   * 絞り込みなし(null)、選択エリアに一致、または全国ネット局(regionName === '全国'、
-   * JOAK-FM/RN1/RN2など。エリアを問わず受信可能なため常に対象に含める)のいずれかならtrue。
+   * 絞り込みなし(null)、選択エリアに一致のいずれかならtrue。全国ネット局(regionName === '全国'、
+   * JOAK-FM/RN1/RN2など)は、他の局と同様に扱い、`NATIONWIDE_AREA_ID`が選択されている場合のみ対象に含める
+   * (エリア選択設定画面の局一覧表示と一致させるため、無条件には表示しない)。
    * @param stationInfo 判定対象の局情報。
    * @param areaFilter {@link #getSelectedAreaFilter}が返す絞り込み対象エリアID集合。
    */
@@ -1319,7 +1333,7 @@ export default class JpRadio {
       return true;
     }
     if (stationInfo.regionName === '全国') {
-      return true;
+      return areaFilter.has(NATIONWIDE_AREA_ID);
     }
     return areaFilter.has(stationInfo.areaId);
   }

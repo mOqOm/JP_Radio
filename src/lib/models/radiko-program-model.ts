@@ -16,4 +16,6 @@ export interface RadikoProgramData {
   pfm: string;
   // 番組画像URL
   img: string;
+  // 番組詳細情報(HTML)。番組情報モーダルでのみ使う(Browse一覧等の軽量なメタ情報には含めない)
+  info: string;
 }

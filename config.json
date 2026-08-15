@@ -44,6 +44,10 @@
     "value": "yyyy/MM/dd HH:mm-HH:mm"
   },
   "radikoAreas": {
+    "ZENKOKU": {
+      "type": "boolean",
+      "value": false
+    },
     "JP1": {
       "type": "boolean",
       "value": false

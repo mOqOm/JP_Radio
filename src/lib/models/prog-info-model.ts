@@ -11,4 +11,6 @@ export interface ProgInfoData {
   artist: string;
   albumart: string;
   uri: string;
+  // 番組詳細情報(HTML、無ければ空文字列)。番組情報モーダルの表示にのみ使う。
+  info: string;
 }
