@@ -301,7 +301,7 @@ export default class JpRadio {
         const t0 = formatTimeString(progData.ft);
         const t1 = formatTimeString(progData.tt);
         const now = formatTimeString(getCurrentRadioTime());
-        const artist = `${stationName} / ${formatRadioTimeRangeTimeOnly(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
+        const artist = this.#buildStationTimeLabel(stationName ?? '', progData.ft, progData.tt, messageCatalog.get('PLAYBACK_STATUS_LIVE'), false);
         this.logger.info('RCT_I003', t0, t1);
         this.logger.info('RCT_I004', artist, now);
 
@@ -375,7 +375,7 @@ export default class JpRadio {
       }
       const stationInfo = this.rdk?.stations.get(stationId);
       const stationName = stationInfo?.name ?? stationId;
-      const artist = `${stationName} / ${formatRadioTimeRangeTimeOnly(progData.ft, progData.tt, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
+      const artist = this.#buildStationTimeLabel(stationName, progData.ft, progData.tt, messageCatalog.get('PLAYBACK_STATUS_LIVE'), false);
 
       if (queueItem.artist !== artist) {
         queueItem.name = progData.title;
@@ -806,15 +806,22 @@ export default class JpRadio {
       if (ft === null || to === null) {
         return;
       }
-      const program = await this.prg?.findProgram(stationId, ft);
+      let program = await this.prg?.findProgram(stationId, ft);
+      if (program === undefined) {
+        // 番組表の表示期間外(古い/先の)お気に入りはDBキャッシュに無いことがあるため、
+        // 「？」のまま表示せずサーバーから補う
+        await this.prg?.getStationProgramsForDate(stationId, parseRadioTime(ft).date);
+        program = await this.prg?.findProgram(stationId, ft);
+      }
       // お気に入り一覧からの選択は常に、日付ずらし更新・削除ができる番組登録モーダル(progreg)を開く
-      // (直接再生ではなく、お気に入りの管理操作を優先する)
+      // (通常のブラウズ再生とは別に、お気に入りの管理操作もできるようにするため。再生はモーダル内の
+      // 「再生」ボタンから行う)
       const item: BrowseItem = {
         service: this.serviceName,
         type: 'radio-category',
         title: program?.title ?? '?',
         album: program?.pfm,
-        artist: `${stationInfo.name} ${formatRadioTimeRange(ft, to, this.timeFormat)}`,
+        artist: this.#buildStationTimeLabel(stationInfo.name, ft, to, messageCatalog.get('PLAYBACK_STATUS_TIMEFREE'), true),
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
         uri: `radiko/progreg/${stationId}?ft=${ft}&to=${to}`,
         time: ft,
@@ -977,9 +984,9 @@ export default class JpRadio {
           const item: BrowseItem = {
             service: this.serviceName,
             type: 'song',
-            title: `${icon} ${program.title}`,
-            album: program.pfm,
-            artist: `${stationName} ${t0}-${t1}`,
+            title: `${icon} ${t0}-${t1} ${program.title}`,
+            album: stationName,
+            artist: program.pfm,
             albumart: this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, program.img),
             uri: buildPlayUri(program.ft, program.tt),
             time: program.ft,
@@ -1166,10 +1173,26 @@ export default class JpRadio {
       album = program.pfm;
       img = program.img;
     }
-    const areaName = stationInfo.areaKanji || stationInfo.areaName;
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, img);
-    const artist = `${areaName} / ${stationInfo.name} ${formatRadioTimeRange(query.ft, query.to, this.timeFormat)} ${messageCatalog.get('PLAYBACK_STATUS_TIMEFREE')}`;
+    const artist = this.#buildStationTimeLabel(stationInfo.name, query.ft, query.to, messageCatalog.get('PLAYBACK_STATUS_TIMEFREE'), true);
     return { title, album, artist, albumart };
+  }
+
+  /**
+   * 「放送局 - [日付]時刻 (Live/TimeFree)」の統一形式でartist表示文字列を組み立てる。
+   * 従来ライブは「局名 / 時刻」、タイムフリーは「エリア名 / 局名 日付時刻」と表記がばらついて
+   * いたため、artist表示を使う箇所(再生画面・番組表・お気に入り等)すべてでこれに揃える。
+   * @param stationName 局名。
+   * @param ft 番組の放送開始時刻(ラジオ時間表記)。
+   * @param tt 番組の放送終了時刻(ラジオ時間表記)。
+   * @param statusLabel `messageCatalog.get('PLAYBACK_STATUS_LIVE'/'PLAYBACK_STATUS_TIMEFREE')`の値(例: `'(Live)'`)。
+   * @param includeDate trueなら日付も含める(タイムフリー用)。ライブはfalse(放送中で日付は自明なため)。
+   */
+  #buildStationTimeLabel(stationName: string, ft: string, tt: string, statusLabel: string, includeDate: boolean): string {
+    const timePart = includeDate
+      ? formatRadioTimeRange(ft, tt, this.timeFormat)
+      : formatRadioTimeRangeTimeOnly(ft, tt, this.timeFormat);
+    return `${stationName} - ${timePart} ${statusLabel}`;
   }
 
   /**
@@ -1183,19 +1206,14 @@ export default class JpRadio {
     let title = '';
     let album = '';
     let progImg = '';
-    let t0 = '';
-    let t1 = '';
+    let artist = `${stationInfo.name} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
     if (progData !== undefined) {
       title = progData.title;
       album = progData.pfm;
       progImg = progData.img;
-      t0 = formatHourMinute(progData.ft);
-      t1 = formatHourMinute(progData.tt);
+      artist = this.#buildStationTimeLabel(stationInfo.name, progData.ft, progData.tt, messageCatalog.get('PLAYBACK_STATUS_LIVE'), false);
     }
-    const areaName = stationInfo.areaKanji || stationInfo.areaName;
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, progImg);
-    const stationAndTime = `${stationInfo.name} ${t0}-${t1}`;
-    const artist = `${areaName} / ${stationAndTime} ${messageCatalog.get('PLAYBACK_STATUS_LIVE')}`;
     return { title, album, artist, albumart };
   }
 

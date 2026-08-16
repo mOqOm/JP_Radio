@@ -866,6 +866,16 @@ class ControllerJpRadio {
       size: 'lg',
       buttons: [
         {
+          name: messageCatalog.get('PROGINFO_PLAY'),
+          class: 'btn btn-info',
+          emit: 'callMethod',
+          payload: {
+            endpoint: `music_service/${this.serviceName}`,
+            method: 'playFromProgInfoModal',
+            data
+          }
+        },
+        {
           name: messageCatalog.get('PROGREG_NEXT_DAY'),
           class: 'btn btn-info',
           emit: 'callMethod',
@@ -926,10 +936,10 @@ class ControllerJpRadio {
 
     if (data.oldUri === data.uri) {
       // まだ日付をずらしていない(登録済みのまま) → 「更新」ボタンは無意味なので消す
-      modalMessage.buttons.splice(3, 1);
+      modalMessage.buttons.splice(4, 1);
     } else {
       // 日付をずらした(別の番組に切り替えた) → 「削除」ボタンは無意味なので消す
-      modalMessage.buttons.splice(4, 1);
+      modalMessage.buttons.splice(5, 1);
     }
 
     this.commandRouter.broadcastMessage('openModal', modalMessage);
