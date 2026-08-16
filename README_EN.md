@@ -19,6 +19,10 @@ Japanese radio relay server for Volumio4
 + 2026/08/15 Added "全国" (Nationwide) as a selectable area. Nationwide network stations (Radio NIKKEI, NHK FM, etc.) are now opt-in just like any prefecture, instead of always showing unconditionally, so the settings screen matches what Browse displays
 + 2026/08/15 Restored the detailed program description (in addition to the performer info) in the program info modal
 + 2026/08/15 Added the broadcast date to the Time-Free playback screen and the "Favourite Programs (Time-Free)" list. Conversely, removed the now-redundant date from the live playback screen
++ 2026/08/16 Changed the Time-Free timetable order to "time first, then title", and adjusted the performer/station display order for readability
++ 2026/08/16 Fixed Favourite Programs (Time-Free) getting stuck showing "?" as the title for programs outside the timetable's normal display range (too old/far ahead); it now falls back to fetching from the server
++ 2026/08/16 Fixed the management modal opened from a favourited program having no "Play" button, leaving no way to actually play it
++ 2026/08/16 Unified the inconsistent artist display format between live and Time-Free into "Station - [Date]Time (Live/TimeFree)"
 ### version 4.1.0(2026/07/25)
 + 2026/07/25 Grouped the Time-Free timetable by date, with prev-week/prev-day/next-day/next-week navigation and on-air status icons (★on air/⬜︎not yet aired/▷playable)
 + 2026/07/25 Added a "Time-Free (Today)" shortcut
