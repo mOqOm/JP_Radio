@@ -25,6 +25,7 @@ Japanese radio relay server for Volumio4
 + 2026/08/16 Unified the inconsistent artist display format between live and Time-Free into "Station - [Date]Time (Live/TimeFree)"
 + 2026/08/17 Reverted the performer/station display order in the Time-Free timetable (the 8/16 change actually made it harder to read; the station name is now always shown)
 + 2026/08/17 Stopped opening a dedicated management modal when selecting a favourited program; it now uses the exact same display and playback flow (following the browseMode2 setting) as the regular Time-Free timetable
++ 2026/08/17 Programs with no listed performer now show a blank (single space) instead of a visually cramped empty field
 ### version 4.1.0(2026/07/25)
 + 2026/07/25 Grouped the Time-Free timetable by date, with prev-week/prev-day/next-day/next-week navigation and on-air status icons (★on air/⬜︎not yet aired/▷playable)
 + 2026/07/25 Added a "Time-Free (Today)" shortcut
