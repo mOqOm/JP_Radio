@@ -307,7 +307,7 @@ export default class JpRadio {
 
         state.title = progData.title;
         state.artist = artist;
-        state.album = progData.pfm;
+        state.album = this.#formatPerformer(progData.pfm);
         state.albumart = this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, progData.img);
         // sec
         state.duration = getTimeSpan(t0, t1);
@@ -379,7 +379,7 @@ export default class JpRadio {
 
       if (queueItem.artist !== artist) {
         queueItem.name = progData.title;
-        queueItem.album = progData.pfm;
+        queueItem.album = this.#formatPerformer(progData.pfm);
         queueItem.artist = artist;
         queueItem.albumart = this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, progData.img);
         changed = true;
@@ -824,7 +824,7 @@ export default class JpRadio {
         service: this.serviceName,
         type: 'song',
         title: `${icon} ${t0}-${t1} ${program?.title ?? '?'}`,
-        album: program?.pfm,
+        album: this.#formatPerformer(program?.pfm),
         artist: stationInfo.name,
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
         uri: `http://localhost:${this.port}/radiko/play/${stationId}?ft=${ft}&to=${to}`,
@@ -993,7 +993,7 @@ export default class JpRadio {
             service: this.serviceName,
             type: 'song',
             title: `${icon} ${t0}-${t1} ${program.title}`,
-            album: program.pfm,
+            album: this.#formatPerformer(program.pfm),
             artist: stationName,
             albumart: this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, program.img),
             uri: buildPlayUri(program.ft, program.tt),
@@ -1183,7 +1183,7 @@ export default class JpRadio {
     }
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, img);
     const artist = this.#buildStationTimeLabel(stationInfo.name, query.ft, query.to, messageCatalog.get('PLAYBACK_STATUS_TIMEFREE'), true);
-    return { title, album, artist, albumart };
+    return { title, album: this.#formatPerformer(album), artist, albumart };
   }
 
   /**
@@ -1201,6 +1201,15 @@ export default class JpRadio {
       ? formatRadioTimeRange(ft, tt, this.timeFormat)
       : formatRadioTimeRangeTimeOnly(ft, tt, this.timeFormat);
     return `${stationName} - ${timePart} ${statusLabel}`;
+  }
+
+  /**
+   * 出演者名(pfm)が未設定の番組向けに、空文字列の代わりに半角スペースを返す。
+   * 空文字列のままだとBrowse一覧・再生画面でその項目だけ表示行が詰まって見えるため。
+   * @param pfm 出演者名(未取得の場合はundefined、情報が無い番組は空文字列)。
+   */
+  #formatPerformer(pfm: string | undefined): string {
+    return pfm !== undefined && pfm !== '' ? pfm : ' ';
   }
 
   /**
@@ -1222,7 +1231,7 @@ export default class JpRadio {
       artist = this.#buildStationTimeLabel(stationInfo.name, progData.ft, progData.tt, messageCatalog.get('PLAYBACK_STATUS_LIVE'), false);
     }
     const albumart = this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, progImg);
-    return { title, album, artist, albumart };
+    return { title, album: this.#formatPerformer(album), artist, albumart };
   }
 
   /**
