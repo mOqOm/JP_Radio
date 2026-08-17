@@ -355,15 +355,3 @@ export function addDaysToDateOnly(dateOnly: string, days: number): string {
   const shifted = new Date(parseYyyyMMdd(dateOnly).getTime() + days * 24 * 3600 * 1000);
   return formatFields(fieldsFromDate(shifted), 'yyyyMMdd');
 }
-
-/**
- * ラジオ時間表記(`'yyyyMMddHHmmss'`、`24:00`~`29:00`表記を含みうる)の日付部分だけをN日シフトする。
- * 時・分・秒はそのまま維持するため、「同じ時間帯の翌日/翌週の番組」を求める用途(お気に入りの日付ずらし)に使う。
- * @param t シフト元のラジオ時間表記(`'yyyyMMddHHmmss'`)。
- * @param days シフトする日数(負数で過去方向)。
- */
-export function addDaysToRadioTime(t: string, days: number): string {
-  const parts = parseRadioTime(t);
-  const newDate = addDaysToDateOnly(parts.date, days);
-  return `${newDate}${parts.hour}${parts.minute}${parts.second}`;
-}

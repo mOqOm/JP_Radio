@@ -742,6 +742,7 @@ export default class JpRadio {
   async #commonRadioFavouriteStations(mode: 'live' | 'timefree'): Promise<[BrowseItem[], BrowseItem[]]> {
     const stationItems: BrowseItem[] = [];
     const programItems: BrowseItem[] = [];
+    const currentRadioTime = getCurrentRadioTime();
 
     const favouriteStations: any[] = await this.commandRouter.playListManager.getRadioFavouritesContent() ?? [];
 
@@ -813,17 +814,20 @@ export default class JpRadio {
         await this.prg?.getStationProgramsForDate(stationId, parseRadioTime(ft).date);
         program = await this.prg?.findProgram(stationId, ft);
       }
-      // お気に入り一覧からの選択は常に、日付ずらし更新・削除ができる番組登録モーダル(progreg)を開く
-      // (通常のブラウズ再生とは別に、お気に入りの管理操作もできるようにするため。再生はモーダル内の
-      // 「再生」ボタンから行う)
+      // 通常のタイムフリー番組表(stationTimetable)の項目と表示・挙動を揃える
+      // (browseMode2に応じて直接再生/番組情報モーダルを切り替え)。
+      const status = getProgramTimeStatus(ft, to, currentRadioTime);
+      const icon = status === 'live' ? '★' : status === 'future' ? '⬜︎' : '▷';
+      const t0 = formatHourMinute(ft);
+      const t1 = formatHourMinute(to);
       const item: BrowseItem = {
         service: this.serviceName,
-        type: 'radio-category',
-        title: program?.title ?? '?',
+        type: 'song',
+        title: `${icon} ${t0}-${t1} ${program?.title ?? '?'}`,
         album: program?.pfm,
-        artist: this.#buildStationTimeLabel(stationInfo.name, ft, to, messageCatalog.get('PLAYBACK_STATUS_TIMEFREE'), true),
+        artist: stationInfo.name,
         albumart: this.selectAlbumart(stationInfo.bannerUrl, stationInfo.logoUrl, program?.img),
-        uri: `radiko/progreg/${stationId}?ft=${ft}&to=${to}`,
+        uri: `http://localhost:${this.port}/radiko/play/${stationId}?ft=${ft}&to=${to}`,
         time: ft,
         duration: getTimeSpan(formatTimeString(ft), formatTimeString(to)),
         favourite: true,
@@ -831,6 +835,10 @@ export default class JpRadio {
         bitdepth: 0,
         channels: 0,
       };
+      if (this.browseMode2 === 'type2') {
+        item.type = 'radio-category';
+        item.uri = `radiko/proginfo/${stationId}?ft=${ft}&to=${to}`;
+      }
       programItems.push(item);
     });
 
@@ -985,8 +993,8 @@ export default class JpRadio {
             service: this.serviceName,
             type: 'song',
             title: `${icon} ${t0}-${t1} ${program.title}`,
-            album: stationName,
-            artist: program.pfm,
+            album: program.pfm,
+            artist: stationName,
             albumart: this.selectAlbumart(stationInfo?.bannerUrl, stationInfo?.logoUrl, program.img),
             uri: buildPlayUri(program.ft, program.tt),
             time: program.ft,

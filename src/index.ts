@@ -11,7 +11,7 @@ import type { TimeFreeQuery } from '@/models/time-free-query-model';
 import type { ProgInfoData } from '@/models/prog-info-model';
 import { AREA_KANJI, AREA_REGIONS } from '@/consts/area-name';
 import { LoggerEx } from '@/utils/logger';
-import { getCurrentRadioTime, getCurrentRadioDate, getProgramTimeStatus, parseRadioTime, addDaysToDateOnly, addDaysToRadioTime, setRadioDelay } from '@/utils/radio-time';
+import { getCurrentRadioTime, getCurrentRadioDate, getProgramTimeStatus, parseRadioTime, addDaysToDateOnly, setRadioDelay } from '@/utils/radio-time';
 
 export = ControllerJpRadio;
 
@@ -691,35 +691,6 @@ class ControllerJpRadio {
       return defer.promise;
     }
 
-    if (segments[0] === 'radiko' && segments[1] === 'progreg' && segments[2] !== undefined) {
-      const stationId = segments[2];
-      let timeFreeQuery: TimeFreeQuery | undefined;
-      if (queryString !== undefined) {
-        const params = new URLSearchParams(queryString);
-        const ft = params.get('ft');
-        const to = params.get('to');
-        if (ft !== null && to !== null) {
-          timeFreeQuery = { ft, to };
-        }
-      }
-
-      libQ.resolve()
-        .then(() => appRadio.progInfo(stationId, timeFreeQuery))
-        .then((data: ProgInfoData | null) => {
-          if (data !== null) {
-            // お気に入り一覧から開いた直後は、まだ日付をずらしていないので oldUri === uri
-            this.showProgRegModal({ ...data, oldUri: data.uri });
-          }
-          defer.resolve({});
-        })
-        .fail((error: any) => {
-          this.logger.error('IDX_E007', error);
-          defer.reject(error);
-        });
-
-      return defer.promise;
-    }
-
     let task: Promise<BrowseResult> | null;
     if (baseUri === 'radiko') {
       task = appRadio.rootMenu();
@@ -844,166 +815,6 @@ class ControllerJpRadio {
     }
 
     this.commandRouter.broadcastMessage('openModal', modalMessage);
-  }
-
-  /**
-   * お気に入り一覧から個別番組を選択した際に表示する「登録済みお気に入りの管理」モーダル。
-   * 「翌日」「翌週」「翌々週」ボタンで同じ時間帯の別の日の番組に表示を切り替えながら、最終的に
-   * 「お気に入りを更新」(表示中の番組で置き換え)または「お気に入りから削除」を選べる。
-   * `data.oldUri`が実際に登録されているお気に入りのURI、`data.uri`が現在モーダルに表示中の番組のURIで、
-   * 両者が一致する間は「更新」を、日付をずらして一致しなくなったら「削除」を隠す({@link showProgInfoModal}とは
-   * 独立したモーダルにしているのは、通常のブラウズ再生と競合させないため)。
-   * @param data 表示中の番組情報+`oldUri`(実際に登録されているお気に入りのURI)。
-   */
-  private showProgRegModal(data: ProgInfoData & { oldUri: string }): void {
-    let message = `<div>${data.artist}</div>`;
-    if (data.album !== '') {
-      message += `<div>${messageCatalog.get('PROGINFO_PERFORMER')}${data.album}</div>`;
-    }
-    const modalMessage = {
-      title: messageCatalog.get('PROGINFO_PROG_INFO') + data.title,
-      message,
-      size: 'lg',
-      buttons: [
-        {
-          name: messageCatalog.get('PROGINFO_PLAY'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'playFromProgInfoModal',
-            data
-          }
-        },
-        {
-          name: messageCatalog.get('PROGREG_NEXT_DAY'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'changeDateFromProgRegModal',
-            data: { ...data, days: 1 }
-          }
-        },
-        {
-          name: messageCatalog.get('PROGREG_NEXT_WEEK'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'changeDateFromProgRegModal',
-            data: { ...data, days: 7 }
-          }
-        },
-        {
-          name: messageCatalog.get('PROGREG_NEXT_2WEEK'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'changeDateFromProgRegModal',
-            data: { ...data, days: 14 }
-          }
-        },
-        {
-          name: messageCatalog.get('PROGREG_UPDATE_FAVOURITES'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'updateFavouriteFromProgRegModal',
-            data
-          }
-        },
-        {
-          name: messageCatalog.get('PROGREG_REMOVE_FROM_FAVOURITES'),
-          class: 'btn btn-info',
-          emit: 'callMethod',
-          payload: {
-            endpoint: `music_service/${this.serviceName}`,
-            method: 'removeFavouriteFromProgRegModal',
-            data
-          }
-        },
-        {
-          name: this.commandRouter.getI18nString('COMMON.CLOSE'),
-          class: 'btn btn-warning',
-          emit: 'closeModals',
-          payload: ''
-        }
-      ]
-    };
-
-    if (data.oldUri === data.uri) {
-      // まだ日付をずらしていない(登録済みのまま) → 「更新」ボタンは無意味なので消す
-      modalMessage.buttons.splice(4, 1);
-    } else {
-      // 日付をずらした(別の番組に切り替えた) → 「削除」ボタンは無意味なので消す
-      modalMessage.buttons.splice(5, 1);
-    }
-
-    this.commandRouter.broadcastMessage('openModal', modalMessage);
-  }
-
-  /**
-   * {@link showProgRegModal}の「翌日」「翌週」「翌々週」ボタンから呼ばれる。表示中の番組の`ft`/`to`を
-   * 指定日数分シフトした番組情報を取得し直し、同じモーダルを再表示する(`oldUri`は元の登録URIのまま引き継ぐ)。
-   * @param data 表示中の番組情報+`oldUri`+シフトする日数(`days`)。
-   */
-  async changeDateFromProgRegModal(data: ProgInfoData & { oldUri: string; days: number }): Promise<void> {
-    this.logger.info('IDX_I022', data.days);
-
-    const [liveUri, queryStr] = data.uri.split('?');
-    if (queryStr === undefined) {
-      return;
-    }
-    const params = new URLSearchParams(queryStr);
-    const ft = params.get('ft');
-    const to = params.get('to');
-    const stationId = liveUri.split('/').pop();
-    if (ft === null || to === null || stationId === undefined) {
-      return;
-    }
-
-    const newFt = addDaysToRadioTime(ft, data.days);
-    const newTo = addDaysToRadioTime(to, data.days);
-
-    const appRadio = this.appRadio;
-    if (appRadio === null) {
-      return;
-    }
-    const newData = await appRadio.progInfo(stationId, { ft: newFt, to: newTo });
-    if (newData !== null) {
-      this.showProgRegModal({ ...newData, oldUri: data.oldUri });
-    }
-  }
-
-  /**
-   * {@link showProgRegModal}の「お気に入りを更新」ボタンから呼ばれる。元のお気に入り登録(`oldUri`)を削除し、
-   * 現在表示中の番組(`uri`)を新たに登録する。
-   * @param data 表示中の番組情報+`oldUri`(削除対象の旧登録URI)。
-   */
-  async updateFavouriteFromProgRegModal(data: ProgInfoData & { oldUri: string }): Promise<void> {
-    this.logger.info('IDX_I023', data.uri);
-    await this.commandRouter.playListManager.commonRemoveFromPlaylist(
-      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri
-    );
-    await this.commandRouter.playListManager.commonAddToPlaylist(
-      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.uri, data.title, data.albumart
-    );
-    this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('FAVOURITE_UPDATED', data.title));
-  }
-
-  /**
-   * {@link showProgRegModal}の「お気に入りから削除」ボタンから呼ばれる。
-   * @param data `oldUri`(削除対象の登録URI)を含む番組情報。
-   */
-  async removeFavouriteFromProgRegModal(data: ProgInfoData & { oldUri: string }): Promise<void> {
-    this.logger.info('IDX_I024', data.oldUri);
-    await this.commandRouter.playListManager.commonRemoveFromPlaylist(
-      this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri
-    );
-    this.commandRouter.pushToastMessage('success', messageCatalog.get('APP_TITLE'), messageCatalog.get('FAVOURITE_REMOVED', data.title));
   }
 
   /**
