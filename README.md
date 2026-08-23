@@ -1,43 +1,90 @@
 # JP RADIO Volumio4 plugin
 Japanese radio relay server for Volumio4
 
-> **Alert**: This plugin is only accessible from Japan. Access is restricted from outside Japan.
+> **注意**: このプラグインは日本からのみアクセス可能です。日本国外からのアクセスは制限されています。
 
-## Change log
+📖 インストール手順・開発者向け情報は [Wiki](https://github.com/mOqOm/JP_Radio/wiki) を参照してください。
+
+## 変更履歴
+### version 4.1.0(2026/07/25)
++ 2026/07/25 タイムフリー番組表を日付ごとにグループ化し、前週/前日/翌日/翌週への日送りナビゲーションと放送状態アイコン(★放送中/⬜︎配信前/▷再生可能)を追加
++ 2026/07/25 「タイムフリー(本日分)」のショートカットを追加
++ 2026/07/25 お気に入り機能を追加(ライブ局・タイムフリー局・タイムフリー個別番組)
++ 2026/07/25 局ロゴ画像のローカルキャッシュに対応し、アルバムアートの取得方式(局バナー/局ロゴ/番組画像優先)を設定画面から選択可能に
++ 2026/07/25 再生画面・番組表の日時表示書式をカスタマイズ可能に
++ 2026/07/25 ライブ配信のネットワーク遅延補正値を設定画面から調整可能に
++ 2026/07/25 タイムフリー再生中のシーク操作に対応
++ 2026/07/25 再生画面の「アーティストへ移動」「アルバムへ移動」から番組表へ遷移できるように対応
++ 2026/07/25 開発者向けデバッグページ(`/radiko/dev/`)を追加
++ 2026/07/25 タイムフリー視聴・お気に入り登録・ライブ再生時のSeek表示など、version 3.1.0/3.0.2([**@hirokun0413**](https://github.com/hirokun0413) 様提供)の機能をVolumio4系に取り込み
++ 2026/07/25 Volumioの検索画面から局名で検索できるように対応
++ 2026/07/25 お気に入り・プレイリストへの追加時に、パーソナリティ名を含む完全なメタデータを提供するように対応
++ 2026/07/25 ルートメニューにアイコン表示・グリッド表示切替を追加
++ 2026/07/25 番組表に番組の長さを表示するように対応
++ 2026/07/25 タイムフリー再生中に局名・時間帯・パーソナリティ情報が数秒で消える不具合を修正
++ 2026/07/25 局ロゴキャッシュを手動でクリアするボタンを設定画面に追加
++ 2026/07/25 プラグイン停止・アンインストール時、およびVolumioのシステム終了・再起動時に、再生キューに残った局・番組を確実に取り除くように修正
++ 2026/07/25 ブラウズ動作・タイムフリー再生速度・アルバムアート取得方式・番組表表示設定・ネットワーク遅延補正値を、再起動不要でその場反映できるように改善
++ 2026/07/25 ライブ再生中に過去方向へシークした場合、現在放送中の番組の追っかけ再生に自動切替するように対応
++ 2026/07/25 お気に入り登録済みのタイムフリー番組を、別の週の同じ時間帯に登録し直せる機能を追加
++ 2026/07/28 FM802の局IDがフル局データとエリア別フィードで表記ゆれ(`FM802`/`802`)しており、非プレミアムユーザーのエリア判定に失敗して局一覧に表示されない不具合を修正([Issue #21](https://github.com/mOqOm/JP_Radio/issues/21))
++ 2026/07/28 番組表表示設定の表示期間(過去方向)を8日以上に設定した場合、週次番組表API(前後1週間分)がカバーしない7日より前の日付が「項目がありません」と表示される不具合を修正
++ 2026/07/28 「エリア選択」設定(エリアフリー会員向け)が、ライブ局一覧・タイムフリー局一覧・検索結果の絞り込みに反映されず、常に全国の局が表示されてしまう不具合を修正
++ 2026/07/29 「エリア選択」設定が、エリアフリー会員以外(無料プランなど)では一切反映されなかった不具合を修正。会員種別によらず、選択したエリアの局＋全国ネット局(NHKラジオなど)だけにライブ局一覧・タイムフリー局一覧・検索結果を絞り込めるように変更
++ 2026/07/29 「エリア選択」設定の変更を再起動不要でその場反映できるように改善
++ 2026/07/29 「エリア選択」でエリアを選択している場合、会員種別によらず番組表の取得対象も選択したエリア(＋全国ネット局分)だけに絞るように変更し、不要な番組表取得を削減
++ 2026/07/29 未ログイン時(局一覧が自エリアの局のみに制限される)、「エリア選択」で他エリアを選択していると自エリアの局まで一覧・番組表取得から消えてしまう不具合を修正(未ログイン時のみ自エリアを常に対象に含め、ログイン済みの場合は選択したエリアだけに厳密に絞り込む)
 ### version 4.0.1(2026/07/24)
-+ 2026/07/24 Adapted to Radiko's 2026 streaming API changes, fixing live playback.
-+ 2026/07/24 Fixed missing program guide data for neighboring-area stations (BAYFM78/NACK5/YFM/IBS, etc.) on non-AreaFree accounts.
-+ 2026/07/24 Fixed a crash on plugin restart.
-+ 2026/07/24 Fixed the album art (icon) not displaying.
-+ 2026/07/24 Fixed the settings screen (UIConfig) not displaying.
-+ 2026/07/24 Fixed time handling to always use JST, regardless of the device's system timezone.
-+ 2026/07/24 Verified compatibility with Node.js v20.5.1 / Volumio (bookworm).
-+ 2026/07/24 Reorganized internal structure into controllers/services/logic/utils, and added ESLint and Jest-based tests.
++ 2026/07/24 Radikoの配信方式変更(2026年)に対応し、ライブ再生を修正
++ 2026/07/24 非AreaFreeエリアの隣接局(BAYFM78/NACK5/YFM/IBSなど)の番組表が取得できない不具合を修正
++ 2026/07/24 プラグイン再起動時にクラッシュする不具合を修正
++ 2026/07/24 アルバムアート(アイコン)が表示されない不具合を修正
++ 2026/07/24 設定画面(UIConfig)が表示されない不具合を修正
++ 2026/07/24 タイムゾーンをJST固定にし、端末側のシステム設定に依存しないよう修正
++ 2026/07/24 Node.js v20.5.1 / Volumio(bookworm)環境に対応
++ 2026/07/24 内部構成をcontrollers/services/logic/utilsに整理し、ESLint・Jestによるテストを追加
 ### version 4.0.0(2025/06/01)
-+ 2025/06/01 Fixed to support Volumio4.
++ 2025/06/01 Volumio4に対応するように修正
+### version 3.1.0
+- このバージョンは [**@hirokun0413**](https://github.com/hirokun0413) 様によりご提供いただきました。
+### version 3.0.2
+- このバージョンは [**@hirokun0413**](https://github.com/hirokun0413) 様によりご提供いただきました。
 ### version 0.1.3(2025/05/30)
-+ 2025/05/30 Modified to display by region
++ 2025/05/30 地域毎に表示するように修正
 ### version 0.1.2(2025/05/29)
-+ 2025/05/29 Fixed a bug that prevents viewing on Radiko Premium.
++ 2025/05/29 Radikoプレミアムで視聴できないバグ修正
 ### version 0.1.1(2025/05/22)
-+ 2025/05/26 Changed to display a popup window on startup (tentative)
++ 2025/05/26 起動時にポップアップ表示するように変更(暫定対応)
 ### version 0.1.0(2025/05/22)
-+ 2025/05/22 Transitioned to TypeScript
++ 2025/05/22 TypeScriptへ移行
 ### version 0.0.6(2025/05/17)
-+ 2025/05/17 Emergency 2 response to bug that prevents listening to Radiko
++ 2025/05/17 Radiko聴くことができないバグのため緊急対応(2)
 ### version 0.0.5(2025/05/17)
-+ 2025/05/17 Emergency response to bug that prevents listening to Radiko
++ 2025/05/17 Radiko聴くことができないバグのため緊急対応
 ### version 0.0.4(2025/02/13)
-+ Bug fix for not being able to play FM802.
++ FM802が再生できないバグの修正
 ### version 0.0.3(2024/03/16)
-+ Change to display a popup for prompting restart.
-+ Change to allow the user to specify the startup port.
++ 再起動を促す表示をポップアップで表示するように変更
++ 起動ポートをユーザ側で指定できるように変更
 ### version 0.0.2(2023/11/04)
-+ Bug fix for not starting correctly on plugin restart
++ プラグインの再起動時に正しく起動できないバグ修正
 ### version 0.0.1(2023/11/02)
-+ Initial Version
++ 初期バージョン
 
 ## Acknowledgments
 + [NanoPi NEOにインストールしたMPDでradikoを聞く](http://burro.hatenablog.com/entry/2019/02/16/175836)
 + [Github for Streaming server for relaying "radiko" radio stream to Music Player Daemon (MPD)](https://github.com/burrocargado/RadioRelayServer)
 + [Trunkene/volumio_jpradio: Japanese radio relay server for Volumio](https://github.com/Trunkene/volumio_jpradio)
+
+## Contributors
+このプラグインの開発・改善にご協力いただいた皆さまに感謝します。
+
+| 名前 / Name | 役割 / Contribution |
+|--------------|----------------------|
+| [**@mOqOm**](https://github.com/mOqOm) | メイン開発 / TypeScript移行 / Volumio4対応 |
+| [**@Trunkene**](https://github.com/Trunkene) | 元プロジェクト作成者（volumio_jpradio） |
+| [**@burrocargado**](https://github.com/burrocargado) | RadioRelayServer（Radiko中継サーバー）提供 |
+| [**@hirokun0413**](https://github.com/hirokun0413) | メイン開発 / タイムフリー視聴 / お気に入り登録 / ライブ再生時のSeek表示対応 |
+
+> Pull Request や Issue を通じての貢献も歓迎します！
+> 新しい機能提案や改善報告はぜひ [Issues](../../issues) へ。

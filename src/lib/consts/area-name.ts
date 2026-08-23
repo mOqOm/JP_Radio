@@ -25,3 +25,16 @@ export const AREA_KANJI = new Map([
   ['JP40', '福岡'], ['JP41', '佐賀'], ['JP42', '長崎'], ['JP43', '熊本'],
   ['JP44', '大分'], ['JP45', '宮崎'], ['JP46', '鹿児島'], ['JP47', '沖縄']
 ]);
+
+/**
+ * エリア選択設定画面で地域ごとにグループ化して表示するための一覧。
+ */
+export const AREA_REGIONS: Array<{ name: string; areaIdArray: string[] }> = [
+  { name: '北海道・東北', areaIdArray: ['JP1', 'JP2', 'JP3', 'JP4', 'JP5', 'JP6', 'JP7'] },
+  { name: '関東', areaIdArray: ['JP8', 'JP9', 'JP10', 'JP11', 'JP12', 'JP13', 'JP14'] },
+  { name: '北陸・甲信越', areaIdArray: ['JP15', 'JP16', 'JP17', 'JP18', 'JP19', 'JP20'] },
+  { name: '中部', areaIdArray: ['JP21', 'JP22', 'JP23', 'JP24'] },
+  { name: '近畿', areaIdArray: ['JP25', 'JP26', 'JP27', 'JP28', 'JP29', 'JP30'] },
+  { name: '中国・四国', areaIdArray: ['JP31', 'JP32', 'JP33', 'JP34', 'JP35', 'JP36', 'JP37', 'JP38', 'JP39'] },
+  { name: '九州・沖縄', areaIdArray: ['JP40', 'JP41', 'JP42', 'JP43', 'JP44', 'JP45', 'JP46', 'JP47'] },
+];

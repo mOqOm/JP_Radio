@@ -13,3 +13,6 @@ export const I18N_DIR = path.join(PLUGIN_ROOT, 'i18n');
 
 /** `UIConfig.json`への絶対パス。 */
 export const UI_CONFIG_PATH = path.join(PLUGIN_ROOT, 'UIConfig.json');
+
+/** 局ロゴのローカルキャッシュ等を保存する`assets/images/`ディレクトリへの絶対パス。 */
+export const ASSETS_IMAGES_DIR = path.join(PLUGIN_ROOT, 'assets', 'images');

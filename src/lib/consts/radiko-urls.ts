@@ -40,7 +40,7 @@ export const MAX_RETRY_COUNT = 2;
 
 // 再生系
 //export const PLAY_LIVE_URL = 'https://f-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8'; // Radiko仕様変更(2026/06)で廃止
-//export const PLAY_TIMEFREE_URL = 'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id=%s&l=15&ft=%s&to=%s';  // Radiko仕様変更(2026/01)で廃止
+//export const PLAY_TIME_FREE_URL = 'https://radiko.jp/v2/api/ts/playlist.m3u8?station_id=%s&l=15&ft=%s&to=%s';  // Radiko仕様変更(2026/01)で廃止
 /**
  * 局ごとのライブ配信XML。`playlist_create_url`を含む。例: `TBS.xml`
  */
@@ -52,7 +52,7 @@ export const PLAY_LIVE_QUERY = '?station_id=%s&l=15&lsid=%s&type=c';
 /**
  * `playlist_create_url`に付与するタイムフリー再生用クエリ
  */
-export const PLAY_TIMEFREE_QUERY = '?station_id=%s&start_at=%s&ft=%s&end_at=%s&to=%s&preroll=0&l=15&lsid=%s&type=c';
+export const PLAY_TIME_FREE_QUERY = '?station_id=%s&start_at=%s&ft=%s&end_at=%s&to=%s&preroll=0&l=15&lsid=%s&type=c';
 
 // ステーションリスト
 /**
