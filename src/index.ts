@@ -555,7 +555,7 @@ class ControllerJpRadio {
               service: this.serviceName,
               type   : 'radio-category',
               title  : getI18nString('BROWSER.TIMEFREE_TODAY'),
-              icon   : 'fa fa-map-marker',
+              icon   : 'fa fa-calendar-check-o',
               uri    : 'radiko/timefree_today'
             },
             {
@@ -636,13 +636,14 @@ class ControllerJpRadio {
         type    : 'track',
         name    : decodeURIComponent(tt), // title
         album   : decodeURIComponent(pf), // performer
-        artist  : decodeURIComponent(sn), // stationName / time
+        artist  : decodeURIComponent(sn), // stationName - time
         albumart: decodeURIComponent(aa), // albumart
         uri     : `http://localhost:${this.confParam.port}/${liveUri}`
       };
       if (ft && to) {
         // タイムフリー
-        response.artist += RadioTime.formatDateString(ft, ` @${this.confParam.dateFmt}`);
+        const date = RadioTime.formatDateString(ft, this.confParam.dateFmt);
+        response.artist = response.artist.replace('- ', `- ${date} `);
         response.uri += `?ft=${ft}&to=${to}` + (sk ? `&seek=${sk}` : '');
       }
       //this.logger.info(`JP_Radio::explodeUri: response.uri=${response.uri}`);
@@ -805,12 +806,13 @@ class ControllerJpRadio {
       }
       const progData = await prg.getProgramData(stationId, ft, true);
       if (!progData) return;
+      const stationTIme = (data.type === 'track' || progData.pfm === '') ? data.artist : data.artist.replace(` - ${progData.pfm}`, '');
       const pfm = progData.pfm ? getI18nString('PROGINFO.PERFORMER') + progData.pfm : '<br/>';
       data.uri = data.uri.replace(/\/proginfo\//, '/play/');
       const modalMessage = {
         title  : getI18nString('PROGINFO.PROG_INFO') + progData.title,
-      //message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div style="text-align:right">${data.uri}</div>`,
-        message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div align="right">${data.uri}</div>`,
+      //message: `<div>${data.artist}</div><div>${pfm}</div>${progData.info}<div align="right">${data.uri}</div>`,
+        message: `<div>${stationTIme}</div><div>${pfm}</div>${progData.info}`,
         size   : 'lg',
         buttons: [
           {
@@ -819,7 +821,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'play_formProgInfoModal',
+              method  : 'play_fromProgInfoModal',
               data    : data
             } 
           },
@@ -829,7 +831,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'addQueue_formProgInfoModal',
+              method  : 'addQueue_fromProgInfoModal',
               data    : data
             } 
           },
@@ -839,7 +841,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'addFavourites_formProgInfoModal',
+              method  : 'addFavourites_fromProgInfoModal',
               data    : data
             } 
           },
@@ -859,8 +861,8 @@ class ControllerJpRadio {
     }
   }
 
-  public play_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::play_formProgInfoModal: ${Object.entries(data)}`);
+  public play_fromProgInfoModal(data: any): void {
+    this.logger.info(`JP_Radio::play_fromProgInfoModal: ${Object.entries(data)}`);
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
     arrayQueue.unshift(data);
     this.commandRouter.stateMachine.playQueue.arrayQueue = arrayQueue;
@@ -868,8 +870,8 @@ class ControllerJpRadio {
     this.commandRouter.volumioPlay(0);
   }
 
-  public addQueue_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::addQueue_formProgInfoModal: ${Object.entries(data)}`);
+  public addQueue_fromProgInfoModal(data: any): void {
+    this.logger.info(`JP_Radio::addQueue_fromProgInfoModal: ${Object.entries(data)}`);
     this.commandRouter.pushToastMessage('success', this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TITLE'),
       this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TEXT_1') + data.name + this.commandRouter.getI18nString('COMMON.ADD_QUEUE_TEXT_2'));
     const arrayQueue = this.commandRouter.stateMachine.playQueue.arrayQueue;
@@ -879,8 +881,8 @@ class ControllerJpRadio {
     this.commandRouter.volumioPushQueue(arrayQueue);
   }
 
-  public addFavourites_formProgInfoModal(data: any): void {
-    this.logger.info(`JP_Radio::addFavourites_formProgInfoModal: ${Object.entries(data)}`);
+  public addFavourites_fromProgInfoModal(data: any): void {
+    this.logger.info(`JP_Radio::addFavourites_fromProgInfoModal: ${Object.entries(data)}`);
     this.commandRouter.pushToastMessage('success', this.commandRouter.getI18nString('PLAYLIST.ADDED_TITLE'),
       data.name + this.commandRouter.getI18nString('PLAYLIST.ADDED_TO_FAVOURITES'));
     this.commandRouter.playListManager.commonAddToPlaylist(
@@ -908,14 +910,13 @@ class ControllerJpRadio {
       }
       const progData = await prg.getProgramData(stationId, ft, true);
       if (!progData) return;
-      const stationName = data.artist.replace(/\s\/.+$/, '');
-      const time  = RadioTime.formatFullString2([ft, to], '$1/$2/$3 $4:$5-$10:$11');
+      const stationTime = data.artist.replace(/\s-\s.+$/, RadioTime.formatFullString2([ft, to], ' - ' + this.confParam.timeFmt));
       const pfm = progData.pfm ? getI18nString('PROGINFO.PERFORMER') + progData.pfm : '<br/>';
       data.uri = data.uri.replace(/\/progreg\//, '/play/');
       if (!data.oldUri) data.oldUri = data.uri;
       const modalMessage = {
         title  : getI18nString('PROGINFO.PROG_INFO') + progData.title,
-        message: `<div>${stationName} / ${time}</div><div>${pfm}</div>${progData.info}<div align="right">${data.uri}</div>`,
+        message: `<div>${stationTime}</div><div>${pfm}</div>${progData.info}`,
         size   : 'lg',
         buttons: [
           {
@@ -924,7 +925,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'changeDate_formProgRegModal',
+              method  : 'changeDate_fromProgRegModal',
               data    : [data, 1]
             } 
           },
@@ -934,7 +935,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'changeDate_formProgRegModal',
+              method  : 'changeDate_fromProgRegModal',
               data    : [data, 7]
             } 
           },
@@ -944,7 +945,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'changeDate_formProgRegModal',
+              method  : 'changeDate_fromProgRegModal',
               data    : [data, 14]
             } 
           },
@@ -954,7 +955,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'updateFavourites_formProgRegModal',
+              method  : 'updateFavourites_fromProgRegModal',
               data    : data
             } 
           },
@@ -964,7 +965,7 @@ class ControllerJpRadio {
             emit  : 'callMethod',
             payload: {
               endpoint: `music_service/${this.serviceName}`,
-              method  : 'removeFromFavourites_formProgRegModal',
+              method  : 'removeFromFavourites_fromProgRegModal',
               data    : data
             } 
           },
@@ -984,8 +985,8 @@ class ControllerJpRadio {
     }
   }
 
-  public changeDate_formProgRegModal(data: any): void {
-    this.logger.info(`JP_Radio::changeDate_formProgRegModal: ${Object.entries(data[0])}`);
+  public changeDate_fromProgRegModal(data: any): void {
+    this.logger.info(`JP_Radio::changeDate_fromProgRegModal: ${Object.entries(data[0])}`);
     const [liveUri, timefree] = data[0].uri.split('?');
     const sec = data[1] * 86400;
     var ft = RadioTime.getCurrentRadioTime();
@@ -995,13 +996,13 @@ class ControllerJpRadio {
       ft = query.ft ? RadioTime.convertRadioTime(RadioTime.addTime(String(query.ft), sec)) : '';
       to = query.to ? RadioTime.convertRadioTime(RadioTime.addTime(String(query.to), sec)) : '';
       data[0].uri = liveUri.replace(/\/play\//, '/progreg/') + `?ft=${ft}&to=${to}`;
-      //this.logger.info(`JP_Radio::changeDate_formProgRegModal: ${data[0].uri}`);
+      //this.logger.info(`JP_Radio::changeDate_fromProgRegModal: ${data[0].uri}`);
     }
     this.showProgRegistModal(data[0]);
   }
 
-  public async updateFavourites_formProgRegModal(data: any): Promise<void> {
-    this.logger.info(`JP_Radio::updateFavourites_formProgRegModal: ${Object.entries(data)}`);
+  public async updateFavourites_fromProgRegModal(data: any): Promise<void> {
+    this.logger.info(`JP_Radio::updateFavourites_fromProgRegModal: ${Object.entries(data)}`);
     await this.commandRouter.playListManager.commonRemoveFromPlaylist(
       this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri);
     await this.commandRouter.playListManager.commonAddToPlaylist(
@@ -1010,8 +1011,8 @@ class ControllerJpRadio {
       data.name + this.commandRouter.getI18nString('PLAYLIST.ADDED_TO_FAVOURITES'));
   }
 
-  public async removeFromFavourites_formProgRegModal(data: any): Promise<void> {
-    this.logger.info(`JP_Radio::removeFromFavourites_formProgRegModal: ${Object.entries(data)}`);
+  public async removeFromFavourites_fromProgRegModal(data: any): Promise<void> {
+    this.logger.info(`JP_Radio::removeFromFavourites_fromProgRegModal: ${Object.entries(data)}`);
     await this.commandRouter.playListManager.commonRemoveFromPlaylist(
       this.commandRouter.playListManager.favouritesPlaylistFolder, 'radio-favourites', 'webradio', data.oldUri);
   }

@@ -1,10 +1,8 @@
 "use strict";
 import 'date-utils';
 import { format } from 'util';
-import got, { OptionsOfJSONResponseBody, Response } from 'got';
+import got from 'got';
 import { spawn, execFile, ChildProcess } from 'child_process';
-import * as tough from 'tough-cookie';
-import { CookieJar } from 'tough-cookie';
 import { XMLParser } from 'fast-xml-parser';
 import pLimit from 'p-limit';
 import fs from 'fs';
@@ -12,15 +10,13 @@ import fs from 'fs';
 import type { StationInfo, RegionData } from './models/StationModel';
 import type { LoginAccount, LoginState } from './models/AuthModel';
 import {
-  LOGIN_URL, CHECK_URL, AUTH1_URL, AUTH2_URL,
   STATION_AREA_URL, STATION_FULL_URL,
-  //PLAY_LIVE_URL, 
-  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIMEFREE_QUERY,
-  AUTH_KEY, MAX_RETRY_COUNT
+  STATION_STREAM_XML_URL, PLAY_LIVE_QUERY, PLAY_TIMEFREE_QUERY
 } from './consts/radikoUrls';
 
 import { getI18nString } from './i18nStrings';
 import { RadioTime } from './radioTime';
+import { RadikoAuthLogic } from './radikoAuthLogic';
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: '@',
@@ -31,12 +27,9 @@ const xmlParser = new XMLParser({
 
 export default class Radiko {
   private readonly logger: Console;
-  private token: string = '';
-  private myAreaId: string = '';
-  private cookieJar: CookieJar = new tough.CookieJar();
+  private authLogic: RadikoAuthLogic;
   private loginState: LoginState | null = null;
   private lsid: string = this.RandomHex32();  // PLAY時に指定する16進32桁（今のところ何でもいいらしい。起動時に乱数で決めた値を使うことにする）
-
   public stations: Map<string, StationInfo> = new Map();
   public areaData: Map<string, { areaName: string; stations: string[] }> = new Map();
   private areaIDs: string[];
@@ -44,122 +37,26 @@ export default class Radiko {
   constructor(logger: Console, areaIDs: string[]) {
     this.logger = logger;
     this.areaIDs = areaIDs;
+    this.authLogic = new RadikoAuthLogic(logger);
   }
 
   public async init(acct: LoginAccount | null = null, forceGetStations = false): Promise<string[]> {
     this.logger.info('JP_Radio::Radiko.init');
     if (acct) {
       this.logger.info('JP_Radio::Attempting login');
-      const loginOK = await this.checkLogin() ?? await this.login(acct).then(jar => {
-        this.cookieJar = jar;
-        return this.checkLogin();
+      const loginOK = await this.authLogic.checkLogin() ?? await this.authLogic.login(acct).then(jar => {
+        return this.authLogic.checkLogin();
       });
       this.loginState = loginOK;
     }
 
-    if (forceGetStations || !this.myAreaId) {
-      [this.token, this.myAreaId] = await this.getToken();
+    let [myAreaId] = this.authLogic.getMyArea();
+    if (forceGetStations || myAreaId == '') {
+      [,myAreaId] = await this.authLogic.getToken();
       await this.getStations();
     }
-    return [this.myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? '']
+    return [myAreaId, this.loginState?.areafree ?? '', this.loginState?.member_type.type ?? '']
   }
-
-  private async login(acct: LoginAccount): Promise<CookieJar> {
-    this.logger.info('JP_Radio::Radiko.login');
-    const jar = new tough.CookieJar();
-    try {
-      await got.post(LOGIN_URL, {
-        cookieJar: jar,
-        form: acct
-      });
-      return jar;
-
-    } catch (err: any) {
-      if (err.statusCode === 302) return jar;
-      this.logger.error('JP_Radio::Login failed', err);
-      throw err;
-    }
-  }
-
-  private async checkLogin(): Promise<LoginState | null> {
-    this.logger.info('JP_Radio::Radiko.checkLogin');
-    if (!this.cookieJar) {
-      this.logger.info('JP_Radio::premium account not set');
-      return null;
-    }
-
-    try {
-      const options: OptionsOfJSONResponseBody = {
-        cookieJar: this.cookieJar,
-        method: 'GET',
-        responseType: 'json'
-      };
-      // TODO: エリアフリー・タイムフリー30・ダブルプランはここで判別できるのか？？？
-      const response: Response<any> = await got(CHECK_URL, options);
-      const body = response.body as LoginState;
-      //this.logger.info(`JP_Radio::Radiko.checkLogin: Login status=${Object.entries(body)}`);
-      //this.logger.info(`JP_Radio::Radiko.checkLogin: member_type=${Object.entries(body.member_type)}`);
-      return body;
-
-    } catch (err: any) {
-      const statusCode = err?.response?.statusCode;
-      if (statusCode === 400) {
-        this.logger.info('JP_Radio::premium not logged in (HTTP 400)');
-        return null;
-      }
-
-      this.logger.error(`JP_Radio::premium account login check error: ${err.message}`, err);
-      return null;
-    }
-  }
-
-  private async getToken(): Promise<[string, string]> {
-    this.logger.info('JP_Radio::Radiko.getToken');
-    const auth1Headers = await this.auth1();
-    const [partialKey, token] = this.getPartialKey(auth1Headers);
-    const result = await this.auth2(token, partialKey);
-    const [areaId] = result.trim().split(',');
-    return [token, areaId];
-  }
-
-  private async auth1(): Promise<Record<string, string>> {
-    this.logger.info('JP_Radio::Radiko.auth1');
-    const res = await got.get(AUTH1_URL, {
-      cookieJar: this.cookieJar,
-      headers: {
-        'X-Radiko-App': 'pc_html5',
-        'X-Radiko-App-Version': '0.0.1',
-        'X-Radiko-User': 'dummy_user',
-        'X-Radiko-Device': 'pc',
-      },
-    });
-    return res.headers as Record<string, string>;
-  }
-
-  private getPartialKey(headers: Record<string, string>): [string, string] {
-    this.logger.info('JP_Radio::Radiko.getPartialKey');
-    const token = headers['x-radiko-authtoken'];
-    const offset = parseInt(headers['x-radiko-keyoffset'], 10);
-    const length = parseInt(headers['x-radiko-keylength'], 10);
-    const partialKey = Buffer.from(AUTH_KEY.slice(offset, offset + length)).toString('base64');
-    return [partialKey, token];
-  }
-
-  private async auth2(token: string, partialKey: string): Promise<string> {
-    this.logger.info('JP_Radio::Radiko.auth2');
-    const res = await got.get(AUTH2_URL, {
-      cookieJar: this.cookieJar,
-      headers: {
-        'X-Radiko-AuthToken': token,
-        'X-Radiko-Partialkey': partialKey,
-        'X-Radiko-User': 'dummy_user',
-        'X-Radiko-Device': 'pc',
-      },
-    });
-    return res.body;
-  }
-
-//-----------------------------------------------------------------------
 
   private async getStations(): Promise<void> {
     this.logger.info('JP_Radio::Radiko.getStations: start...');
@@ -180,7 +77,7 @@ export default class Radiko {
         ascii_name: s.ascii_name,
         areafree  : s.areafree,
         timefree  : s.timefree,
-        logo      : s.logo[2]['#text'],
+        logo      : s.logo[2]['#text'], // [0]=224x100.png, [1]=258x60.png, [2]=448x200.png, [3]=688x160.png
         banner    : s.banner,
         area_id   : s.area_id,
       })),
@@ -197,14 +94,14 @@ export default class Radiko {
           const stations = parsed.stations.station.map((s: any) => s.id);
           this.areaData.set(areaId, {
             areaName: parsed.stations['@area_name'],
-            stations,
+            stations
           });
         })
       )
     );
 
     const areaData = this.areaData;
-    const currentAreaID = this.myAreaId ?? '';
+    const [currentAreaID] = this.authLogic.getMyArea() ?? [''];
     var allowedStations = areaData.get(currentAreaID)?.stations.map(String) ?? [];
     if (this.loginState) {
       for (const id of this.areaIDs) {
@@ -291,7 +188,7 @@ export default class Radiko {
       return null;
     }
 
-    let m3u8 = hls_urls[hls_urls.length-1]; // 0番がメインサーバー、1番がサブと思われる
+    let m3u8 = hls_urls[0]; // 0番がメインサーバー、1番がサブと思われる
     let aac: string | null = null;
     let atempo: string | null = null;
     if (timefree == '1') {
@@ -309,10 +206,10 @@ export default class Radiko {
       m3u8 += format(PLAY_LIVE_QUERY, stationId, this.lsid);
     }
 
-    [this.token, this.myAreaId] = await this.getToken();
+    const [token, areaId] = await this.authLogic.getToken();
     const args = [
       '-y', 
-      '-headers', `X-Radiko-Authtoken:${this.token}\r\nX-Radiko-AreaId:${this.myAreaId}`,
+      '-headers', `X-Radiko-Authtoken:${token}\r\nX-Radiko-AreaId:${areaId}`,
       '-i', m3u8,
       (!atempo) ? '-acodec' : '-af',  // '-acodec copy'と'-af atempo=x'は排他
       (!atempo) ?  'copy' : atempo,
@@ -346,7 +243,7 @@ export default class Radiko {
   }*/
 
   private async getHlsURLs(xml_url: string, areafree: string, timefree: string): Promise<string[] | null> {
-    this.logger.info(`JP_Radio::Radiko.getHlsURLs xml_url=${xml_url}, areafree=${areafree}, timefree=${timefree}`);
+    this.logger.info(`JP_Radio::Radiko.getHlsURLs: xml_url=${xml_url}, areafree=${areafree}, timefree=${timefree}`);
     try {
       var hls_urls: string[] = [] ;
       const res = await got(xml_url);
@@ -356,11 +253,11 @@ export default class Radiko {
         const hls_areafree = data['@areafree'];
         const hls_timefree = data['@timefree'];
         if(areafree == hls_areafree && timefree == hls_timefree) {
-          this.logger.info(`JP_Radio::Radiko.getHlsURLs: data=[${Object.entries(data)}`);
+          this.logger.info(`JP_Radio::Radiko.getHlsURLs: data=[${Object.entries(data)}]`);
           hls_urls.push(hls_url);
         }
       }
-      if(hls_urls.length == 0)  return null;
+      if(hls_urls.length == 0)  throw('No valid URL found');
       return hls_urls;
 
     } catch (err) {

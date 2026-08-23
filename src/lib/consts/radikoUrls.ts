@@ -13,6 +13,13 @@ export const MAX_RETRY_COUNT = 2;
 export const STATION_STREAM_XML_URL = 'https://radiko.jp/v3/station/stream/pc_html5/%s.xml';   // TBS.xml
 export const PLAY_LIVE_QUERY = '?station_id=%s&l=15&lsid=%s&type=c';
 export const PLAY_TIMEFREE_QUERY = '?station_id=%s&start_at=%s&ft=%s&end_at=%s&to=%s&preroll=0&l=15&lsid=%s&type=c';
+// lsidについて
+//  16進32桁（何かの識別子、今のところ何でもいいらしい）
+//
+// typeについて
+//  多分、会員タイプだと思われる
+//  type=bは未ログイン、type=cはエリアフリーにログイン中、その他は不明
+//      注意：ログイン中であってもtype=bを指定するとエリア外が再生できない
 
 // ステーションリスト
 export const STATION_AREA_URL = 'http://radiko.jp/v3/station/list/%s.xml';  // JP13.xml

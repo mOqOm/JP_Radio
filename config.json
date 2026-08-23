@@ -5,7 +5,7 @@
   },
   "networkDelay": {
     "type": "int",
-    "value": 20
+    "value": 100
   },
   "radikoUser": {
     "type": "string",
