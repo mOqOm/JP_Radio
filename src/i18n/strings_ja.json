@@ -47,7 +47,7 @@
     "REMOVE_FROM_FAVOURITES": "× お気に入りから削除",
     "NEXT_DAY" : "▽ 翌日",
     "NEXT_WEEK": "▼ 翌週",
-    "NEXT2_WEEK": "▼ 翌々週"
+    "NEXT2_WEEK": "▼▼ 翌々週"
   },
   "UI_SETTINGS": {
     "PLUGIN_CONFIGURATION": "JP Radio Plugin設定",
@@ -56,8 +56,8 @@
     "NETWORK_SETTING_LABEL": "ネットワーク設定",
     "SERVICE_PORT_LABEL": "サービスポート",
     "SERVICE_PORT_DOC": "ポート番号(1024～65535)を設定します。<br/>　デフォルト値：9000",
-    "NETWORK_DELAY_LABEL": "タイムラグ (秒）",
-    "NETWORK_DELAY_DOC": "ライブ放送のおよその遅延時間を設定します。<br/>　デフォルト値：20秒",
+    "NETWORK_DELAY_LABEL": "ネットワーク遅延 (秒）",
+    "NETWORK_DELAY_DOC": "ライブ放送のおよその遅延時間を設定します。<br/>　デフォルト値：100秒",
     "RADIKO_ACCOUNT_SETTING_LABEL": "ラジコ プレミアム アカウント設定",
     "RADIKO_ACCOUNT_USER_LABEL": "ユーザ名",
     "RADIKO_ACCOUNT_USER_DOC": "Radikoプレミアムアカウントのユーザー名を設定します。",
@@ -76,7 +76,7 @@
     "BROWSE_LIVE_LABEL": "ライブ",
     "BROWSE_LIVE_DOC": "ライブ番組選択時の動作を設定します。<br/>　デフォルト値：再生",
     "BROWSE_TIMEFREE_LABEL": "タイムフリー",
-    "BROWSE_TIMEFREE_DOC": "タイムフリー番組選択時の動作を設定します。<br/>　デフォルト値：番組情報を開く",
+    "BROWSE_TIMEFREE_DOC": "タイムフリー番組選択時の動作を設定します。<br/>　デフォルト値：再生",
     "BROWSE_TYPE1": "再生",
     "BROWSE_TYPE2": "番組情報を開く",
     "TIMEFREE_SETTING_LABEL": "タイムフリー設定",

@@ -42,11 +42,11 @@
           "label": "TRANSLATE.UI_SETTINGS.NETWORK_DELAY_LABEL",
           "doc": "TRANSLATE.UI_SETTINGS.NETWORK_DELAY_DOC",
           "attributes": [
-            { "placeholder": "20 (0~300)" },
+            { "placeholder": "100 (0~300)" },
             { "min": 0  },
             { "max": 300 }
           ],
-          "value": 20
+          "value": 100
         }
       ]
     },

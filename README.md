@@ -5,6 +5,13 @@ Japanese radio relay server for Volumio3
 
 ## 📜 変更履歴
 
+### version 3.1.4 (2026/08/23)
+- AuthTokenの期限切れ対策（RadikoAuthLogicのクラス化）
+- 遅延時間のデフォルト値を100秒に変更
+- 各種表示をできるだけv4.1.1に揃えた
+- 英語表記の整備
+- このバージョンは [**@hirokun0413**](https://github.com/hirokun0413) 様によりご提供いただきました。
+
 ### version 3.1.3 (2026/06/24)
 - Radiko仕様変更(2026/06)でライブが再生できなくなった問題に対応
 - タイムフリー時の倍速再生（0.5～2.0；※早聞き時は音飛びしがち）

@@ -165,8 +165,8 @@ export default class JpRadio {
     const date = RadioTime.formatDateString(ft, this.confParam.dateFmt);
     const tempo = (this.confParam.tempo == 1.0) ? '' : `;${this.confParam.tempo}x`;
     const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
-    state.title = queueItem.name + (queueItem.album ? ` - ${queueItem.album}` : '');
-    state.artist = `${stationName} / ${time} @${date} (TimeFree${tempo})`;
+    state.title = queueItem.name;
+    state.artist = `${stationName} - ${date} ${time} (TimeFree${tempo})` + (queueItem.album ? ` - ${queueItem.album}` : '');
     if (state.duration == undefined || state.duration <= 0) {
       state.duration = RadioTime.getTimeSpan(ft, to);  // sec
       this.commandRouter.stateMachine.currentSongDuration = state.duration;
@@ -189,11 +189,11 @@ export default class JpRadio {
       const queueItem = this.commandRouter.stateMachine.playQueue.arrayQueue[state.position];
       queueItem.name = progData.title;
       queueItem.album = progData.pfm;
-      queueItem.artist = `${stationName} / ${time}`;
+      queueItem.artist = `${stationName} - ${time} (Live)`;
       queueItem.albumart = this.selectAlbumart(state.albumart, state.albumart, progData.img);
       queueItem.duration = RadioTime.getTimeSpan(progData.ft, progData.to);  // sec
-      state.title = progData.title + (progData.pfm ? ` - ${progData.pfm}` : '');
-      state.artist = `${queueItem.artist} (Live)`;
+      state.title = queueItem.name;
+      state.artist = `${stationName} - ${time} (Live) ` + (progData.pfm ? ` - ${progData.pfm}` : '')
       state.albumart = queueItem.albumart;
       state.duration = queueItem.duration
       state.seek = RadioTime.getTimeSpan(progData.ft, RadioTime.getCurrentRadioTime()) * 1000;  // msec
@@ -221,7 +221,7 @@ export default class JpRadio {
         if (!stationAndTime.endsWith(progTime)) {
           queueItem.name = progData.title;
           queueItem.album = progData.pfm;
-          queueItem.artist = stationAndTime.replace(/\d+:\d+-\d+:\d+\s?/, progTime);
+          queueItem.artist = stationAndTime.replace(/\d+:\d+-\d+:\d+/, progTime);
           queueItem.albumart = this.selectAlbumart(queueItem.albumart, queueItem.albumart, progData.img);
           //this.logger.info(`JP_Radio::JpRadio.updateQueueInfo: [${currentTime}] Queue[${i}]=${Object.values(queueItem)}`);
           changeFlag = true;
@@ -308,7 +308,7 @@ export default class JpRadio {
         do {  // 一日分（05:00～29:00）の番組表
           const progData = await this.prg!.getProgramData(stationId, `${wDate.date}${time}`, true);
           if (progData) {
-            const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo, progData);
+            const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo, progData, true);
             if (mode.startsWith('prog')) {
               item.type = 'radio-category';
               item.uri  = item.uri.replace(/\/play\//, '/proginfo/');
@@ -383,8 +383,9 @@ export default class JpRadio {
             const ft = query.ft ? String(query.ft) : '';
             const to = query.to ? String(query.to) : '';
             const check1 = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioDate() + '050000');
-            const check2 = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime());
-            const retry = (-7 * 86400 <= check1 && check2 < 0);  // 配信期間内だけリトライする
+          //const check2 = RadioTime.checkProgramTime(ft, to, RadioTime.getCurrentRadioTime());
+          //const retry = (-7 * 86400 <= check1 && check2 < 0);  // 配信期間内だけリトライする
+            const retry = (-7 * 86400 <= check1);  // 配信終了前はリトライする
             const progData = await this.prg?.getProgramData(stationId, ft, retry);
             const item = this.makeBrowseItem_TimeTable('play', stationId, stationInfo,
               progData ? progData : { stationId, progId:'', ft, to, title:data.title, info:'', pfm:'', img:data.albumart } );
@@ -410,7 +411,6 @@ export default class JpRadio {
     //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_Common: stationId=${stationId}`);
     const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
     const stationName = stationInfo ? stationInfo.Name : stationId;
-    const areaStation = `${areaName} / ${stationName}`;
     const progTitle = progData ? progData.title : '?';
     const progPfm   = progData ? progData.pfm! : '';
     const progTime  = progData ? RadioTime.formatTimeString2([progData.ft, progData.to], '$1:$2-$4:$5') : '';  // HH:mm-HH:mm
@@ -421,12 +421,12 @@ export default class JpRadio {
     //type    : 'webradio',       // 再生キューに１つのみ
       title   : progTitle,        // 番組タイトル
       album   : progPfm,          // パーソナリティ名
-      artist  : `${areaStation} / ${progTime}`, // エリア名 / 局名 / 時間
+      artist  : `${stationName} - ${progTime}`, // 局名 - 時間
       albumart: this.selectAlbumart(stationInfo?.BannerURL, stationInfo?.LogoURL, progData?.img),
       uri     : `radiko/${mode}/${stationId}`
               + '?' + encodeURIComponent(progTitle)
               + '&' + encodeURIComponent(progPfm)
-              + '&' + encodeURIComponent(`${stationName} / ${progTime}`)
+              + '&' + encodeURIComponent(`${stationName} - ${progTime}`)
               + '&' + encodeURIComponent(albumart)
     };
   }
@@ -456,12 +456,12 @@ export default class JpRadio {
     };
   }
 
-  private makeBrowseItem_TimeTable(mode: string, stationId: string, stationInfo: StationInfo | undefined, progData: RadikoProgramData | undefined): BrowseItem {
+  private makeBrowseItem_TimeTable(mode: string, stationId: string, stationInfo: StationInfo | undefined, progData: RadikoProgramData | undefined, omitDate: Boolean=false): BrowseItem {
     //this.logger.info(`JP_Radio::JpRadio.makeBrowseItem_TimeTable: stationId=${stationId}`);
     const item = this.makeBrowseItem_Common(mode, stationId, stationInfo, progData);
     const areaName = stationInfo ? (stationInfo.AreaKanji || stationInfo.AreaName) : '?';
     const stationName = stationInfo ? stationInfo.Name : stationId;
-    const areaStation = `${areaName} / ${stationName}`;
+    //const areaStation = `${areaName} / ${stationName}`;
     const progTitle = progData ? progData.title : '?';
     if (progData?.ft && progData?.to) {
       const check = RadioTime.checkProgramTime(progData.ft, progData.to, RadioTime.getCurrentRadioTime());
@@ -493,11 +493,12 @@ export default class JpRadio {
     } else {
       item.title = '？';
     }
-    const time = progData ? RadioTime.formatFullString2([progData.ft, progData.to], this.confParam.timeFmt) : '';
+    const timeFmt = omitDate ? this.confParam.timeFmt.replace(/^.+\s/, '') : this.confParam.timeFmt
+    const time = progData ? RadioTime.formatFullString2([progData.ft, progData.to], timeFmt) : '';
     const duration = progData ? RadioTime.getTimeSpan(progData.ft, progData.to) : 0;  // sec
-    item.title += ` ${time} / ${progTitle}`;  // 日時 / 番組タイトル
+    item.title += ` ${time}　${progTitle}`;   // 日時_番組タイトル
     item.time = progData ? progData.ft : '';
-    item.artist = areaStation;                // エリア名 / 局名
+    item.artist = stationName;                // 局名
     item.duration = duration;                 // 番組時間
     return item;
   }

@@ -5,6 +5,13 @@ Japanese radio relay server for Volumio3
 
 ## Change log
 
+### version 3.1.4 (2026/08/23)
+- Handling AuthToken Expiration (Refactoring RadikoAuthLogic into a Class)
+- Changed the default delay time to 100 seconds.
+- Aligned various displays with v4.1.1 as much as possible.
+- Standardization of English notation.
+- This version was provided by [**@hirokun0413**](https://github.com/hirokun0413).
+
 ### version 3.1.3 (2026/06/24)
 - Addresses an issue where Live playback became unavailable due to a Radiko specification change (June 2026).
 - Variable-speed playback (0.5x–2.0x) for Time-Free.
